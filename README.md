@@ -16,5 +16,6 @@ This project is licensed under Creative Commons Attribution 4.0 International. S
 - [MaxStrang](https://github.com/MaxStrang)
 - [SlightlyRoasted](https://github.com/SlightlyRoasted)
 - [valens-twiringiyimana](https://github.com/valens-twiringiyimana)
+- [Seemihh](https://github.com/Seemihh)
 
 ## Acknowledgements
