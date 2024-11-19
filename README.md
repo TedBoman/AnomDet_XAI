@@ -1,6 +1,12 @@
 # AnomDet - A Performance Anomaly Detector
 
----
+## About The Project
+
+## Getting started
+
+## License
+
+This project is licensed under Creative Commons Attribution 4.0 International. See `LICENCE` for more details. 
 
 ## Authors
 
@@ -10,3 +16,5 @@
 - [MaxStrang](https://github.com/MaxStrang)
 - [SlightlyRoasted](https://github.com/SlightlyRoasted)
 - [valens-twiringiyimana](https://github.com/valens-twiringiyimana)
+
+## Acknowledgements
