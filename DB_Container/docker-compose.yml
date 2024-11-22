@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  timescaledb:
+    build: .
+    container_name: timescaledb
+    ports: 
+      - "5432:5432"
+    environment: 
+      POSTGRES_PASSWORD: G5anomdet
+      POSTGRES_USER: Anomdet
+      POSTGRES_DB: mytimescaleDB
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data 
+
+volumes:
+  timescaledb_data:
