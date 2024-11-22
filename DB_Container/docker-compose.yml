@@ -10,7 +10,8 @@ services:
       POSTGRES_USER: Anomdet
       POSTGRES_DB: mytimescaleDB
     volumes:
-      - timescaledb_data:/var/lib/postgresql/data 
+      - test:/var/lib/postgresql/data 
 
 volumes:
-  timescaledb_data:
+  test:
+    external: true
