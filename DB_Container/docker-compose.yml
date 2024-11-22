@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   timescaledb:
     build: .
@@ -10,8 +11,9 @@ services:
       POSTGRES_USER: Anomdet
       POSTGRES_DB: mytimescaleDB
     volumes:
-      - test:/var/lib/postgresql/data 
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./Migrations:/docker-entrypoint-initdb.d
+    restart: always
 
 volumes:
-  test:
-    external: true
+  timescaledb_data:
