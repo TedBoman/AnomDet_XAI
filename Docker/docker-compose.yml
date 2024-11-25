@@ -1,6 +1,14 @@
 version: '3.8'
 
 services:
+  node-exporter: # Service that collects computer metrics and exposes them on a webpage at localhost:9100
+    image: prom/node-exporter:latest  # Use the official Node Exporter image
+    ports:
+      - "9100:9100"  # Map port 9100 on the host to the container
+    volumes:
+      - /proc:/host/proc:ro  # Mount /proc for system metrics (read-only)
+      - /sys:/host/sys:ro  # Mount /sys for system metrics (read-only)
+      - /:/rootfs:ro  # Mount the root filesystem for some metrics (read-only)
   timescaledb:
     build: .
     container_name: timescaledb
