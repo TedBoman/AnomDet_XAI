@@ -11,21 +11,21 @@
     * Step 1: Clone the repository
 
         - Clone the repository using a terminal, run the following command:
-        ``` 
-        git clone https://github.com/MarcusHammarstrom/AnomDet.git
+        ```bash 
+            git clone https://github.com/MarcusHammarstrom/AnomDet.git
         ```
         Open the folder in your choice of environment and navigate into the project folder:
-        ``` 
-        >cd Docker
+        ```bash 
+            cd Docker
         ```
     * Step 2: Build and Start the Docker Container
 
         Run the following command to build and start the Docker Container:
-        ```
+        ```bash
         docker-compose up -d
         ```
         What this command does:
-            ```
+            ```bash
             -Downloads the required Docker images if they aren't already installed on your machine.
             -Starts a PostgreSQL database container.
             - The "-d" flag makes sure the container runs in the background.
@@ -34,11 +34,11 @@
 
         [Option 1]
         To access the database from within the Docker container, run the following command:
-        ```
+        ```bash
         docker exec -it timescaledb psql -U AnomDet -d mytimescaleDB
         ```
         What this command does and what the flags are for:
-            ```
+            ```bash
             -Opens an interactive psql session connected to the database.
             - "timescaledb" is the name of the running container.
             - "-U AnomDet" specifies the PostgreSQL user.
@@ -50,7 +50,7 @@
             ```
         [Option 2]
         To access the database using an External PostgreSql Client such as "pgAdmin" or "DBeaver" use the following credentials:
-            ```
+            ```bash
             -Host localhost
             -Port 5432
             -Database mytimescaleDB
@@ -60,13 +60,13 @@
     * Step 4: Stopping the Container
         
         To stop the container without removing its data, run the following command in the terminal:
-            ```
+            ```bash
             docker-compose down
             ```
 
         [Optional]
         If you need to access the running container's shell for debugging or inspecting, run the following command in the terminal:
-            ```
+            ```bash
             docker exec -it timescaledb bash
             ```
     
