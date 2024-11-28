@@ -23,17 +23,17 @@ def execute_values(conn, arr, table, columns):
     print("execute_values() done") 
 
 def main():
-    file_path = "../Datasets/Electric_Production.csv"       # Path to the csv file
-    df = pd.read_csv(file_path, low_memory=False)           # Read the csv file
-    file_base_name = ntpath.basename(file_path)             # Get the file name and file extension
-    table_name = file_base_name.split('.')[0]               # Get the file name without the file extension and use as table name
+    file_path = "../Datasets/daily_minimum_temperatures_in_me.csv"    # Path to the csv file
+    df = pd.read_csv(file_path, low_memory=False)                     # Read the csv file
+    file_base_name = ntpath.basename(file_path)                       # Get the file name and file extension
+    table_name = file_base_name.split('.')[0]                         # Get the file name without the file extension and use as table name
 
-    columns = df.columns.to_list()                          # Get the columns of the csv file into a list
-    first_column = columns[0]                               # Get the first column
-    columns = columns[1:]                                   # Remove the first column from the list
-    for i in range(len(columns)):                        # Add VARCHAR(50) to each column except first
-        columns[i] = columns[i] + " VARCHAR(50)"        
-    columns = ",".join(columns)                             # Join the columns with a comma
+    columnn_names = df.columns.to_list()                              # Get the columns of the csv file into a list
+    columns_with_types = columnn_names.copy()
+    for i in range(len(columnn_names)):                               # Add VARCHAR(50) to each column except first
+        columnn_names[i] = f'\"{columnn_names[i]}\"'
+        columns_with_types[i] = f'{columnn_names[i]} VARCHAR(50)'    
+    columns_with_types[0] = f'{columnn_names[0]} TIMESTAMPTZ NOT NULL'
 
     # Assuming the docker container is started, connect to the database
     CONNECTION = "postgres://Anomdet:G5anomdet@localhost:5432/mytimescaleDB"
@@ -41,14 +41,14 @@ def main():
     cursor = conn.cursor()
 
     # Create query for creating a relational tabel
-    query_create_table = f'CREATE TABLE {table_name} ( {first_column} TIMESTAMPTZ NOT NULL, {columns});'
+    query_create_table = f'CREATE TABLE {table_name} ({",".join(columns_with_types)});'
 
     # Exectute the query, creating a table in the database
     cursor.execute(query_create_table)
     conn.commit()
 
     # Insert data into the database
-    execute_values(conn, df.to_numpy(), table_name, df.columns)                              
+    execute_values(conn, df.to_numpy(), table_name, columnn_names)                              
 
     # Close connection to the database
     cursor.close()

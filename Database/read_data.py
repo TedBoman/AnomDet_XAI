@@ -6,7 +6,7 @@ CONNECTION = "postgres://Anomdet:G5anomdet@localhost:5432/mytimescaleDB"
 conn = psycopg2.connect(CONNECTION)
 cursor = conn.cursor()
 
-query = "SELECT * FROM Electric_Production;"
+query = "SELECT * FROM daily_minimum_temperatures_in_me;"
 cursor.execute(query)
 for row in cursor.fetchall():
     print(row)

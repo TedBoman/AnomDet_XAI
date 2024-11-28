@@ -6,7 +6,7 @@ CONNECTION = "postgres://Anomdet:G5anomdet@localhost:5432/mytimescaleDB"
 conn = psycopg2.connect(CONNECTION)
 cursor = conn.cursor()
 
-cursor.execute("DROP TABLE electric_production")
+cursor.execute("DROP TABLE daily_minimum_temperatures_in_me")
 conn.commit()
 
 cursor.close
