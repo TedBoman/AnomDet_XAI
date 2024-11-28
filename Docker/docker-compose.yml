@@ -11,7 +11,7 @@ services:
       - /:/rootfs:ro  # Mount the root filesystem for some metrics (read-only)
   timescaledb:
     build: .
-    container_name: timescaledb
+    container_name: TSdatabase
     ports: 
       - "5432:5432"
     environment: 
@@ -21,6 +21,16 @@ services:
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
       - ./Migrations:/docker-entrypoint-initdb.d
+    restart: always
+
+  dash-frontend:
+    build:
+      context: ../Frontend 
+    container_name: Frontend
+    ports:
+      - "8050:8050" 
+    depends_on:
+      - timescaledb
     restart: always
 
 volumes:
