@@ -99,4 +99,5 @@ def update_chart(selected_metric, start_date, end_date, n_intervals):
 
 # Uygulamayı çalıştır
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=True, host="0.0.0.0", port=8050)
+
