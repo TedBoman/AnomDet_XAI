@@ -2,6 +2,10 @@
 
 ## About The Project
 
+Anomaly detection of real-world data consists of recognizing outlier data points. These outliers are what's called anomalies and there are plenty of algorithms with the purpose of finding these anomalies. The performance of these algorithms can be very dependent on the dataset it is used on. This means that if an algorithm performs well on one data set, it doesn't necessarily mean that it performs well on another.
+
+AnomDet is a system which can manage different anomaly detection algorithms and anomaly injection methods by either simulating a real-time data stream or by reading data in batches. With AnomDet, you're provided a working framework for evaluating the performance of pre-defined anomaly detection models and how they respond to pre-defined anomaly injections. The framework architecture is modular by design and a simple way to add your own models and anomaly detection methods are provided in [Usage](#Usage) 
+
 ## Getting started
 
 * Prerequisites
@@ -70,6 +74,12 @@ If you need to access the running container's shell for debugging or inspecting,
 docker exec -it timescaledb bash
 ```
     
+## Usage
+
+### Adding a model
+
+### Adding a injection method
+
 ## License
 
 This project is licensed under Creative Commons Attribution 4.0 International. See `LICENCE` for more details. 
