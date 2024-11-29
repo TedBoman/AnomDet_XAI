@@ -25,5 +25,14 @@ services:
       - timescaledb
     restart: always
 
+  simulator:
+    build:
+      context: ../Simulator
+    volumes:
+      - ./Datasets:/app/Datasets
+    container_name: Simulator
+    depends_on:
+      - timescaledb
+
 volumes:
   timescaledb_data:
