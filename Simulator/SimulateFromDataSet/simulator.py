@@ -2,7 +2,7 @@ import time
 import multiprocessing as mp          # To allow for fast insertion of the data
 import pandas as pd                   
 from pathlib import Path              
-from API.db_interface import DBInterface as db    # The database API
+from DBAPI.db_interface import DBInterface as db    # The database API
 
 file_path = './Datasets/system-1.csv'
 x_speedup = 1
