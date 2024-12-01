@@ -35,7 +35,7 @@ What this command does:
 [Option 1]
 To access the database from within the Docker container, run the following command:
 ```sh
-docker exec -it timescaledb psql -U AnomDet -d mytimescaleDB
+docker exec -it TSdatabase psql -U AnomDet -d mytimescaleDB
 ```
 What this command does and what the flags are for:
 ```sh
