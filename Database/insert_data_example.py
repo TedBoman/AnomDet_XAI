@@ -2,13 +2,25 @@ import psycopg2
 import psycopg2.extras as extras 
 import pandas as pd
 import ntpath
+from anom_secrets.anom_secrets import SECRET_PATH
+import time
 from datetime import datetime
 
-def execute_values(conn, arr, table, columns):
+def add_to_timestamp(x: str):
+    return datetime.fromtimestamp(x)
+
+def execute_values(conn, df, table, columns):
     cursor = conn.cursor()
-    tuples = [tuple(x) for x in arr] 
-  
+    first_column = columns[0].replace("\"", '')             # Remove the double quotes from the first column name
+    df = df.astype('str')
+    print(type(df[first_column].iloc[0]))
+    df[first_column] = df[first_column].astype('int32').apply(add_to_timestamp)
+    print(df[first_column].iloc[0])
+    tuples = [tuple(x) for x in df.to_numpy()]              # Convert the dataframe to a list of tuples
     cols = ','.join(columns)
+    print(tuples[0])
+
+    start_time = time.time()
 
     # SQL query to execute 
     query = "INSERT INTO %s(%s) VALUES %%s" % (table, cols) # Creates the query: INSERT INTO table_name(column1, column2, ...) VALUES %s
@@ -21,9 +33,10 @@ def execute_values(conn, arr, table, columns):
         conn.rollback() 
         cursor.close() 
     print("execute_values() done") 
+    print("Inserting values took %s seconds" % (time.time() - start_time))
 
 def main():
-    file_path = "../Datasets/daily_minimum_temperatures_in_me.csv"    # Path to the csv file
+    file_path = SECRET_PATH                                           # Path to the csv file
     df = pd.read_csv(file_path, low_memory=False)                     # Read the csv file
     file_base_name = ntpath.basename(file_path)                       # Get the file name and file extension
     table_name = file_base_name.split('.')[0]                         # Get the file name without the file extension and use as table name
@@ -48,7 +61,7 @@ def main():
     conn.commit()
 
     # Insert data into the database
-    execute_values(conn, df.to_numpy(), table_name, columnn_names)                              
+    execute_values(conn, df, table_name, columnn_names)                              
 
     # Close connection to the database
     cursor.close()
