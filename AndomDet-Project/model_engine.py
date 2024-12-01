@@ -1,31 +1,23 @@
-import pandas as pd
-import os
+import interface
+import data_read
 
-import model_lstm
 
-def run_model():
-    data_frame = read_dataset()
+def run_lstm(model:interface.ModelInterface):
+    data_frame = data_read.read_dataset()
     sequence_len = 30
-    #Preprocess & split data
-    X, scaler = model_lstm.model_preprocess(data_frame, sequence_len)
-    X_train, X_test = model_lstm.split_data(X)
-    #Build Model
-    model = model_lstm.model_build(X_train.shape[1:])
-    model.summary()
-    #Train model
-    model_lstm.model_train(X_train, model)
-    #Evaluate performance
-    reconstructed, mse, threshold = model_lstm.model_evaluate(X_test, model)
-    anomalies = model_lstm.model_detect(mse, threshold)
-    model_lstm.model_plot(anomalies)
+    # Preprocess & split data
+    X, scaler = model.preprocess(data_frame, sequence_len)
+    X_train, X_test = model.split(X)
+    # Build Model
+    model_instance = model.model_build(X_train.shape[1:])
+    model_instance.summary()
+    # Train model
+    model.model_train(X_train, model_instance)
+    # Evaluate performance
+    reconstructed, mse, threshold = model.model_evaluate(X_test, model_instance)
+    anomalies = model.detect(mse, threshold)
+    model.model_plot(anomalies)
+    return
 
 
 
-    pass
-
-def read_dataset():
-    #REPLACE WITH DATABASE COMMUNICATION
-    base_path = os.path.dirname(__file__)
-    dataset_path = os.path.join(base_path, 'system-1.csv')
-    data = pd.read_csv(dataset_path, low_memory=False)
-    return data
