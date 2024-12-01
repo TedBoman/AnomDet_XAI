@@ -21,7 +21,11 @@ DOC = """Invoke backend API from command line with the following commands:
     6. "python backend_api.py get-data <dataset-running>"
         get all processed data from <dataset-running>, meaning just the data that has gone through our detection model
     
-    7. "python backend_api.py help"
+    7. "python backend_api.py inject-anomaly <timestamps> <dataset-running>"    
+        injects anomalies in the data set running if manual injection is enabled, <timestamps> is a comma separated list of timestamps in 
+        seconds from now to inject anomalies at
+
+    8. "python backend_api.py help"
         prints this help message"""
 
 def main(argv: list[str]):
@@ -54,6 +58,13 @@ def main(argv: list[str]):
         if (len(argv) != 3):
             handle_error(1, "Invalid number of arguments")
         get_data(argv[2])
+    
+    # Inject anomalies into a running job if the command is "inject-anomaly"
+    elif argv[1] == "inject-anomaly":
+        if (len(argv) != 4):
+            handle_error(1, "Invalid number of arguments")
+        timestamps = argv[2].split(',')
+        inject_anomaly(timestamps, argv[3])
 
     # Print information about the backend API command line tool if the command is "help"
     elif argv[1] == "help":
@@ -81,6 +92,9 @@ def change_method(method: str, name: str):
     pass
 
 def get_data(name: str):
+    pass
+
+def inject_anomaly(timestamps: list[int], name: str):
     pass
 
 def handle_error(code: int, message: str):
