@@ -14,7 +14,6 @@ class ModelInterface(ABC):
     def model_build(self, input_shape):
         pass
 
-
     def model_evaluate(self, X_test, model):
         pass
 

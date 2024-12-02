@@ -6,7 +6,7 @@ from tensorflow.keras.layers import LSTM, RepeatVector, TimeDistributed, Dense
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 
-class LSTMModel(ModelInterface):
+class LSTMModel(interface.ModelInterface):
 
         def preprocess(self, data, seq_len):
             scaler = MinMaxScaler(feature_range=(0, 1))
