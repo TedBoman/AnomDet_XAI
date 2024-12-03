@@ -6,14 +6,14 @@ from BatchImport.batchimport import BatchImporter
 
 use = "batch"
 
-if __name__ == '__main__':
+def main(argv: list[str]):
     file_path = './Datasets/system-1.csv'  # Or get this from the frontend
     conn_params = {
-        "dbname": "mytimescaleDB",
+        "dbname": "TSdatabase",
         "user": "Anomdet",
         "passwd": "G5anomdet",
         "port": "5432",
-        "host": "localhost"
+        "host": "host.docker.internal"
     }
 
     match use:
@@ -31,3 +31,5 @@ if __name__ == '__main__':
             match file_extension:
                 case ".csv":
                     importer.filetype_csv(conn_params)
+
+main([])

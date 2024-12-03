@@ -51,11 +51,19 @@ services:
   simulator:
     build:
       context: ../Simulator
-    volumes:
-      - ./Datasets:/app/Datasets
     container_name: Simulator
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Add this line
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - SIMULATOR_PORT=${SIMULATOR_PORT}
+    ports:
+      - "${SIMULATOR_PORT}:8150"
     depends_on:
       - timescaledb
+    restart: always
 
 volumes:
   timescaledb_data:
