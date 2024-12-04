@@ -1,21 +1,26 @@
 import sys
 from os import path
+import socket
+import json
+
+HOST = "localhost"
+PORT = 9524
 
 DOC = """Invoke backend API from command line with the following commands:
 
-    1. "python backend_api.py run-batch <model> <injection-methd> <path-to-batch-file>"
+    1. "python backend_api.py run-batch <model> <injection-method> <path-to-batch-file>"
         starts anomaly detection of batch data from the given file with the given model and injection method
 
-    2. "python backend_api.py run-stream <path-to-stream-file>" starts anomaly detection of stream data from the given file
+    2. "python backend_api.py run-stream <model> <injection-method> <path-to-stream-file>" 
         starts anomaly detection of stream data from the given file with the given model and injection method
 
     3. "python backend_api.py change-model <model> <dataset-running>"
         changes the model used for anomaly detection for the currently run batch or stream named <dataset-running> to <model>
 
-    4. "python backend_api.py change-injectio <injection-method> <dataset-running>"
+    4. "python backend_api.py change-injection <injection-method> <dataset-running>"
         changes the injection method used for anomaly detection for the currently run batch or stream named <dataset-running> to <injection-method>
 
-    5. "python backend_api.py cancel <dataset-running>" prints this help message"
+    5. "python backend_api.py cancel <dataset-running>" 
         cancels the currently running batch or stream named <dataset-running>
 
     6. "python backend_api.py get-data <dataset-running>"
@@ -23,83 +28,193 @@ DOC = """Invoke backend API from command line with the following commands:
     
     7. "python backend_api.py inject-anomaly <timestamps> <dataset-running>"    
         injects anomalies in the data set running if manual injection is enabled, <timestamps> is a comma separated list of timestamps in 
-        seconds from now to inject anomalies at
+        seconds from now to inject anomalies at. (python backend_api.py inject-anomaly 10,20,30 system1 injects an anomaly at 10, 20 and 30 seconds from now)
 
-    8. "python backend_api.py help"
+    8. "python backend_api.py get-running"
+        get all running datasets
+
+    9. "python backend_api.py get-models"
+        gets all available models for anomaly detection
+
+    10. "python backend_api.py get-injection-methods"
+        gets all available injection methods for anomaly detection
+        
+    11. "python backend_api.py help"
         prints this help message"""
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
+    arg_len = len(argv)
+    api = BackendAPI()
     # Start a batch job in the backend if the command is "run-batch"
     if argv[1] == "run-batch":
-        if len(argv) != 5:
+        if arg_len != 5:
             handle_error(1, "Invalid number of arguments")
-        run_batch(argv[2], argv[3], argv[4])
+        print(len([argv[2], argv[3], argv[4]]))
+        result = api.run_batch(argv[2], argv[3], argv[4])
 
     # Start a stream job in the backend if the command is "run-stream"
     elif argv[1] == "run-stream":
-        if len(argv) != 5:
+        if arg_len != 5:
             handle_error(1, "Invalid number of arguments")
-        run_stream(argv[2], argv[3], argv[4])
+        result = api.run_stream(argv[2], argv[3], argv[4])
         
     # Change the model used for a running job if the command is "change-model"
     elif argv[1] == "change-model":
-        if (len(argv) != 4):
+        if (arg_len != 4):
             handle_error(1, "Invalid number of arguments")
-        change_model(argv[2], argv[3])
+        result = api.change_model(argv[2], argv[3])
 
     # Change the injection method used for a running job if the command is "change-injection"
     elif argv[1] == "change-injection":
-        if (len(argv) != 4):
+        if (arg_len != 4):
             handle_error(1, "Invalid number of arguments")
-        change_method(argv[2], argv[3])
+        result = api.change_method(argv[2], argv[3])
     
     # Get data from a running job if the command is "get-data", the backend will return data that has gone through the detection model
     elif argv[1] == "get-data":
-        if (len(argv) != 3):
+        if (arg_len != 3):
             handle_error(1, "Invalid number of arguments")
-        get_data(argv[2])
+        result = api.get_data(argv[2])
     
     # Inject anomalies into a running job if the command is "inject-anomaly"
     elif argv[1] == "inject-anomaly":
-        if (len(argv) != 4):
+        if (arg_len != 4):
             handle_error(1, "Invalid number of arguments")
         timestamps = argv[2].split(',')
-        inject_anomaly(timestamps, argv[3])
+        result = api.inject_anomaly(timestamps, argv[3])
+
+    # Print all running datasets if the command is "get-running"
+    elif argv[1] == "get-running":
+        if (arg_len != 2):
+            handle_error(1, "Invalid number of arguments")
+        result = api.get_running()
+
+    # Cancel a running job if the command is "cancel"
+    elif argv[1] == "cancel":
+        if (arg_len != 3):
+            handle_error(1, "Invalid number of arguments")
+        result = api.cancel_job(argv[2])
+
+    # Get all avaliable models for anomaly detection if the command is "get-models"
+    elif argv[1] == "get-models":
+        if (arg_len != 2):
+            handle_error(1, "Invalid number of arguments")
+        result = api.get_models()
+
+    # Get all avaliable injection methods for anomaly detection if the command is "get-injection-methods"
+    elif argv[1] == "get-injection-methods":
+        if (arg_len != 2):
+            handle_error(1, "Invalid number of arguments")
+        result = api.get_injection_methods()
 
     # Print information about the backend API command line tool if the command is "help"
     elif argv[1] == "help":
-        print(DOC)
+        result = DOC
 
     # Print an error message if the command is not recognized
     else: 
         handle_error(3, f'argument "{argv[1]}" not recognized as a valid command')
+
+    # Print return messgage in terminal when API is used by the command line tool
+    print(f'Recieved from backend: {result}')
         
+def handle_error(code: int, message: str) -> None:
+        print(message)
+        exit(code)        
+class BackendAPI:
+    # Constructor setting host adress and port for the the backend container
+    def __init__(self) -> None:
+        self.host = HOST
+        self.port = PORT
 
-def run_batch(model: str, injection_method: str, file_path: str):
-    if not path.isfile(path):
-        handle_error(2, "File not found")
-    pass
+    # Sends a request to the backend to start a batch job
+    def run_batch(self, model: str, injection_method: str, file_path: str) -> dict:
+        if not path.isfile(file_path):
+            handle_error(2, "File not found")
+        data = {
+            "METHOD": "run-batch",
+            "model": model,
+            "injection_method": injection_method,
+            "file_path": file_path
+        }
+        return self.__send_data(json.dumps(data))
 
-def run_stream(model: str, injection_method: str, file_path: str):
-    if not path.isfile(path):
-        handle_error(2, "File not found")
-    pass
+    # Sends a request to the backend to start a stream job
+    def run_stream(self, model: str, injection_method: str, file_path: str) -> dict:
+        if not path.isfile(path):
+            handle_error(2, "File not found")
+        data = {
+            "METHOD": "run-stream",
+            "model": model,
+            "injection_method": injection_method,
+            "file_path": file_path
+        }
+        return self.__send_data(json.dumps(data))
 
-def change_model(model: str, name: str):
-    pass
+    # Sends a request to the backend to change the model used for a running job
+    def change_model(self, model: str, name: str) -> dict:
+        data = {
+            "METHOD": "change-model",
+            "model": model,
+            "job_name": name
+        }
+        return self.__send_data(json.dumps(data))
 
-def change_method(method: str, name: str):
-    pass
+    # Sends a request to the backend to change the injection method used for a running job
+    def change_method(self, injection_method: str, name: str) -> dict:
+        data = {
+            "METHOD": "change-method",
+            "injection-method": injection_method,
+            "job_name": name
+        }
+        return self.__send_data(json.dumps(data))
 
-def get_data(name: str):
-    pass
 
-def inject_anomaly(timestamps: list[int], name: str):
-    pass
+    def get_data(self, name: str) -> dict:
+        data = {
+            "METHOD": "get-data",
+            "job_name": name
+        }
+        return self.__send_data(json.dumps(data))
 
-def handle_error(code: int, message: str):
-    print(message)
-    exit(code)
+    def inject_anomaly(self, timestamps: list[int], name: str) -> dict:
+        data = {
+            "METHOD": "inject-anomaly",
+            "timestamps": timestamps,
+            "job_name": name
+        }
+        return self.__send_data(json.dumps(data))
+
+    def get_running(self) -> dict:
+        data = {
+            "METHOD": "get-running"
+        }
+        return self.__send_data(json.dumps(data))
+    
+    def cancel_job(self, name: str) -> dict:
+        data = {
+            "METHOD": "cancel-job",
+            "job_name": name
+        }
+        return self.__send_data(json.dumps(data))
+    
+    def get_models(self) -> dict:
+        data = {
+            "METHOD": "get-models"
+        }
+        return self.__send_data(json.dumps(data))
+    
+    def get_injection_methods(self) -> dict:
+        data = {
+            "METHOD": "get-injection-methods"
+        }
+        return self.__send_data(json.dumps(data))
+
+    def __send_data(self, data: str) -> dict:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((HOST, PORT))
+        sock.sendall(bytes(data, encoding="utf-8"))
+        return json.loads(sock.recv(1024))
 
 if __name__ == "__main__":
     main(sys.argv)
