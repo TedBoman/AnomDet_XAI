@@ -24,15 +24,38 @@ class Simulator:
 
     def create_table(self, conn_params, tb_name, columns):
         """
-        Creates a table in the timeseries database.
+        Creates a table in the timeseries database. If the table already exists, 
+        it creates a new table with a numbered suffix.
 
         Args: 
             conn_params: The parameters needed to connect to the database.
-            tb_name: The name of the table.
+            tb_name: The base name of the table.
             columns: The columns for the table.
+
+        Returns:
+            str: The actual name of the table created (might include a suffix).
         """
         db_instance = self.init_db(conn_params)
-        db_instance.create_table(tb_name, columns)
+        
+        try:
+            db_instance.create_table(tb_name, columns)
+            return tb_name  # Return the original name if successful
+        except Exception as e:
+            if "already exists" in str(e):
+                i = 1
+                new_table_name = f"{tb_name}_{i}"
+                while True:
+                    try:
+                        db_instance.create_table(new_table_name, columns)
+                        return new_table_name  # Return the new table name
+                    except Exception as e:
+                        if "already exists" in str(e):
+                            i += 1
+                            new_table_name = f"{tb_name}_{i}"
+                        else:
+                            raise e
+            else:
+                raise e
 
     def process_entry(self, conn_params, table_name, chunk):
         """
@@ -56,7 +79,7 @@ class Simulator:
         with open(self.file_path, 'r') as f:
             columns = f.readline().strip().split(',')
         
-        self.create_table(conn_params, Path(self.file_path).stem, columns)
+        table_name = self.create_table(conn_params, Path(self.file_path).stem, columns)
 
         dataindex = 1
         time_between_input = self.get_time_diffs_pandas().mean()
@@ -64,7 +87,7 @@ class Simulator:
         print("Starting to insert!")
         for data in pd.read_csv(self.file_path, chunksize=self.chunksize):
             print(f"Inserting data {dataindex}")
-            self.process_entry(conn_params, Path(self.file_path).stem, data)
+            self.process_entry(conn_params, table_name, data)
             dataindex += 1
             time.sleep(time_between_input / self.x_speedup)
 

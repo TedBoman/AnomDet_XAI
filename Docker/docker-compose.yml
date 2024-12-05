@@ -63,7 +63,7 @@ services:
       - "${SIMULATOR_PORT}:8150"
     depends_on:
       - timescaledb
-    restart: always
+    restart: no
 
 volumes:
   timescaledb_data:

@@ -1,13 +1,29 @@
 # main.py
 
+import threading
 from pathlib import Path
 from SimulateFromDataSet.simulator import Simulator
 from BatchImport.batchimport import BatchImporter
 
 use = "batch"
 
+def process_file(file_path, conn_params, use):
+    """Processes a single file based on the specified use case."""
+    match use:
+        case "sim":
+            sim = Simulator(file_path)
+            file_extension = Path(file_path).suffix
+            match file_extension:
+                case ".csv":
+                    sim.filetype_csv(conn_params)
+        case "batch":
+            importer = BatchImporter(file_path)
+            file_extension = Path(file_path).suffix
+            match file_extension:
+                case ".csv":
+                    importer.filetype_csv(conn_params)
+
 def main(argv: list[str]):
-    file_path = './Datasets/system-1.csv'  # Or get this from the frontend
     conn_params = {
         "dbname": "TSdatabase",
         "user": "Anomdet",
@@ -16,20 +32,19 @@ def main(argv: list[str]):
         "host": "host.docker.internal"
     }
 
-    match use:
-        case "sim":
-            sim = Simulator(file_path)  # Create a Simulator instance
+    file_paths = [  # List of file paths to process
+        './Datasets/system-1.csv',
+    ]
 
-            file_extension = Path(file_path).suffix
-            match file_extension:
-                case ".csv":
-                    sim.filetype_csv(conn_params)
-        case "batch":
-            importer = BatchImporter(file_path)
+    threads = []
+    for file_path in file_paths:
+        thread = threading.Thread(target=process_file, args=(file_path, conn_params, use))
+        threads.append(thread)
+        thread.start()
 
-            file_extension = Path(file_path).suffix
-            match file_extension:
-                case ".csv":
-                    importer.filetype_csv(conn_params)
+    # Wait for all threads to finish
+    for thread in threads:
+        thread.join()
 
-main([])
+if __name__ == "__main__":
+    main([])
