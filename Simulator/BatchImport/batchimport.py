@@ -22,6 +22,9 @@ class BatchImporter:
         """
         db_instance = db(conn_params)
         return db_instance
+    
+    def check_for_message():
+        return False
 
     def create_table(self, conn_params, tb_name, columns):
         """
