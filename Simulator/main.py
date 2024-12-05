@@ -4,14 +4,16 @@ import threading
 from pathlib import Path
 from SimulateFromDataSet.simulator import Simulator
 from BatchImport.batchimport import BatchImporter
+import multiprocessing as mp
+
 
 use = "batch"
 
-def process_file(file_path, conn_params, use):
+def process_file(file_path, conn_params, use, anomaly_settings, speedup: int = 1):
     """Processes a single file based on the specified use case."""
     match use:
         case "sim":
-            sim = Simulator(file_path)
+            sim = Simulator(file_path, x_speedup=speedup)
             file_extension = Path(file_path).suffix
             match file_extension:
                 case ".csv":
@@ -21,7 +23,10 @@ def process_file(file_path, conn_params, use):
             file_extension = Path(file_path).suffix
             match file_extension:
                 case ".csv":
-                    importer.filetype_csv(conn_params)
+                    importer.filetype_csv(conn_params, anomaly_settings)
+
+def listen_to_front():
+    return
 
 def main(argv: list[str]):
     conn_params = {
@@ -33,12 +38,20 @@ def main(argv: list[str]):
     }
 
     file_paths = [  # List of file paths to process
-        './Datasets/system-1.csv',
+        './Datasets/test_system.csv',
     ]
+
+    anomaly_settings = {
+        "anomaly_type": "lowered",
+        "timestamp": 210,
+        "magnitude": 2,
+        "percentage": 5,
+        "columns": ["load-5m", "load-1m"],
+    }
 
     threads = []
     for file_path in file_paths:
-        thread = threading.Thread(target=process_file, args=(file_path, conn_params, use))
+        thread = threading.Thread(target=process_file, args=(file_path, conn_params, use, anomaly_settings))
         threads.append(thread)
         thread.start()
 

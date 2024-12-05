@@ -24,11 +24,10 @@ class DBInterface(ABC):
     def create_table(self, table_name: str, columns: list[str]):
         # Adjust types based on your actual data
         columns_with_types = columns.copy()
-        for i in range(len(columns)):
-            columns[i] = f'\"{columns[i]}\"'
-            # Use appropriate types based on your data
-            columns_with_types[i] = f'{columns[i]} DOUBLE PRECISION'
-        columns_with_types[0] = f'{columns[0]} DOUBLE PRECISION'  
+        for i in range(len(columns_with_types)):
+            columns_with_types[i] = f'"{columns_with_types[i]}"'
+            # Assign the data type only once
+            columns_with_types[i] = f'{columns_with_types[i]} DOUBLE PRECISION' 
         
         # Add the "injected_anomaly" column
         columns_with_types.append('"injected_anomaly" BOOLEAN')

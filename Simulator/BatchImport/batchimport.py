@@ -8,7 +8,7 @@ from AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
 
 class BatchImporter:
 
-    def __init__(self, file_path, chunksize=20):
+    def __init__(self, file_path, chunksize=100):
         self.file_path = file_path
         self.chunksize = chunksize
 
@@ -22,9 +22,6 @@ class BatchImporter:
         """
         db_instance = db(conn_params)
         return db_instance
-    
-    def check_for_message():
-        return False
 
     def create_table(self, conn_params, tb_name, columns):
         """
@@ -45,6 +42,7 @@ class BatchImporter:
             db_instance.create_table(tb_name, columns)
             return tb_name  # Return the original name if successful
         except Exception as e:
+            db_instance.conn.rollback()
             if "already exists" in str(e):
                 i = 1
                 new_table_name = f"{tb_name}_{i}"
@@ -53,6 +51,7 @@ class BatchImporter:
                         db_instance.create_table(new_table_name, columns)
                         return new_table_name  # Return the new table name
                     except Exception as e:
+                        db_instance.conn.rollback()
                         if "already exists" in str(e):
                             i += 1
                             new_table_name = f"{tb_name}_{i}"
@@ -61,7 +60,7 @@ class BatchImporter:
             else:
                 raise e
 
-    def process_chunk(self, conn_params, table_name, chunk, inject: bool = False):
+    def process_chunk(self, conn_params, table_name, chunk, isAnomaly=False):
         """
         Processes a chunk of data by creating a DBInterface instance
         and inserting the chunk into the database.
@@ -70,27 +69,12 @@ class BatchImporter:
             conn_params: The parameters needed to connect to the database.
             table_name: The name of the table.
             chunk (pd.DataFrame): A chunk of data to be inserted.
+            isAnomaly (bool): Indicates if the chunk contains an anomaly.
         """
+        db_instance = self.init_db(conn_params)
+        db_instance.insert_data(table_name, chunk, isAnomaly)  # Use isAnomaly flag
 
-        if(inject):
-            # Create an anomaly injector
-            anomaly_injector = TimeSeriesAnomalyInjector()
-
-            # Inject anomalies before inserting into database
-            chunk_with_anomalies = anomaly_injector.inject_anomaly(
-                chunk, 
-                anomaly_type='spike',  # Choose anomaly type
-                percentage=0.05,        # Percentage of points to modify
-                magnitude=1.5           # Intensity of anomalies
-            )
-
-            db_instance = self.init_db(conn_params)
-            db_instance.insert_data(table_name, chunk_with_anomalies, True)
-        else:
-            db_instance = self.init_db(conn_params)
-            db_instance.insert_data(table_name, chunk, False)
-
-    def filetype_csv(self, conn_params):
+    def filetype_csv(self, conn_params, anomaly_settings):
         """
         Takes a filepath to a CSV file, divides it into chunks, and inserts them into the database.
 
@@ -110,9 +94,20 @@ class BatchImporter:
         table_name = self.create_table(conn_params, Path(self.file_path).stem, columns)
 
         print("Starting to insert!")
-        # For every chunksize rows in the file, we start a process that inserts those rows
+
+        injector = TimeSeriesAnomalyInjector()  # Create the injector instance here
+
         for chunk in pd.read_csv(self.file_path, chunksize=self.chunksize):
-            pool.apply_async(self.process_chunk, args=(conn_params, table_name, chunk))
+            if anomaly_settings:
+                timestamp = anomaly_settings.get('timestamp')
+                if timestamp in chunk.iloc[:, 0].values:  # Check if timestamp is in this chunk
+                    chunk = injector.inject_anomaly(chunk, anomaly_settings)  # Inject the anomaly
+                    pool.apply_async(self.process_chunk, args=(conn_params, table_name, chunk, True))
+                else:
+                    pool.apply_async(self.process_chunk, args=(conn_params, table_name, chunk, False))
+            else:
+                pool.apply_async(self.process_chunk, args=(conn_params, table_name, chunk, False))
+
         print("Inserting done!")
 
         # Wait for all the processes to finish
