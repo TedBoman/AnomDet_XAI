@@ -82,10 +82,10 @@ class BatchImporter:
             )
 
             db_instance = self.init_db(conn_params)
-            db_instance.insert_data(table_name, chunk_with_anomalies)
+            db_instance.insert_data(table_name, chunk_with_anomalies, True)
         else:
             db_instance = self.init_db(conn_params)
-            db_instance.insert_data(table_name, chunk)
+            db_instance.insert_data(table_name, chunk, False)
 
     def filetype_csv(self, conn_params):
         """

@@ -30,31 +30,39 @@ class DBInterface(ABC):
             columns_with_types[i] = f'{columns[i]} DOUBLE PRECISION'
         columns_with_types[0] = f'{columns[0]} DOUBLE PRECISION'  
         
+        # Add the "injected_anomaly" column
+        columns_with_types.append('"injected_anomaly" BOOLEAN')
+
         query_create_table = f'CREATE TABLE "{table_name}" ({",".join(columns_with_types)});'
         self.cursor.execute(query_create_table)
         self.conn.commit()
 
-    def insert_data(self, table_name: str, data: pd.DataFrame):
+    def insert_data(self, table_name: str, data: pd.DataFrame, isAnomaly: bool = False):
         """
-        Inserts data into the specified table.
+        Inserts data into the specified table and sets the "injected_anomaly" column.
+
+        Args:
+            table_name: The name of the table.
+            data: The DataFrame containing the data to insert.
+            isAnomaly: A boolean indicating whether the data has been injected with an anomaly.
         """
         with self.conn.cursor() as cur:
-            columns = ', '.join([f'"{col}"' for col in data.columns])
+            # Add "injected_anomaly" to the columns
+            columns = ', '.join([f'"{col}"' for col in data.columns] + ['"injected_anomaly"'])  
             query = f"INSERT INTO \"{table_name}\" ({columns}) VALUES %s"
 
             try:
-                # Convert DataFrame to list of tuples, with type conversion
+                # Convert DataFrame to list of tuples, with type conversion and anomaly flag
                 values = [tuple(
                     float(x) if isinstance(x, (np.float64, np.float32)) else x 
                     for x in row
-                ) for row in data.values]
+                ) + (isAnomaly,) for row in data.values]  # Add the isAnomaly flag
 
                 execute_values(cur, query, values)
                 self.conn.commit()
                 print(f"Data insertion successful for table: {table_name}")
             except Exception as e:
                 self.conn.rollback()
-                print(f"Error inserting data into {table_name}: {e}")
 
     # Reads data from the table_name table
     def read_data(self, table_name: str, time: datetime):
