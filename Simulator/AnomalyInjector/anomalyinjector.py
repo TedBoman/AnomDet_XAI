@@ -15,168 +15,157 @@ class TimeSeriesAnomalyInjector:
     def inject_anomaly(
         self, 
         data: Union[pd.DataFrame, pd.Series],
-        anomaly_settings: Optional[Dict] = None,  # Add anomaly_settings argument
+        anomaly_settings: Optional[Dict] = None,
     ) -> Union[pd.DataFrame, pd.Series]:
         """
-        Inject anomalies into a single DataFrame or Series.
-        Can inject anomalies at a specific timestamp or randomly.
+        Inject anomalies into a time series at a specific point or within a span.
 
         Args:
             data (DataFrame or Series): Input time series data
-            anomaly_settings (Dict, optional): Settings for targeted anomaly injection.
-                                                Should contain 'timestamp' and any settings
-                                                needed for _inject_series_anomaly.
-            columns (List[str], optional): Columns to inject anomalies into. 
-                Defaults to all numeric columns for DataFrame.
-            anomaly_type (str, optional): Type of anomaly to inject. 
-                Choices: 'point', 'spike', 'step', 'drift'.
-            percentage (float, optional): Percentage of data points to modify. 
-                Defaults to 0.1.
-            magnitude (float, optional): Scaling factor for anomaly intensity. 
-                Defaults to 1.0.
-            custom_params (Dict, optional): Additional parameters for specific anomaly types
+            anomaly_settings (Dict): Settings for targeted anomaly injection
+                - timestamp: Specific time or start of the anomaly span
+                - duration (optional): Length of the anomaly span
+                - columns: Columns to inject anomalies into
+                - anomaly_type: Type of anomaly ('lowered', 'spike', etc.)
+                - percentage: Percentage of data points to modify (for span)
+                - magnitude: Scaling factor for anomaly intensity
 
         Returns:
             DataFrame or Series with injected anomalies
         """
-        if anomaly_settings:  # If anomaly_settings are provided
-            timestamp = anomaly_settings.get('timestamp')
-            if timestamp is not None:
-                return self._inject_anomaly_at_timestamp(data, anomaly_settings)
+        # Validate required settings
+        if not anomaly_settings:
+            return data
 
-        # Handle both DataFrame and Series inputs
-        if isinstance(data, pd.Series):
-            return self._inject_series_anomaly(
-                data, 
-                anomaly_settings.get('anomaly_type'), 
-                anomaly_settings.get('percentage'), 
-                anomaly_settings.get('magnitude'), 
-            )
-        
-        # For DataFrame
+        # Extract settings with defaults
+        start_time = anomaly_settings.get('timestamp')
+        duration = anomaly_settings.get('duration', None)
+        columns = anomaly_settings.get('columns', [])
+        anomaly_type = anomaly_settings.get('anomaly_type', 'custom')
+        percentage = anomaly_settings.get('percentage', 0.1)
+        magnitude = anomaly_settings.get('magnitude', 1.0)
+
+        # Prepare modified data
         modified_data = data.copy()
-        
-        # If no columns specified, use all numeric columns
-        if columns is None:
-            columns = list(modified_data.select_dtypes(include=[np.number]).columns)
-        
-        # Inject anomalies for each specified column
-        for column in columns:
-            modified_data[column] = self._inject_series_anomaly(
-                modified_data[column], 
-                anomaly_settings.get('anomaly_type'), 
-                anomaly_settings.get('percentage'), 
-                anomaly_settings.get('magnitude'), 
-            )
+        timestamp_col = modified_data.columns[0]  # Assume first column is timestamp
+
+        # Convert timestamp column to pandas Timestamp and then to float (seconds since Unix epoch)
+        modified_data[timestamp_col] = pd.to_datetime(modified_data[timestamp_col])  # Ensure it's a Timestamp
+        modified_data[timestamp_col] = modified_data[timestamp_col].astype(np.int64) / 1e9  # Convert to float (seconds)
+
+        # Ensure start_time is a pandas Timestamp and convert it to float (seconds since Unix epoch)
+        start_time = pd.to_datetime(start_time) if isinstance(start_time, str) else start_time
+        start_time = start_time.timestamp()  # Convert to float (seconds since Unix epoch)
+
+        # Determine injection method based on duration
+        if duration:
+            # Span-based anomaly injection
+            span_mask = (modified_data[timestamp_col] >= start_time) & \
+                        (modified_data[timestamp_col] < start_time + pd.Timedelta(duration).total_seconds())
+            span_data = modified_data[span_mask]
+            
+            # If no columns specified, use all numeric columns
+            if not columns:
+                columns = list(span_data.select_dtypes(include=[np.number]).columns)
+            
+            # Inject anomalies for each specified column in the span
+            for column in columns:
+                data_range = modified_data[column].max() - modified_data[column].min()
+                mean = modified_data[column].mean()
+                print(f"MAX: {column} {modified_data[column].max()}. MIN: {column} {modified_data[column].min()}")
+                if column in span_data.columns:
+                    print(f"Injecting anomalies into column: {column}")
+                    # Create a mask for the specific column in the span
+                    col_data = span_data[column]
+                    
+                    # Calculate number of anomalies to inject
+                    num_anomalies = min(len(col_data), max(1, int(len(col_data) * percentage)))
+                    
+                    # Select random indices to modify within the span
+                    if num_anomalies > 0:
+                        print(f"Injecting {num_anomalies} anomalies.")
+                        anomaly_indices = self.rng.choice(
+                            col_data.index, 
+                            size=num_anomalies, 
+                            replace=False
+                        )
+
+                        print(f"Selected indices for anomalies: {anomaly_indices}")
+                        
+                        # Apply anomaly based on type
+                        modified_data.loc[anomaly_indices, column] = self._apply_anomaly(
+                            modified_data.loc[anomaly_indices, column], 
+                            data_range,
+                            mean,
+                            anomaly_type, 
+                            magnitude
+                        )
+
+                        print(f"Modified data for column {column}:")
+                        print(modified_data.loc[anomaly_indices, column])  # Verify changes
+        else:
+            # Point-specific anomaly injection
+            # Identify the exact timestamp
+            point_mask = modified_data[timestamp_col] == start_time
+            point_data = modified_data[point_mask]
+            
+            # If no columns specified, use all numeric columns
+            if not columns:
+                columns = list(point_data.select_dtypes(include=[np.number]).columns)
+            
+            # Inject anomalies for each specified column at the specific point
+            for column in columns:
+                if column in point_data.columns:
+                    # Modify the specific point
+                    modified_data.loc[point_mask, column] = self._apply_anomaly(
+                        modified_data.loc[point_mask, column], 
+                        data_range,
+                        mean,
+                        anomaly_type, 
+                        magnitude
+                    )
         
         return modified_data
-    
-    def _inject_series_anomaly(
-        self, 
-        series: pd.Series,
-        anomaly_type: str,
-        percentage: float,
-        magnitude: float,
-    ) -> pd.Series:
+
+    def _apply_anomaly(self, data, data_range, mean, anomaly_type, magnitude):
         """
-        Inject anomalies into a single Series
+        Apply a specific type of anomaly to the data.
 
         Args:
-            series (pd.Series): Input time series
-            anomaly_type (str): Type of anomaly to inject
-            percentage (float): Percentage of data points to modify
-            magnitude (float): Scaling factor for anomaly intensity
-            custom_params (Dict, optional): Additional configuration
+            data (pd.Series): Data to modify
+            anomaly_type (str): Type of anomaly to apply
+            magnitude (float): Intensity of the anomaly
 
         Returns:
-            pd.Series with injected anomalies
+            pd.Series: Modified data
         """
-        # Calculate number of anomalies to inject
-        num_anomalies = max(1, int(len(series) * percentage))
-        
-        # Create a copy of the series to modify
-        modified_series = series.copy()
-        
-        # Select random indices to modify
-        anomaly_indices = self.rng.choice(
-            series.index, 
-            size=num_anomalies, 
-            replace=False
-        )
-        
-        # Anomaly injection strategies
-        if anomaly_type == 'hightened':
-            modifications = self.rng.normal(
-                loc=0, 
-                scale=series.std() * magnitude, 
-                size=num_anomalies
-            )
-            modified_series.loc[anomaly_indices] += modifications
+        if anomaly_type == 'lowered':
+            print("Injecting lowerd anomaly!")
+            random_factors = self.rng.uniform(0.3, 0.4)
+            step_value = -data_range * random_factors
+            print(f"Step: {step_value} = -datarange: -{data_range} * random: {random_factors} * magnitude: {magnitude}")
+            
+            print(f"return: {np.maximum(data + step_value, 0)}")
+
+            return np.maximum(data + step_value, 0)
         
         elif anomaly_type == 'spike':
+            print("Injecting spike anomaly!")
+            std_dev = data.std()
             modifications = self.rng.normal(
                 loc=0, 
-                scale=series.std() * (magnitude * 2), 
-                size=num_anomalies
+                scale=std_dev * (magnitude * 2)
             )
-            modified_series.loc[anomaly_indices] += modifications
+            return data + modifications
         
-        elif anomaly_type == 'lowered':
-
-            data_range = series.max() - series.min()
-            random_factors = self.rng.uniform(0.4, 0.5, size=num_anomalies) #Generate a randomized percentage between 40-50% 
-            step_values = -data_range * random_factors
-
-            modified_series.loc[anomaly_indices] = np.maximum( modified_series.loc[anomaly_indices] + step_values, 0 ) # Apply the step values but clip the result to ensure it stays >= 0
-        
-        elif anomaly_type == 'offline':
-            modifications = self.rng.normal(
-                loc=0, 
-                scale=series.std() * 0.000001,
-                size=num_anomalies
-            )
-            modified_series.loc[anomaly_indices] += modifications
+        elif anomaly_type == 'step':
+            print("Injecting step anomaly!")
+            step_value = mean * magnitude
+            return data + step_value
         
         elif anomaly_type == 'custom':
-            # Calculate the number of anomalies to inject based on percentage
-            num_anomalies = max(1, int(len(series) * percentage))
-
-            # Select random indices to modify
-            anomaly_indices = self.rng.choice(
-                series.index, 
-                size=num_anomalies, 
-                replace=False
-            )
-
-            # Apply the custom modifications to the selected indices
-            modified_series.loc[anomaly_indices] *= magnitude
+            print("Injecting custom anomaly!")
+            return data * magnitude
         
-        return modified_series
-    
-    def _inject_anomaly_at_timestamp(self, data, anomaly_settings):
-        """Injects an anomaly at a specific timestamp."""
-        modified_data = data.copy()
-        timestamp = anomaly_settings.pop('timestamp')  # Remove timestamp from settings
-
-        # Assuming the first column is the timestamp column
-        target_index = modified_data[modified_data.iloc[:, 0] == timestamp].index  
-
-        if len(target_index) > 0:  # If the timestamp is found
-            # Get the relevant settings from anomaly_settings
-            columns = anomaly_settings.get('columns')
-            anomaly_type = anomaly_settings.get('anomaly_type', 'custom')
-            magnitude = anomaly_settings.get('magnitude', 1.0)
-
-            # Inject the anomaly into the specified columns
-            for column in columns:
-                modified_data[column] = self._inject_series_anomaly(
-                    modified_data[column],
-                    anomaly_type,
-                    1.0,  # Inject into 100% of the selected points (the single timestamp)
-                    magnitude,
-                )
-                # Since we're targeting a specific timestamp, 
-                # we override the percentage to 1.0 to ensure the anomaly is injected 
-                # at that point. The anomaly_indices will only contain the target index.
-
-        return modified_data
+        else:
+            return data

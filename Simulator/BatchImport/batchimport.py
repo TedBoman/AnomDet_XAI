@@ -5,12 +5,16 @@ import pandas as pd
 from pathlib import Path
 from DBAPI.db_interface import DBInterface as db
 from AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
+import re
+from datetime import timedelta
+import datetime
 
 class BatchImporter:
 
-    def __init__(self, file_path, chunksize=100):
+    def __init__(self, file_path, start_time, chunksize=100):
         self.file_path = file_path
         self.chunksize = chunksize
+        self.start_time = start_time
 
     def init_db(self, conn_params) -> db:
         """
@@ -74,42 +78,141 @@ class BatchImporter:
         db_instance = self.init_db(conn_params)
         db_instance.insert_data(table_name, chunk, isAnomaly)  # Use isAnomaly flag
 
-    def filetype_csv(self, conn_params, anomaly_settings):
+    def parse_duration(self, duration_str):
         """
-        Takes a filepath to a CSV file, divides it into chunks, and inserts them into the database.
+        Parses a duration string like '1H', '30min', '2D', '1h30m', '2days 5hours' 
+        into a timedelta object.
+        
+        Supports the following units:
+            - H, h: hours
+            - min, m: minutes
+            - D, d, days: days
+            - S, s: seconds
+            - W, w, weeks: weeks
 
         Args:
-            conn_params: The parameters needed to connect to the database.
+            duration_str (str): The duration string to parse.
+
+        Returns:
+            datetime.timedelta: A timedelta object representing the duration.
+
+        Raises:
+            ValueError: If the duration string is invalid.
         """
-        # Get the number of cores the PC has
+        pattern = r'(\d+)\s*([HhmindaysSwW]+)'
+        matches = re.findall(pattern, duration_str)
+
+        if not matches:
+            raise ValueError("Invalid duration format")
+
+        total_seconds = 0
+        for value, unit in matches:
+            value = int(value)
+            if unit in ('H', 'h'):
+                total_seconds += value * 3600
+            elif unit in ('min', 'm'):
+                total_seconds += value * 60
+            elif unit in ('D', 'd', 'days'):
+                total_seconds += value * 86400
+            elif unit in ('S', 's'):
+                total_seconds += value
+            elif unit in ('W', 'w', 'weeks'):
+                total_seconds += value * 604800
+            else:
+                raise ValueError(f"Invalid unit: {unit}")
+
+        return timedelta(total_seconds)
+
+    def inject_anomalies_into_chunk(self, chunk, anomaly_settings):
+        """
+        Injects anomalies into a DataFrame chunk based on the provided settings.
+        Handles anomalies that may span across chunk boundaries.
+        """
+        injector = TimeSeriesAnomalyInjector()
+        anomaly_applied = False
+
+        # Iterate over each anomaly setting
+        for anomaly_setting in anomaly_settings:
+            start_time = anomaly_setting['timestamp']
+            duration = self.parse_duration(anomaly_setting['duration'])
+            end_time = start_time + duration
+
+            # Check if this chunk overlaps with the anomaly span
+            chunk_start_time = chunk[chunk.columns[0]].min()
+            chunk_end_time = chunk[chunk.columns[0]].max()
+
+            # Expanded overlap condition to cover more scenarios
+            if (chunk_start_time <= end_time) and (chunk_end_time >= start_time):
+                chunk = injector.inject_anomaly(chunk, anomaly_setting)
+                anomaly_applied = True
+
+        return chunk, anomaly_applied
+
+    def filetype_csv(self, conn_params, anomaly_settings=None):
+        """
+        Processes a CSV file, injects anomalies, and inserts the data into the database.
+        Ensures consistent anomaly injection across chunks.
+        """
         num_processes = mp.cpu_count()
-        # Create one spot in the pool for each core
         pool = mp.Pool(processes=num_processes)
 
-        # Get column names from the first row of the CSV file
         with open(self.file_path, 'r') as f:
             columns = f.readline().strip().split(',')
-        
-        # Creates a table in the database with the filename as table name and the correct columns
+
         table_name = self.create_table(conn_params, Path(self.file_path).stem, columns)
 
         print("Starting to insert!")
 
-        injector = TimeSeriesAnomalyInjector()  # Create the injector instance here
+        # Preprocess anomaly settings to convert timestamps to absolute times
+        if anomaly_settings:
+            for setting in anomaly_settings:
+                # Convert timestamp to absolute time if it's not already
+                if not isinstance(setting['timestamp'], pd.Timestamp):
+                    setting['timestamp'] = self.start_time + pd.Timedelta(seconds=setting['timestamp'])
 
-        for chunk in pd.read_csv(self.file_path, chunksize=self.chunksize):
+        # Create a list to store results from async processes
+        results = []
+
+        full_df = pd.read_csv(self.file_path)
+
+        # Convert the first column (assume it's timestamps in seconds)
+        full_df[full_df.columns[0]] = self.start_time + pd.to_timedelta(
+            full_df[full_df.columns[0]].astype(float), unit='s'
+        )
+
+        # Drop rows with invalid timestamps
+        full_df = full_df.dropna(subset=[full_df.columns[0]])
+
+        print(full_df.head())  # Inspect the parsed DataFrame
+
+        # Process chunks with guaranteed anomaly injection
+        for chunk in [full_df[i:i+self.chunksize] for i in range(0, len(full_df), self.chunksize)]:
+            anomaly_applied = False
+
             if anomaly_settings:
-                timestamp = anomaly_settings.get('timestamp')
-                if timestamp in chunk.iloc[:, 0].values:  # Check if timestamp is in this chunk
-                    chunk = injector.inject_anomaly(chunk, anomaly_settings)  # Inject the anomaly
-                    pool.apply_async(self.process_chunk, args=(conn_params, table_name, chunk, True))
-                else:
-                    pool.apply_async(self.process_chunk, args=(conn_params, table_name, chunk, False))
-            else:
-                pool.apply_async(self.process_chunk, args=(conn_params, table_name, chunk, False))
+                # If timestamps need adjustment, add start_time explicitly
+                chunk[chunk.columns[0]] = chunk[chunk.columns[0]].apply(
+                    lambda x: self.start_time + pd.Timedelta(seconds=x.timestamp())
+                    if isinstance(x, datetime.datetime) and x < self.start_time
+                    else x
+                )
 
-        print("Inserting done!")
+                # Inject anomalies across chunk boundaries
+                chunk, anomaly_applied = self.inject_anomalies_into_chunk(chunk, anomaly_settings)
 
-        # Wait for all the processes to finish
+            # Use apply_async and collect results
+            result = pool.apply_async(
+                self.process_chunk,
+                args=(conn_params, table_name, chunk, anomaly_applied),
+            )
+            results.append(result)
+
+        # Wait for all processes to complete
         pool.close()
         pool.join()
+
+        # Optionally, check for any exceptions in the results
+        for result in results:
+            result.get()  # This will raise any exceptions that occurred in the process
+
+        print("Inserting done!")
