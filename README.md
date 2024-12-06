@@ -1,6 +1,6 @@
 # AnomDet - A Performance Anomaly Detector
 
-## Table of contents
+## 📑 Table of contents
 
 - [About](#-about-the-project)
 - [Getting started](#-getting-started)
@@ -16,13 +16,15 @@
 
 Anomaly detection of real-world data consists of recognizing outlier data points. These outliers are what's called anomalies and anomaly detection algortihms have been researched extensively. The performance of these algorithms can be very dependent on the dataset it is used on. This means that if an algorithm performs well on one data set, it doesn't necessarily mean that it performs well on another.
 
-AnomDet is a system which can manage different anomaly detection algorithms and anomaly injection methods by either simulating a real-time data stream or by reading data in batches. With AnomDet, you're provided a working framework for evaluating the performance of pre-defined anomaly detection models and how they respond to pre-defined anomaly injections. The framework architecture is modular by design and a simple way to add your own models and anomaly detection methods are provided in [to_add](#to_add).
+AnomDet is a system which can manage different anomaly detection algorithms and anomaly injection methods by either simulating a real-time data stream or by reading data in batches. With AnomDet, you're provided a working framework for evaluating the performance of pre-defined anomaly detection models and how they respond to pre-defined anomaly injections. 
+
+The system architecture is modular by design and a simple way to add your own models and anomaly detection methods are provided in our [Guide](#-guide). If the choice of database doesn't suit you, we have abstracted away the API between the backend and the database with an interface described in our [Guide](#-guide) under [Database APi](#-database-api).
 
 ### Features provided
 
-AnomDet allows for anomaly detection by importing a complete dataset in one batch or by simulating a real-time stream of data. A machine learning model will process the data that is fed to the system and display results in a frontend. 
+AnomDet allows for anomaly detection by importing a complete dataset in one batch or by simulating a real-time stream of the imported data. A machine learning model will process the data that is fed to the system and visualize the results in a frontend. The system also provides a set of self-defined 
 
-## How To Build
+## 📝 How To Build
 
 * Prerequisites
 - First of all, before you begin, ensure that you have Docker Desktop installed on your system.
@@ -90,7 +92,7 @@ If you need to access the running container's shell for debugging or inspecting,
 docker exec -it timescaledb bash
 ```
     
-## Guide
+## 👋 Guide
 
 ### Fronend
 
@@ -100,7 +102,9 @@ docker exec -it timescaledb bash
 
 ### Adding an injection method
 
-## License
+### Database API
+
+## 📄 License
 
 This project is licensed under Creative Commons Attribution 4.0 International. See `LICENCE` for more details. 
 
