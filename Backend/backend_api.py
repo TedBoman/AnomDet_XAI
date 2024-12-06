@@ -1,10 +1,12 @@
 import sys
-from os import path
+import os
 import socket
 import json
+from dotenv import load_dotenv
 
-HOST = "localhost"
-PORT = 9524
+load_dotenv()
+HOST = os.getenv('HOST')
+PORT = int(os.getenv('PORT'))
 
 DOC = """"python backend_api.py run-batch <model> <injection-method> <path-to-batch-file>"
 starts anomaly detection of batch data from the given file with the given model and injection method
@@ -129,7 +131,7 @@ class BackendAPI:
 
     # Sends a request to the backend to start a batch job
     def run_batch(self, model: str, injection_method: str, file_path: str) -> str:
-        if not path.isfile(file_path):
+        if not os.path.isfile(file_path):
             handle_error(2, "File not found")
         data = {
             "METHOD": "run-batch",
@@ -141,7 +143,7 @@ class BackendAPI:
 
     # Sends a request to the backend to start a stream job
     def run_stream(self, model: str, injection_method: str, file_path: str) -> str:
-        if not path.isfile(path):
+        if not os.path.isfile(file_path):
             handle_error(2, "File not found")
         data = {
             "METHOD": "run-stream",
