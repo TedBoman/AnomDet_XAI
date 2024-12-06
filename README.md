@@ -10,7 +10,7 @@
 - [License](#-license)
 - [Contacts](#%EF%B8%8F-contacts)
 
-## About The Project
+## 💻 About The Project
 
 ### Overview
 
@@ -22,7 +22,9 @@ The system architecture is modular by design and a simple way to add your own mo
 
 ### Features provided
 
-AnomDet allows for anomaly detection by importing a complete dataset in one batch or by simulating a real-time stream of the imported data. A machine learning model will process the data that is fed to the system and visualize the results in a frontend. The system also provides a set of self-defined 
+AnomDet allows for anomaly detection by importing a complete dataset in one batch or by simulating a real-time stream of the imported data. A machine learning model will process the data that is fed to the system and visualize the results in a frontend.
+
+The system also provides a set of self-defined anomaly detection algorithms and anomaly injection methods. The backend API offers the user to initiate a batch or stream job from the frontend or by invoking it from the command line. The API provides ways to check what models and injection methods are provided as well as listing jobs currently running. More details can be found in the [Guide](#-guide).
 
 ## 📝 How To Build
 
@@ -91,8 +93,8 @@ If you need to access the running container's shell for debugging or inspecting,
 ```sh
 docker exec -it timescaledb bash
 ```
-    
-## 👋 Guide
+
+## 📚 Guide
 
 ### Fronend
 
