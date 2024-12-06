@@ -3,6 +3,8 @@ import json
 import threading
 from time import sleep
 import os
+from pathlib import PureWindowsPath, PurePosixPath
+import platform
 import ML_models
 
 HOST = "localhost"
@@ -28,15 +30,19 @@ def main():
 
     # Start a thread listening for requests
     listener_thread = threading.Thread(target=__request_listener)
+    listener_thread.daemon = True
     listener_thread.start()
 
     i = 1
     print("Counting in main thread...")
     # Main loop serving the backend logic
-    while True:
-        print(i)
-        i += 1
-        sleep(1)
+    try:
+        while True:
+            print(i)
+            i += 1
+            sleep(1)
+    except KeyboardInterrupt:
+        print("Exiting backend...")
 
 # Returns a list of models implemented in MODEL_DIRECTORY
 def __get_models() -> list:
@@ -68,24 +74,31 @@ def __request_listener():
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind((HOST, PORT))
         sock.listen()
+        sock.settimeout(1)
+    except Exception as e:
+        print(e)
 
-        while True:
+    while True:
+        try: 
             conn, addr = sock.accept()
             print(f'Connected to {addr}')
             recv_data = conn.recv(1024)
             recv_dict = json.loads(recv_data)
             __handle_api_call(conn, recv_dict)
             print(f"Received request: {recv_dict}")
-            conn.send(b'{Data was received properly}')
-            conn.close() 
+            conn.close()
+        except Exception as e:
+            pass
     
-    except Exception as e:
-        print(e)
 
 # Handles the incoming requests and sends a response back to the client
 def __handle_api_call(conn, data: dict) -> None:
     if data["METHOD"] == "run-batch":
-        file_name = data["file_path"].split("/")[-1].split(".")[0]
+        if platform.system() == "Windows":              # Split the path apart to get filename
+            path = PureWindowsPath(data["file_path"])
+        else:
+            path = PurePosixPath(data["file_path"])
+        file_name = path.parts[-1].split(".")[0]
         test_json = json.dumps({"test": f'running batch job on {file_name} with model {data["model"]} and injection method {data["injection_method"]}' })
         conn.sendall(bytes(test_json, encoding="utf-8"))
     elif data["METHOD"] == "run-stream":
