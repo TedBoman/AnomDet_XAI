@@ -1,50 +1,51 @@
 import sys
-from os import path
+import os
 import socket
 import json
+from dotenv import load_dotenv
 
-HOST = "localhost"
-PORT = 9524
+load_dotenv()
+HOST = os.getenv('HOST')
+PORT = int(os.getenv('PORT'))
 
-DOC = """Invoke backend API from command line with the following commands:
+DOC = """"python backend_api.py run-batch <model> <injection-method> <path-to-batch-file>"
+starts anomaly detection of batch data from the given file with the given model and injection method
 
-    1. "python backend_api.py run-batch <model> <injection-method> <path-to-batch-file>"
-        starts anomaly detection of batch data from the given file with the given model and injection method
+"python backend_api.py run-stream <model> <injection-method> <path-to-stream-file>" 
+starts anomaly detection of stream data from the given file with the given model and injection method
 
-    2. "python backend_api.py run-stream <model> <injection-method> <path-to-stream-file>" 
-        starts anomaly detection of stream data from the given file with the given model and injection method
+"python backend_api.py change-model <model> <dataset-running>"
+changes the model used for anomaly detection for the currently run batch or stream named <dataset-running> to <model>
 
-    3. "python backend_api.py change-model <model> <dataset-running>"
-        changes the model used for anomaly detection for the currently run batch or stream named <dataset-running> to <model>
+"python backend_api.py change-injection <injection-method> <dataset-running>"
+changes the injection method used for anomaly detection for the currently run batch or stream named <dataset-running> to <injection-method>
 
-    4. "python backend_api.py change-injection <injection-method> <dataset-running>"
-        changes the injection method used for anomaly detection for the currently run batch or stream named <dataset-running> to <injection-method>
+"python backend_api.py cancel <dataset-running>" 
+cancels the currently running batch or stream named <dataset-running>
 
-    5. "python backend_api.py cancel <dataset-running>" 
-        cancels the currently running batch or stream named <dataset-running>
-
-    6. "python backend_api.py get-data <dataset-running>"
-        get all processed data from <dataset-running>, meaning just the data that has gone through our detection model
+"python backend_api.py get-data <dataset-running>"
+get all processed data from <dataset-running>, meaning just the data that has gone through our detection model
     
-    7. "python backend_api.py inject-anomaly <timestamps> <dataset-running>"    
-        injects anomalies in the data set running if manual injection is enabled, <timestamps> is a comma separated list of timestamps in 
-        seconds from now to inject anomalies at. (python backend_api.py inject-anomaly 10,20,30 system1 injects an anomaly at 10, 20 and 30 seconds from now)
+"python backend_api.py inject-anomaly <timestamps> <dataset-running>"    
+injects anomalies in the data set running if manual injection is enabled, <timestamps> is a comma separated list of timestamps in seconds from now to inject anomalies at. (python backend_api.py inject-anomaly 10,20,30 system1 injects an anomaly at 10, 20 and 30 seconds from now)
 
-    8. "python backend_api.py get-running"
-        get all running datasets
+"python backend_api.py get-running"
+get all running datasets
 
-    9. "python backend_api.py get-models"
-        gets all available models for anomaly detection
+"python backend_api.py get-models"
+gets all available models for anomaly detection
 
-    10. "python backend_api.py get-injection-methods"
-        gets all available injection methods for anomaly detection
+"python backend_api.py get-injection-methods"
+gets all available injection methods for anomaly detection
         
-    11. "python backend_api.py help"
-        prints this help message"""
+"python backend_api.py help"
+prints this help message
+"""
 
+# Main function handles argument parsing when the API is invoked from the command line
 def main(argv: list[str]) -> None:
     arg_len = len(argv)
-    api = BackendAPI()
+    api = BackendAPI(HOST, PORT)
     # Start a batch job in the backend if the command is "run-batch"
     if argv[1] == "run-batch":
         if arg_len != 5:
@@ -109,27 +110,28 @@ def main(argv: list[str]) -> None:
 
     # Print information about the backend API command line tool if the command is "help"
     elif argv[1] == "help":
-        result = DOC
+        print(DOC)
 
     # Print an error message if the command is not recognized
     else: 
         handle_error(3, f'argument "{argv[1]}" not recognized as a valid command')
 
     # Print return messgage in terminal when API is used by the command line tool
-    print(f'Recieved from backend: {result}')
+    if argv[1] != "help":
+        print(f'Recieved from backend: {result}')
         
 def handle_error(code: int, message: str) -> None:
         print(message)
         exit(code)        
 class BackendAPI:
     # Constructor setting host adress and port for the the backend container
-    def __init__(self) -> None:
-        self.host = HOST
-        self.port = PORT
+    def __init__(self, host: str, port: int) -> None:
+        self.host = host
+        self.port = port
 
     # Sends a request to the backend to start a batch job
-    def run_batch(self, model: str, injection_method: str, file_path: str) -> dict:
-        if not path.isfile(file_path):
+    def run_batch(self, model: str, injection_method: str, file_path: str) -> str:
+        if not os.path.isfile(file_path):
             handle_error(2, "File not found")
         data = {
             "METHOD": "run-batch",
@@ -140,8 +142,8 @@ class BackendAPI:
         return self.__send_data(json.dumps(data))
 
     # Sends a request to the backend to start a stream job
-    def run_stream(self, model: str, injection_method: str, file_path: str) -> dict:
-        if not path.isfile(path):
+    def run_stream(self, model: str, injection_method: str, file_path: str) -> str:
+        if not os.path.isfile(file_path):
             handle_error(2, "File not found")
         data = {
             "METHOD": "run-stream",
@@ -152,7 +154,7 @@ class BackendAPI:
         return self.__send_data(json.dumps(data))
 
     # Sends a request to the backend to change the model used for a running job
-    def change_model(self, model: str, name: str) -> dict:
+    def change_model(self, model: str, name: str) -> str:
         data = {
             "METHOD": "change-model",
             "model": model,
@@ -161,7 +163,7 @@ class BackendAPI:
         return self.__send_data(json.dumps(data))
 
     # Sends a request to the backend to change the injection method used for a running job
-    def change_method(self, injection_method: str, name: str) -> dict:
+    def change_method(self, injection_method: str, name: str) -> str:
         data = {
             "METHOD": "change-method",
             "injection-method": injection_method,
@@ -170,14 +172,14 @@ class BackendAPI:
         return self.__send_data(json.dumps(data))
 
 
-    def get_data(self, name: str) -> dict:
+    def get_data(self, name: str) -> str:
         data = {
             "METHOD": "get-data",
             "job_name": name
         }
         return self.__send_data(json.dumps(data))
 
-    def inject_anomaly(self, timestamps: list[int], name: str) -> dict:
+    def inject_anomaly(self, timestamps: list[int], name: str) -> str:
         data = {
             "METHOD": "inject-anomaly",
             "timestamps": timestamps,
@@ -185,32 +187,32 @@ class BackendAPI:
         }
         return self.__send_data(json.dumps(data))
 
-    def get_running(self) -> dict:
+    def get_running(self) -> str:
         data = {
             "METHOD": "get-running"
         }
         return self.__send_data(json.dumps(data))
     
-    def cancel_job(self, name: str) -> dict:
+    def cancel_job(self, name: str) -> str:
         data = {
             "METHOD": "cancel-job",
             "job_name": name
         }
         return self.__send_data(json.dumps(data))
     
-    def get_models(self) -> dict:
+    def get_models(self) -> str:
         data = {
             "METHOD": "get-models"
         }
         return self.__send_data(json.dumps(data))
     
-    def get_injection_methods(self) -> dict:
+    def get_injection_methods(self) -> str:
         data = {
             "METHOD": "get-injection-methods"
         }
         return self.__send_data(json.dumps(data))
 
-    def __send_data(self, data: str) -> dict:
+    def __send_data(self, data: str) -> str:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((HOST, PORT))
         sock.sendall(bytes(data, encoding="utf-8"))
