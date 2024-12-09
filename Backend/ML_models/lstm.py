@@ -7,13 +7,13 @@ from sklearn.preprocessing import StandardScaler
 
 class LSTMModel(model_interface.ModelInterface):
 
-    def run(self, df, seq_len):
-        df = pd.read_csv('system-1.csv', parse_dates=['timestamp'], index_col='timestamp')
+    def __init__(self):
+        self.model = keras.Sequential()
+
+    def run(self, df, TIME_STEPS):
 
         train_size = int(len(df) * .95)
-        test_size = len(df) - train_size
         train, test = df.iloc[0:train_size], df.iloc[train_size:len(df)]
-        print(train.shape, test.shape)
 
         scaler = StandardScaler()
         scaler = scaler.fit(train.iloc[:, 1:])
@@ -22,22 +22,22 @@ class LSTMModel(model_interface.ModelInterface):
         test.iloc[:, 1:] = scaler.transform(test.iloc[:, 1:])
 
 
-        TIME_STEPS = 30
+        #TIME_STEPS = 30
 
         X_train, y_train = create_dataset(train.iloc[:, 1:], train.iloc[:, 0], TIME_STEPS)
         X_test, y_test = create_dataset(test.iloc[:, 1:], test.iloc[:, 0], TIME_STEPS)
 
-        model = keras.Sequential()
-        model.add(keras.layers.LSTM(units=64, input_shape=(X_train.shape[1], X_train.shape[2])))
-        model.add(keras.layers.Dropout(rate=0.2))
-        model.add(keras.layers.RepeatVector(n=X_train.shape[1]))
-        model.add(keras.layers.LSTM(units=64, return_sequences=True))  # Added layer
-        model.add(keras.layers.Dropout(rate=0.2))  # Added layer
-        model.add(keras.layers.TimeDistributed(keras.layers.Dense(1)))
-        # compile using mean absolute error
-        model.compile(loss='mae', optimizer='adam')
 
-        history = model.fit(
+        self.model.add(keras.layers.LSTM(units=64, input_shape=(X_train.shape[1], X_train.shape[2])))
+        self.model.add(keras.layers.Dropout(rate=0.2))
+        self.model.add(keras.layers.RepeatVector(n=X_train.shape[1]))
+        self.model.add(keras.layers.LSTM(units=64, return_sequences=True))
+        self.model.add(keras.layers.Dropout(rate=0.2))  # Added layer
+        self.model.add(keras.layers.TimeDistributed(keras.layers.Dense(1)))
+
+        self.model.compile(loss='mae', optimizer='adam')
+
+        self.model.fit(
             X_train, y_train,
             epochs=3,
             batch_size=30,
@@ -45,20 +45,17 @@ class LSTMModel(model_interface.ModelInterface):
             shuffle=False  # not shuffle time series data because it is history dependant!!!!
         )
 
-        self.detect(X_test, model)
+        self.detect(X_test)
         return
 
-    def detect(self, detection_df, model):
+    def detect(self, detection_df):
 
-        X_train_pred = model.predict(detection_df)
-        train_mae_loss = np.mean(np.abs(X_train_pred - detection_df), axis=1)
-        X_test_pred = model.predict(detection_df)
-        test_mae_loss_new = np.mean(np.abs(X_test_pred - detection_df), axis=1)
-        threshold = np.mean(train_mae_loss) + 3 * np.std(train_mae_loss)
-        boolean_anomalies = test_mae_loss_new > threshold
-        anomalous_indices = np.where(boolean_anomalies)[0]
-        anomalous_samples = detection_df[anomalous_indices]
-        return anomalous_samples
+        X_pred = self.model.predict(detection_df)
+        mae_loss = np.mean(np.abs(X_pred - detection_df), axis=1)
+        threshold = np.mean(mae_loss) + 3 * np.std(mae_loss)
+        boolean_anomalies = mae_loss > threshold
+
+        return boolean_anomalies
 
 
 def create_dataset(X, y, time_steps=2880):

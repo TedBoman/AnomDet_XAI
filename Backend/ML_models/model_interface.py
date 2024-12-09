@@ -1,11 +1,15 @@
 from abc import ABC, abstractmethod
 
 class ModelInterface(ABC):
-     @abstractmethod
-     def run(self, df, seq_len):
+    @abstractmethod
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def run(self, df, seq_len):
          pass
 
-#Implemented detect function to work with both single-point data and batch datasets.
-     @abstractmethod
-     def detect(self, detection_df, model):
+
+    @abstractmethod
+    def detect(self, detection_df):
          pass
