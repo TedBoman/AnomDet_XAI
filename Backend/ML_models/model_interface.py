@@ -6,9 +6,8 @@ class ModelInterface(ABC):
         pass
 
     @abstractmethod
-    def run(self, df, seq_len):
+    def run(self, df, TIME_STEPS):
          pass
-
 
     @abstractmethod
     def detect(self, detection_df):

@@ -10,7 +10,7 @@ class LSTMModel(model_interface.ModelInterface):
     def __init__(self):
         self.model = keras.Sequential()
 
-    def run(self, df, TIME_STEPS):
+    def run(self, df, time_steps=2880):
 
         train_size = int(len(df) * .95)
         train, test = df.iloc[0:train_size], df.iloc[train_size:len(df)]
@@ -21,11 +21,8 @@ class LSTMModel(model_interface.ModelInterface):
         train.iloc[:, 1:] = scaler.transform(train.iloc[:, 1:])
         test.iloc[:, 1:] = scaler.transform(test.iloc[:, 1:])
 
-
-        #TIME_STEPS = 30
-
-        X_train, y_train = create_dataset(train.iloc[:, 1:], train.iloc[:, 0], TIME_STEPS)
-        X_test, y_test = create_dataset(test.iloc[:, 1:], test.iloc[:, 0], TIME_STEPS)
+        X_train, y_train = self.__create_dataset(train.iloc[:, 1:], train.iloc[:, 0], time_steps)
+        X_test, y_test = self.__create_dataset(test.iloc[:, 1:], test.iloc[:, 0], time_steps)
 
 
         self.model.add(keras.layers.LSTM(units=64, input_shape=(X_train.shape[1], X_train.shape[2])))
@@ -45,8 +42,17 @@ class LSTMModel(model_interface.ModelInterface):
             shuffle=False  # not shuffle time series data because it is history dependant!!!!
         )
 
-        self.detect(X_test)
-        return
+        
+        return X_test
+
+    def __create_dataset(self, X, y, time_steps):
+        Xs, ys = [], []
+        for i in range(len(X) - time_steps):
+            v = X.iloc[i: (i + time_steps)].values
+            Xs.append(v)
+            ys.append(y.iloc[i + time_steps])
+
+        return np.array(Xs), np.array(ys)
 
     def detect(self, detection_df):
 
@@ -58,12 +64,5 @@ class LSTMModel(model_interface.ModelInterface):
         return boolean_anomalies
 
 
-def create_dataset(X, y, time_steps=2880):
-    Xs, ys = [], []
-    for i in range(len(X) - time_steps):
-        v = X.iloc[i: (i + time_steps)].values
-        Xs.append(v)
-        ys.append(y.iloc[i + time_steps])
 
-    return np.array(Xs), np.array(ys)
 
