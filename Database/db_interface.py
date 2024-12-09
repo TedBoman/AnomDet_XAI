@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 
 class DBInterface(ABC):
-    # Constructor that initiates a connection to the database and adds the connection to self.conn
+    # Constructor that adds all connection parameters needed to connect to the database to the object
     @abstractmethod
     def __init__(self, conn_params: dict):
         pass
@@ -11,11 +11,11 @@ class DBInterface(ABC):
     @abstractmethod
     def create_table(self, table_name: str, columns: list[str]):
         pass
-    # Inserts data into the table_name table
+    # Inserts data into the table_name table. The data is a pandas DataFrame with matching columns to the table
     @abstractmethod
     def insert_data(self, table_name: str, data: pd.DataFrame):
         pass
-    # Reads data from the table_name table
+    # Reads each row of data in the table table_name that has a timestamp greater than or equal to time
     @abstractmethod
     def read_data(self, table_name: str, time: datetime):
         pass
