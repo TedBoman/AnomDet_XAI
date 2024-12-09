@@ -9,7 +9,6 @@ class ModelInterface(ABC):
     def run(self, df, TIME_STEPS):
          pass
 
-
     @abstractmethod
     def detect(self, detection_df):
          pass
