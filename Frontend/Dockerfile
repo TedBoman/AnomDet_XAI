@@ -11,4 +11,4 @@ COPY . /app/
 
 EXPOSE 8050
 
-CMD ["python", "app.py"]
+CMD ["python", "pages/app.py"]

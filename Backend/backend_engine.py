@@ -7,8 +7,8 @@ from pathlib import PureWindowsPath, PurePosixPath
 import platform
 import ML_models
 
-HOST = "localhost"
-PORT = 9524
+HOST = os.getenv("BACKEND_HOST", "localhost")
+PORT = int(os.getenv("BACKEND_PORT", 9524))
 
 MODEL_DIRECTORY = "./ML_models"
 INJECTION_METHOD_DIRECTORY = "./injection_methods"
