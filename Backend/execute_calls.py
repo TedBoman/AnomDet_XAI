@@ -1,6 +1,6 @@
-from ML_models.lstm import LSTMModel
-from ML_models.isolation_forest import IsolationForest
-from Database.db_interface import DBInterface
+#from ML_models.lstm import LSTMModel
+#from ML_models.isolation_forest import IsolationForest
+#from Database.db_interface import DBInterface
 import pandas as pd
 import os
 
@@ -16,15 +16,15 @@ def run_batch(model: str, injection_method: str, file_name: str) -> str:
 
     match model:
         case "lstm":
-            lstm_instance = LSTMModel()
-            detection_df = lstm_instance.run(df)
-            anomalies = lstm_instance.detect(detection_df)
+            #lstm_instance = LSTMModel()
+            #detection_df = lstm_instance.run(df)
+            #anomalies = lstm_instance.detect(detection_df)
             pass
         
         case "isolation_forest":
-            if_instance = IsolationForest()
-            detection_df = if_instance.run(df)
-            anomalies = if_instance.detect(detection_df)
+            #if_instance = IsolationForest()
+            #detection_df = if_instance.run(df)
+            #anomalies = if_instance.detect(detection_df)
             pass
         
         case _:
@@ -63,7 +63,7 @@ def get_datasets() -> list:
         file_path = DATASET_DIRECTORY + "/" + path
         print(file_path)
         if os.path.isfile(file_path):
-            dataset_name = path.split(".")[0]
-            datasets.append(dataset_name)
+            dataset = path
+            datasets.append(dataset)
 
     return datasets

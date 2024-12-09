@@ -4,11 +4,14 @@ import threading
 from time import sleep
 import os
 import execute_calls
+import pandas as pd
 from dotenv import load_dotenv
 
 load_dotenv()
 HOST = os.getenv('HOST')
 PORT = int(os.getenv('PORT'))
+
+DATASET_DIRECTORY = "../Datasets/"
 
 backend_data = {
     "batch-jobs": [],
@@ -58,10 +61,17 @@ def __request_listener():
 def __handle_api_call(conn, data: dict) -> None:
     match data["METHOD"]:
         case "run-batch":
+            print("test")
             model = data["model"]
             injection_method = data["injection_method"]
-            path = data["file_path"]
+            dataset_path = DATASET_DIRECTORY + data["dataset"]
+
+            df = pd.read_csv(dataset_path, low_memory=False)
+            df["is_anomaly"] = False
+            df["injected_anomaly"] = False
+            print(df)
             #result = execute_calls.run_batch(model, injection_method, path)
+            print(df)
             test_json = json.dumps({"test": "run-batch-response" })
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case "run-stream":
