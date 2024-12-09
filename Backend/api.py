@@ -148,26 +148,22 @@ class BackendAPI:
         self.port = port
 
     # Sends a request to the backend to start a batch job
-    def run_batch(self, model: str, injection_method: str, file_path: str) -> str:
-        if not os.path.isfile(file_path):
-            handle_error(2, "File not found")
+    def run_batch(self, model: str, injection_method: str, dataset: str) -> str:
         data = {
             "METHOD": "run-batch",
             "model": model,
             "injection_method": injection_method,
-            "file_path": file_path
+            "dataset": dataset
         }
         return self.__send_data(json.dumps(data))
 
     # Sends a request to the backend to start a stream job
-    def run_stream(self, model: str, injection_method: str, file_path: str) -> str:
-        if not os.path.isfile(file_path):
-            handle_error(2, "File not found")
+    def run_stream(self, model: str, injection_method: str, dataset: str) -> str:
         data = {
             "METHOD": "run-stream",
             "model": model,
             "injection_method": injection_method,
-            "file_path": file_path
+            "dataset": dataset
         }
         return self.__send_data(json.dumps(data))
 

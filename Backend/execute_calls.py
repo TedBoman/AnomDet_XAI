@@ -68,7 +68,7 @@ def get_datasets() -> list:
         file_path = DATASET_DIRECTORY + "/" + path
         print(file_path)
         if os.path.isfile(file_path):
-            dataset_name = path.split(".")[0]
-            datasets.append(dataset_name)
+            dataset = path
+            datasets.append(dataset)
 
     return datasets
