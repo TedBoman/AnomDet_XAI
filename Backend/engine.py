@@ -61,7 +61,6 @@ def __request_listener():
 def __handle_api_call(conn, data: dict) -> None:
     match data["METHOD"]:
         case "run-batch":
-            print("test")
             model = data["model"]
             injection_method = data["injection_method"]
             dataset_path = DATASET_DIRECTORY + data["dataset"]
@@ -70,7 +69,7 @@ def __handle_api_call(conn, data: dict) -> None:
             df["is_anomaly"] = False
             df["injected_anomaly"] = False
             print(df)
-            #result = execute_calls.run_batch(model, injection_method, path)
+            df = execute_calls.run_batch(model, injection_method, df)
             print(df)
             test_json = json.dumps({"test": "run-batch-response" })
             conn.sendall(bytes(test_json, encoding="utf-8"))
