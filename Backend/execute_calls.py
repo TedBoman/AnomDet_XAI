@@ -16,15 +16,15 @@ def run_batch(model: str, injection_method: str, df: pd.DataFrame) -> str:
     match model:
         case "lstm":
             lstm_instance = LSTMModel()
-            lstm_instance.run(feature_df)
-            anomalies = lstm_instance.detect(feature_df)
+            lstm_instance.run(df.iloc[:, :-2])
+            anomalies = lstm_instance.detect(df.iloc[:, :-2])
             df["is_anomaly"] = anomalies
             return df
         
         case "isolation_forest":
             if_instance = IsolationForest()
-            if_instance.run(feature_df)
-            anomalies = if_instance.detect(feature_df)
+            if_instance.run(df.iloc[:, :-2])
+            anomalies = if_instance.detect(df.iloc[:, :-2])
             df["is_anoamaly"] = anomalies
             return df
         
