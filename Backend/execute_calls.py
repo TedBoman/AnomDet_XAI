@@ -1,6 +1,5 @@
 from ML_models.lstm import LSTMModel
 from ML_models.isolation_forest import IsolationForest
-from Database.db_interface import DBInterface
 import pandas as pd
 import os
 

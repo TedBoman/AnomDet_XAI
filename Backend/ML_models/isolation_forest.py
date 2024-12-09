@@ -1,4 +1,4 @@
-import model_interface
+from ML_models import model_interface
 from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import train_test_split
 import numpy as np
