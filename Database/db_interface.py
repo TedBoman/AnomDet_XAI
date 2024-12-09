@@ -4,10 +4,21 @@ from datetime import datetime
 
 class DBInterface(ABC):
     # Constructor that adds all connection parameters needed to connect to the database to the object
+    # conn_params is a dictionary with the parameters needed for the specific database implementation
+    # As an example structure, the dictionary for a TimescaleDB implementation of the DBInterface could look like this:
+    # {
+    #     "user": "username",
+    #     "password": "password",
+    #     "host": "hostname",
+    #     "port": "port",
+    #     "database": "database"
+    # }
     @abstractmethod
     def __init__(self, conn_params: dict):
         pass
     # Creates a hypertable called table_name with column-names columns
+    # First column of name columns[0] is of type TIMESTAMPTZ NOT NULL and the rest are VARCHAR(50)
+    # Then two new columns of type BOOLEAN are added to the table, is_anomaly and injected_anomaly
     @abstractmethod
     def create_table(self, table_name: str, columns: list[str]):
         pass
