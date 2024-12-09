@@ -8,37 +8,43 @@ load_dotenv()
 HOST = os.getenv('HOST')
 PORT = int(os.getenv('PORT'))
 
-DOC = """"python backend_api.py run-batch <model> <injection-method> <path-to-batch-file>"
+DOC = """"python api.py run-batch <model> <injection-method> <dataset>"
 starts anomaly detection of batch data from the given file with the given model and injection method
 
-"python backend_api.py run-stream <model> <injection-method> <path-to-stream-file>" 
+"python api.py run-stream <model> <injection-method> <dataset>" 
 starts anomaly detection of stream data from the given file with the given model and injection method
 
-"python backend_api.py change-model <model> <dataset-running>"
+"python api.py change-model <model> <dataset-running>"
 changes the model used for anomaly detection for the currently run batch or stream named <dataset-running> to <model>
 
-"python backend_api.py change-injection <injection-method> <dataset-running>"
+"python api.py change-injection <injection-method> <dataset-running>"
 changes the injection method used for anomaly detection for the currently run batch or stream named <dataset-running> to <injection-method>
 
-"python backend_api.py cancel <dataset-running>" 
+"python api.py cancel <dataset-running>" 
 cancels the currently running batch or stream named <dataset-running>
 
-"python backend_api.py get-data <dataset-running>"
+"python api.py get-data <dataset-running>"
 get all processed data from <dataset-running>, meaning just the data that has gone through our detection model
     
-"python backend_api.py inject-anomaly <timestamps> <dataset-running>"    
-injects anomalies in the data set running if manual injection is enabled, <timestamps> is a comma separated list of timestamps in seconds from now to inject anomalies at. (python backend_api.py inject-anomaly 10,20,30 system1 injects an anomaly at 10, 20 and 30 seconds from now)
+"python api.py inject-anomaly <timestamps> <dataset-running>"    
+injects anomalies in the data set running if manual injection is enabled, <timestamps> is a comma separated list of timestamps in seconds from now to inject anomalies at. (python api.py inject-anomaly 10,20,30 system1 injects an anomaly at 10, 20 and 30 seconds from now)
 
-"python backend_api.py get-running"
+"python api.py get-running"
 get all running datasets
 
-"python backend_api.py get-models"
+"python api.py get-models"
 gets all available models for anomaly detection
 
-"python backend_api.py get-injection-methods"
+"python api.py get-injection-methods"
 gets all available injection methods for anomaly detection
+
+"python api.py get-datasets"
+gets all available datasets
+
+"python api.py upload-dataset <dataset-file-path>"
+uploads a dataset to the backend by adding the file to the Dataset directory
         
-"python backend_api.py help"
+"python api.py help"
 prints this help message
 """
 
@@ -50,7 +56,6 @@ def main(argv: list[str]) -> None:
     if argv[1] == "run-batch":
         if arg_len != 5:
             handle_error(1, "Invalid number of arguments")
-        print(len([argv[2], argv[3], argv[4]]))
         result = api.run_batch(argv[2], argv[3], argv[4])
 
     # Start a stream job in the backend if the command is "run-stream"
@@ -107,6 +112,18 @@ def main(argv: list[str]) -> None:
         if (arg_len != 2):
             handle_error(1, "Invalid number of arguments")
         result = api.get_injection_methods()
+
+    # Get all avaliable datasets if the command is "get-datasets"
+    elif argv[1] == "get-datasets":
+        if (arg_len != 2):
+            handle_error(1, "Invalid number of arguments")
+        result = api.get_datasets()
+
+    # Upload a dataset to the backend if the command is "upload-dataset"
+    elif argv[1] == "upload-dataset":
+        if (arg_len != 3):
+            handle_error(1, "Invalid number of arguments")
+        result = api.upload_dataset(argv[2])
 
     # Print information about the backend API command line tool if the command is "help"
     elif argv[1] == "help":
@@ -209,6 +226,21 @@ class BackendAPI:
     def get_injection_methods(self) -> str:
         data = {
             "METHOD": "get-injection-methods"
+        }
+        return self.__send_data(json.dumps(data))
+    
+    def get_datasets(self) -> str:
+        data = {
+            "METHOD": "get-datasets"
+        }
+        return self.__send_data(json.dumps(data))
+    
+    def upload_dataset(self, file_path: str) -> str:
+        if not os.path.isfile(file_path):
+            handle_error(2, "File not found")
+        data = {
+            "METHOD": "upload-dataset",
+            "file_path": file_path
         }
         return self.__send_data(json.dumps(data))
 
