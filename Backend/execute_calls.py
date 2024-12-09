@@ -8,27 +8,30 @@ MODEL_DIRECTORY = "./ML_models"
 INJECTION_METHOD_DIRECTORY = "./injection_methods"
 DATASET_DIRECTORY = "../Datasets"
 
-def run_batch(model: str, injection_method: str, file_name: str) -> str:
+def run_batch(model: str, injection_method: str, df: pd.DataFrame) -> str:
 
-    dataset_folder = "Datasets"
-    full_path = DATASET_DIRECTORY + "/" + file_name
-    df = pd.read_csv(full_path)
+    #Removing the "is_injected" & "is_anomaly" columns
+    feature_df = df.iloc[:, :-2]
 
+    #Creating an instance of the model
     match model:
         case "lstm":
             lstm_instance = LSTMModel()
-            detection_df = lstm_instance.run(df)
-            anomalies = lstm_instance.detect(detection_df)
-            pass
+            lstm_instance.run(feature_df)
+            anomalies = lstm_instance.detect(feature_df)
+            df["is_anomaly"] = anomalies
+            return df
         
         case "isolation_forest":
             if_instance = IsolationForest()
-            detection_df = if_instance.run(df)
-            anomalies = if_instance.detect(detection_df)
-            pass
+            if_instance.run(feature_df)
+            anomalies = if_instance.detect(feature_df)
+            df["is_anoamaly"] = anomalies
+            return df
         
         case _:
             raise Exception("Model not found")
+
 
 # Returns a list of models implemented in MODEL_DIRECTORY
 def get_models() -> list:
@@ -47,6 +50,7 @@ def get_models() -> list:
     
     return models
 
+#Returns a list of injection methods implemented in INJECTION_METHOD_DIRECTORY
 def get_injection_methods() -> list:
     injection_methods = ["not implemented"]
     '''
@@ -57,6 +61,7 @@ def get_injection_methods() -> list:
     '''
     return injection_methods
 
+#Fetching datasets from the dataset directory
 def get_datasets() -> list:
     datasets = []
     for path in os.listdir(DATASET_DIRECTORY):
