@@ -42,8 +42,8 @@ class LSTMModel(model_interface.ModelInterface):
             shuffle=False  # not shuffle time series data because it is history dependant!!!!
         )
 
-        self.detect(X_test)
-        return
+        
+        return X_test
 
     def __create_dataset(self, X, y, time_steps):
         Xs, ys = [], []
