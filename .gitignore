@@ -1,4 +1,5 @@
 .idea
-**.env*
 Database/anom_secrets/*
+**.env
 **.pyc
+**__pycache__
