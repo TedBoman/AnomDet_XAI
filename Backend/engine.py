@@ -68,9 +68,7 @@ def __handle_api_call(conn, data: dict) -> None:
             df = pd.read_csv("./ML_models/system-1.csv", low_memory=False, parse_dates=["timestamp"], index_col="timestamp")
             df["is_anomaly"] = False
             df["injected_anomaly"] = False
-            print(df)
             df = execute_calls.run_batch(model, injection_method, df)
-            print(df)
             test_json = json.dumps({"test": "run-batch-response" })
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case "run-stream":

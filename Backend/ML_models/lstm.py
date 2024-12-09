@@ -1,3 +1,6 @@
+import os
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 from tensorflow import keras
 from keras import Sequential
 from keras import layers
@@ -41,7 +44,7 @@ class LSTMModel(model_interface.ModelInterface):
             self.model.fit(
                 X_train, y_train,
                 epochs=1,
-                batch_size=30,
+                batch_size=time_steps,
                 validation_split=0.1,
                 shuffle=False  # not shuffle time series data because it is history dependant!!!!
             )
@@ -66,12 +69,8 @@ class LSTMModel(model_interface.ModelInterface):
             X_pred = self.model.predict(X_test)
             mae_loss = np.mean(np.abs(X_pred - X_test), axis=1)
             threshold = np.mean(mae_loss) + 3 * np.std(mae_loss)
+            boolean_anomalies = mae_loss > threshold
         except Exception as e:
             print(f'ERROR: {e}')
-        boolean_anomalies = mae_loss > threshold
 
-        return boolean_anomalies
-
-
-
-
+        return boolean_anomalies[:,0]
