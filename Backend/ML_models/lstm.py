@@ -1,7 +1,7 @@
-import keras
+from tensorflow import keras
 import numpy as np
 import pandas as pd
-import model_interface
+from ML_models import model_interface
 from sklearn.preprocessing import StandardScaler
 
 
@@ -13,35 +13,36 @@ class LSTMModel(model_interface.ModelInterface):
 
     #Preprocesses, trains and fits the model
     def run(self, df, time_steps=2880):
-
         train_size = int(len(df) * 0.5)
-        train, test = df.iloc[0:train_size], df.iloc[train_size:len(df)]
 
-        scaler = StandardScaler()
-        scaler = scaler.fit(train.iloc[:, 1:])
+        try:
+            train = df.iloc[0:train_size]
 
-        train.iloc[:, 1:] = scaler.transform(train.iloc[:, 1:])
-        test.iloc[:, 1:] = scaler.transform(test.iloc[:, 1:])
+            scaler = StandardScaler()
+            scaler = scaler.fit(train.iloc[:, 1:])
 
-        X_train, y_train = self.__create_dataset(train.iloc[:, 1:], train.iloc[:, 0], time_steps)
+            train.iloc[:, 1:] = scaler.transform(train.iloc[:, 1:])
 
+            X_train, y_train = self.__create_dataset(train.iloc[:, 1:], train.iloc[:, 0], 30)
 
-        self.model.add(keras.layers.LSTM(units=64, input_shape=(X_train.shape[1], X_train.shape[2])))
-        self.model.add(keras.layers.Dropout(rate=0.2))
-        self.model.add(keras.layers.RepeatVector(n=X_train.shape[1]))
-        self.model.add(keras.layers.LSTM(units=64, return_sequences=True))
-        self.model.add(keras.layers.Dropout(rate=0.2))
-        self.model.add(keras.layers.TimeDistributed(keras.layers.Dense(1)))
+            self.model.add(keras.layers.LSTM(units=64, input_shape=input((X_train.shape[1], X_train.shape[2]))))
+            print("test1")
+            self.model.add(keras.layers.Dropout(rate=0.2))
+            self.model.add(keras.layers.RepeatVector(n=X_train.shape[1]))
+            self.model.add(keras.layers.LSTM(units=64, return_sequences=True))
+            self.model.add(keras.layers.Dropout(rate=0.2))
+            self.model.add(keras.layers.TimeDistributed(keras.layers.Dense(1)))
+            self.model.compile(loss='mae', optimizer='adam')
 
-        self.model.compile(loss='mae', optimizer='adam')
-
-        self.model.fit(
-            X_train, y_train,
-            epochs=3,
-            batch_size=30,
-            validation_split=0.1,
-            shuffle=False  # not shuffle time series data because it is history dependant!!!!
-        )
+            self.model.fit(
+                X_train, y_train,
+                epochs=3,
+                batch_size=30,
+                validation_split=0.1,
+                shuffle=False  # not shuffle time series data because it is history dependant!!!!
+            )
+        except Exception as e:
+            print(f'ERROR: {e}')
 
     #Creates the X_train and y_train datasets
     def __create_dataset(self, X, y, time_steps):
