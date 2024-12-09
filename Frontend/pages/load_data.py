@@ -43,6 +43,20 @@ layout = html.Div([
     # Graph to display dataset
     dcc.Graph(id="dataset-graph", style={"marginTop": "20px"}),
 
+    # Anomaly Log Box
+    html.Div([
+        html.H3("Anomaly Log:", style={"color": "#ffffff", "marginBottom": "10px"}),
+        html.Div(id="dataset-anomaly-log", style={
+            "height": "200px",
+            "overflowY": "scroll",
+            "backgroundColor": "#1e2130",
+            "color": "#ffffff",
+            "padding": "10px",
+            "border": "1px solid #444",
+            "borderRadius": "5px"
+        })
+    ], style={"marginTop": "30px"}),
+
     # File upload panel below the graph
     html.Div([
         html.Label("Upload a New Dataset:", style={"fontSize": "20px", "color": "#ffffff"}),
@@ -83,30 +97,56 @@ def update_column_dropdown(selected_dataset):
     return columns
 
 
-# Callback to update dataset graph based on selected column
+# Callback to update dataset graph and anomaly log based on selected column
 @callback(
-    Output("dataset-graph", "figure"),
+    [Output("dataset-graph", "figure"),
+     Output("dataset-anomaly-log", "children")],
     [Input("dataset-dropdown", "value"),
      Input("column-dropdown", "value")]
 )
-def update_dataset_graph(selected_dataset, selected_column):
+def update_dataset_graph_and_anomaly_log(selected_dataset, selected_column):
     if selected_dataset and selected_column:
         df = datasets[selected_dataset]
-        return {
-            "data": [{
-                "x": df["timestamp"],
-                "y": df[selected_column],
-                "type": "line",
-                "name": selected_column
-            }],
-            "layout": {
-                "title": f"{selected_dataset} - {selected_column}",
-                "xaxis": {"title": "Timestamp"},
-                "yaxis": {"title": selected_column},
-                "template": "plotly_dark"
-            }
-        }
-    return {}
+
+        # Detect anomalies (e.g., values greater than 8)
+        df["anomaly"] = df[selected_column] > 8
+
+        # Create the graph
+        figure = go.Figure([
+            go.Scatter(
+                x=df["timestamp"],
+                y=df[selected_column],
+                mode="lines+markers",
+                name="Values",
+                line=dict(color="blue")
+            ),
+            go.Scatter(
+                x=df[df["anomaly"]]["timestamp"],
+                y=df[df["anomaly"]][selected_column],
+                mode="markers",
+                marker=dict(color="red", size=10),
+                name="Anomalies"
+            )
+        ])
+        figure.update_layout(
+            title=f"{selected_dataset} - {selected_column}",
+            xaxis_title="Timestamp",
+            yaxis_title=selected_column,
+            template="plotly_dark",
+        )
+
+        # Prepare the anomaly log
+        anomaly_log = [
+            f"[{row['timestamp']}] Anomaly detected: {selected_column} = {row[selected_column]:.2f}"
+            for _, row in df[df["anomaly"]].iterrows()
+        ]
+
+        # Display the last 10 anomalies
+        anomaly_log_display = html.Ul([html.Li(log) for log in anomaly_log[-10:]])
+
+        return figure, anomaly_log_display
+
+    return {}, []
 
 
 # Callback to handle file upload
