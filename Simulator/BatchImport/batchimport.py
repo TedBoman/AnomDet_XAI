@@ -5,8 +5,7 @@ import pandas as pd
 from pathlib import Path
 from DBAPI.db_interface import DBInterface as db
 from AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
-import re
-from datetime import timedelta
+from DBAPI import utils as ut
 import datetime
 
 class BatchImporter:
@@ -78,75 +77,44 @@ class BatchImporter:
         db_instance = self.init_db(conn_params)
         db_instance.insert_data(table_name, chunk, isAnomaly)  # Use isAnomaly flag
 
-    def parse_duration(self, duration_str):
-        """
-        Parses a duration string like '1H', '30min', '2D', '1h30m', '2days 5hours' 
-        into a timedelta object.
-        
-        Supports the following units:
-            - H, h: hours
-            - min, m: minutes
-            - D, d, days: days
-            - S, s: seconds
-            - W, w, weeks: weeks
-
-        Args:
-            duration_str (str): The duration string to parse.
-
-        Returns:
-            datetime.timedelta: A timedelta object representing the duration.
-
-        Raises:
-            ValueError: If the duration string is invalid.
-        """
-        pattern = r'(\d+)\s*([HhmindaysSwW]+)'
-        matches = re.findall(pattern, duration_str)
-
-        if not matches:
-            raise ValueError("Invalid duration format")
-
-        total_seconds = 0
-        for value, unit in matches:
-            value = int(value)
-            if unit in ('H', 'h'):
-                total_seconds += value * 3600
-            elif unit in ('min', 'm'):
-                total_seconds += value * 60
-            elif unit in ('D', 'd', 'days'):
-                total_seconds += value * 86400
-            elif unit in ('S', 's'):
-                total_seconds += value
-            elif unit in ('W', 'w', 'weeks'):
-                total_seconds += value * 604800
-            else:
-                raise ValueError(f"Invalid unit: {unit}")
-
-        return timedelta(total_seconds)
-
     def inject_anomalies_into_chunk(self, chunk, anomaly_settings):
         """
-        Injects anomalies into a DataFrame chunk based on the provided settings.
-        Handles anomalies that may span across chunk boundaries.
+        Inject anomalies into a chunk of data based on the given settings.
         """
-        injector = TimeSeriesAnomalyInjector()
-        anomaly_applied = False
+        try:
+            print("Injecting anomalies into chunk...")
+            print(f"Chunk shape: {chunk.shape}")
+            print(f"Anomaly settings: {anomaly_settings}")
 
-        # Iterate over each anomaly setting
-        for anomaly_setting in anomaly_settings:
-            start_time = anomaly_setting['timestamp']
-            duration = self.parse_duration(anomaly_setting['duration'])
-            end_time = start_time + duration
+            if not isinstance(chunk, pd.DataFrame):
+                raise ValueError("Expected chunk to be a pandas DataFrame.")
 
-            # Check if this chunk overlaps with the anomaly span
-            chunk_start_time = chunk[chunk.columns[0]].min()
-            chunk_end_time = chunk[chunk.columns[0]].max()
+            injector = TimeSeriesAnomalyInjector() 
+            chunk_start_time = chunk['timestamp'].min()  # Adjust to actual timestamp column
+            chunk_end_time = chunk['timestamp'].max()
 
-            # Expanded overlap condition to cover more scenarios
-            if (chunk_start_time <= end_time) and (chunk_end_time >= start_time):
-                chunk = injector.inject_anomaly(chunk, anomaly_setting)
-                anomaly_applied = True
+            anomaly_applied = False  # Flag to track if any anomaly was applied
 
-        return chunk, anomaly_applied
+            for anomaly in anomaly_settings:
+
+                start_time = anomaly['timestamp']  # Start time is already an absolute timestamp
+                end_time = start_time + ut.parse_duration(anomaly.get('duration', '0s'))  # Calculate end time
+
+                # Check if the chunk overlaps with the anomaly’s time range
+                if (chunk_start_time <= end_time) and (chunk_end_time >= start_time):
+                    chunk = injector.inject_anomaly(chunk, anomaly)
+                    anomaly_applied = True
+                    print(f"Anomaly '{anomaly['anomaly_type']}' applied from {start_time} to {end_time}")
+                else:
+                    print(f"No overlap for anomaly '{anomaly['anomaly_type']}'.")
+
+            # Debug: Log the result of anomaly injection
+            print(f"Anomaly applied: {anomaly_applied}")
+            return chunk, anomaly_applied
+
+        except Exception as e:
+            print(f"Error injecting anomalies into chunk: {e}")
+            return chunk, False
 
     def filetype_csv(self, conn_params, anomaly_settings=None):
         """

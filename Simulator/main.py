@@ -47,8 +47,15 @@ def main(argv: list[str]):
         "timestamp": 630,
         "magnitude": 2,
         "percentage": 100,
-        "duration": "3s",
-        "columns": ["load-5m", "load-1m"],}
+        "duration": "0",
+        "columns": ["load-5m", "load-1m"],},
+        #{
+        #"anomaly_type": "spike",
+        #"timestamp": 210,
+        #"magnitude": 2,
+        #"percentage": 50,
+        #"duration": "2m",
+        #"columns": ["load-5m", "load-1m"],}
         #Dic list
     ]
 

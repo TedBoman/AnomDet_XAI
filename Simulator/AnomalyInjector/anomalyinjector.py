@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Union, List, Optional, Dict
+from DBAPI import utils as ut
 
 class TimeSeriesAnomalyInjector:
     def __init__(self, seed: int = 42):
@@ -39,7 +40,7 @@ class TimeSeriesAnomalyInjector:
 
         # Extract settings with defaults
         start_time = anomaly_settings.get('timestamp')
-        duration = anomaly_settings.get('duration', None)
+        duration = ut.parse_duration_seconds(anomaly_settings.get('duration', None))
         columns = anomaly_settings.get('columns', [])
         anomaly_type = anomaly_settings.get('anomaly_type', 'custom')
         percentage = anomaly_settings.get('percentage', 0.1)
@@ -98,13 +99,14 @@ class TimeSeriesAnomalyInjector:
                             data_range,
                             mean,
                             anomaly_type, 
-                            magnitude
+                            magnitude,
                         )
 
                         print(f"Modified data for column {column}:")
                         print(modified_data.loc[anomaly_indices, column])  # Verify changes
         else:
             # Point-specific anomaly injection
+            print("Point anomaly!")
             # Identify the exact timestamp
             point_mask = modified_data[timestamp_col] == start_time
             point_data = modified_data[point_mask]
@@ -116,6 +118,8 @@ class TimeSeriesAnomalyInjector:
             # Inject anomalies for each specified column at the specific point
             for column in columns:
                 if column in point_data.columns:
+                    data_range = modified_data[column].max() - modified_data[column].min()
+                    mean = modified_data[column].mean()
                     # Modify the specific point
                     modified_data.loc[point_mask, column] = self._apply_anomaly(
                         modified_data.loc[point_mask, column], 
@@ -139,12 +143,13 @@ class TimeSeriesAnomalyInjector:
         Returns:
             pd.Series: Modified data
         """
+        print("______________________")
         if anomaly_type == 'lowered':
             print("Injecting lowerd anomaly!")
             random_factors = self.rng.uniform(0.3, 0.4)
             step_value = -data_range * random_factors
-            print(f"Step: {step_value} = -datarange: -{data_range} * random: {random_factors} * magnitude: {magnitude}")
-            
+            print(f"Step: {step_value} = -datarange: -{data_range} * random: {random_factors} = {-data_range * random_factors}")
+            print(f"OLD: {data}. NEW: {np.maximum(data + step_value, 0)}")
             print(f"return: {np.maximum(data + step_value, 0)}")
 
             return np.maximum(data + step_value, 0)
