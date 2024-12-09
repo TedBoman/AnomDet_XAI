@@ -1,24 +1,23 @@
 from dash import dcc, html, Input, Output, callback
-import dash
 
 layout = html.Div([
-    # Sayfa Başlığı
     html.H1("Starter Page", style={
-        "textAlign": "center", 
-        "marginBottom": "30px", 
-        "color": "#ffffff", 
-        "fontSize": "40px"}),
+        "textAlign": "center",
+        "marginBottom": "30px",
+        "color": "#ffffff",
+        "fontSize": "40px"
+    }),
 
-    # Load ve Stream Data Butonları
+    # Load and Stream Data Buttons
     html.Div([
-        html.Button("Load Data", id="load-data-btn", n_clicks=0, 
-                    style={"margin": "10px", "width": "300px", "height": "70px", 
-                           "fontSize": "20px", "backgroundColor": "#4CAF50", 
-                           "color": "#ffffff", "borderRadius": "10px"}),
-        html.Button("Stream Data", id="stream-data-btn", n_clicks=0, 
-                    style={"margin": "10px", "width": "300px", "height": "70px", 
-                           "fontSize": "20px", "backgroundColor": "#008CBA", 
-                           "color": "#ffffff", "borderRadius": "10px"})
+        dcc.Link(html.Button("Load Data", id="load-data-btn",
+                             style={"margin": "10px", "width": "300px", "height": "70px",
+                                    "fontSize": "20px", "backgroundColor": "#4CAF50",
+                                    "color": "#ffffff", "borderRadius": "10px"}), href="/load-data"),
+        dcc.Link(html.Button("Stream Data", id="stream-data-btn",
+                             style={"margin": "10px", "width": "300px", "height": "70px",
+                                    "fontSize": "20px", "backgroundColor": "#008CBA",
+                                    "color": "#ffffff", "borderRadius": "10px"}), href="/stream-data")
     ], style={"textAlign": "center", "marginBottom": "30px"}),
 
     # Detection Model Dropdown
@@ -36,9 +35,8 @@ layout = html.Div([
         )
     ], style={"textAlign": "center", "marginBottom": "30px"}),
 
-    # Injection Checkbox ve Panel
+    # Injection Checkbox and Panel
     html.Div([
-        # Injection Checkbox
         html.Div([
             dcc.Checklist(
                 id="injection-check",
@@ -48,20 +46,21 @@ layout = html.Div([
             )
         ], style={"textAlign": "center"}),
 
-        # Injection Model Panel (başlangıçta gizli)
         html.Div(id="injection-panel", style={"display": "none", "marginTop": "20px", "textAlign": "center"})
     ], style={"textAlign": "center", "marginBottom": "30px"}),
 
-    # Feedback Paneli (Sonuç veya Mesajlar)
-    html.Div(id="starter-feedback", style={"textAlign": "center", "marginTop": "20px"})
+    html.Div(id="starter-feedback", style={"textAlign": "center", "marginTop": "20px"}),
+
+    # Logo Section at the Bottom
+  
 ], style={
-    "backgroundColor": "#282c34",  # Arka plan rengi
+    "backgroundColor": "#282c34",  # Background color
     "padding": "50px",
     "minHeight": "100vh"
 })
 
 
-# Callback: Injection Panelini Göster/Gizle
+# Callback to Show/Hide Injection Panel
 @callback(
     Output("injection-panel", "style"),
     Input("injection-check", "value")
@@ -71,7 +70,8 @@ def toggle_injection_panel(selected):
         return {"display": "block", "marginTop": "20px", "textAlign": "center"}
     return {"display": "none"}
 
-# Callback: Injection Paneline Dropdown Ekleyin
+
+# Callback to Add Dropdown and Date Range to Injection Panel
 @callback(
     Output("injection-panel", "children"),
     Input("injection-check", "value")
@@ -89,24 +89,16 @@ def render_injection_panel(selected):
                 ],
                 placeholder="Select an injection method",
                 style={"width": "350px", "fontSize": "18px", "margin": "auto"}
-            )
+            ),
+            html.Div([
+                html.Label("Select Date Range for Injection:", style={"fontSize": "18px", "color": "#ffffff"}),
+                dcc.DatePickerRange(
+                    id="date-picker-range",
+                    start_date_placeholder_text="Start Date",
+                    end_date_placeholder_text="End Date",
+                    display_format="YYYY-MM-DD",
+                    style={"marginTop": "10px"}
+                )
+            ], style={"marginTop": "20px", "textAlign": "center"})
         ])
-    return ""
-
-# Callback: Load Data ve Stream Data Butonlarını Yönet
-@callback(
-    Output("starter-feedback", "children"),
-    [Input("load-data-btn", "n_clicks"),
-     Input("stream-data-btn", "n_clicks")]
-)
-def navigate_buttons(load_clicks, stream_clicks):
-    ctx = dash.callback_context
-    if not ctx.triggered:
-        return ""
-    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
-
-    if button_id == "load-data-btn":
-        return dcc.Location(href="/load-data", id="redirect-load-data")
-    elif button_id == "stream-data-btn":
-        return dcc.Location(href="/stream-data", id="redirect-stream-data")
     return ""
