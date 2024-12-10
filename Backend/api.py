@@ -5,8 +5,8 @@ import json
 from dotenv import load_dotenv
 
 load_dotenv()
-HOST = os.getenv('HOST')
-PORT = int(os.getenv('PORT'))
+HOST = 'localhost'
+PORT = int(os.getenv('BACKEND_PORT'))
 
 DOC = """"python api.py run-batch <model> <injection-method> <dataset>"
 starts anomaly detection of batch data from the given file with the given model and injection method
@@ -41,7 +41,7 @@ gets all available injection methods for anomaly detection
 "python api.py get-datasets"
 gets all available datasets
 
-"python api.py upload-dataset <dataset-file-path>"
+"python api.py import-dataset <dataset-file-path> <timestamp-column-name>"
 uploads a dataset to the backend by adding the file to the Dataset directory
         
 "python api.py help"
@@ -242,10 +242,14 @@ class BackendAPI:
         return self.__send_data(json.dumps(data))
 
     def __send_data(self, data: str) -> str:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((HOST, PORT))
-        sock.sendall(bytes(data, encoding="utf-8"))
-        return json.loads(sock.recv(1024))
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((HOST, PORT))
+            sock.sendall(bytes(data, encoding="utf-8"))
+            data = sock.recv(1024)
+        except Exception as e:
+            print(e)
+        return json.loads(data)
 
 if __name__ == "__main__":
     main(sys.argv)

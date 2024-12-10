@@ -1,6 +1,7 @@
 from ML_models.lstm import LSTMModel
 from ML_models.isolation_forest import IsolationForest
 import pandas as pd
+import numpy as np
 import os
 
 MODEL_DIRECTORY = "./ML_models"
@@ -15,16 +16,22 @@ def run_batch(model: str, injection_method: str, df: pd.DataFrame) -> str:
     #Creating an instance of the model
     match model:
         case "lstm":
+            time_steps=30
             lstm_instance = LSTMModel()
-            lstm_instance.run(feature_df)
-            anomalies = lstm_instance.detect(feature_df)
-            df["is_anomaly"] = anomalies
+            lstm_instance.run(df.iloc[:, :-2], time_steps)
+            anomalies = lstm_instance.detect(df.iloc[:, :-2])
+            try: 
+                df["is_anomaly"] = anomalies
+                test_df = df[df["is_anomaly"] == True]
+                print(test_df)
+            except Exception as e:
+                print(f'ERROR: {e}')
             return df
         
         case "isolation_forest":
             if_instance = IsolationForest()
-            if_instance.run(feature_df)
-            anomalies = if_instance.detect(feature_df)
+            if_instance.run(df.iloc[:, :-2])
+            anomalies = if_instance.detect(df.iloc[:, :-2])
             df["is_anoamaly"] = anomalies
             return df
         
