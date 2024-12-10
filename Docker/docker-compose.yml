@@ -31,15 +31,17 @@ services:
     build:
       context: ../Backend
       dockerfile: Dockerfile
+      args:
+        - BACKEND_PORT=${BACKEND_PORT}
     container_name: Backend
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     depends_on:
       - timescaledb
-    #env_file:
-      #- ../Backend/.env
-    #extra_hosts:
-      #- "host.docker.internal:host-gateway"
+    env_file:
+      - ../Backend/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: always
 
 volumes:

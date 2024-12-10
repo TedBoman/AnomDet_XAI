@@ -5,8 +5,8 @@ import json
 from dotenv import load_dotenv
 
 load_dotenv()
-HOST = os.getenv('BACKEND_HOST', '127.0.0.1')
-PORT = int(os.getenv('BACKEND_PORT', '9524'))
+HOST = 'localhost'
+PORT = int(os.getenv('BACKEND_PORT'))
 
 DOC = """"python api.py run-batch <model> <injection-method> <dataset>"
 starts anomaly detection of batch data from the given file with the given model and injection method
