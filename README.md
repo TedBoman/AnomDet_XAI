@@ -2,13 +2,13 @@
 
 ## 📑 Table of contents
 
-- [About](#-about-the-project)
-- [Getting started](#-getting-started)
-- [How to Build](#-how-to-build)
-- [Documentation](#-documentation)
-- [Feedback and Contributions](#-feedback-and-contributions)
+- [About The Project](#-about-the-project)
+- [How To Build](#-how-to-build)
+- [Tools And Frameworks](#-tools-and-frameworks)
+- [Guide](#-guide)
 - [License](#-license)
-- [Contacts](#%EF%B8%8F-contacts)
+- [Authors](#-authors)
+- [Acknowledgements](#-acknowledgements)
 
 ## 💻 About The Project
 
@@ -94,9 +94,19 @@ If you need to access the running container's shell for debugging or inspecting,
 docker exec -it timescaledb bash
 ```
 
+## 🛠️ Tools And Frameworks
+
+### Python
+
+### Docker
+
+### TimescaleDB
+
+### Dash
+
 ## 📚 Guide
 
-### Fronend
+### Frontend
 
 ### CLI-tool
 
