@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 HOST = os.getenv('BACKEND_HOST', '127.0.0.1')
-PORT = int(os.getenv('BACKEND_PORT', 9524))
+PORT = int(os.getenv('BACKEND_PORT', '9524'))
 
 DOC = """"python api.py run-batch <model> <injection-method> <dataset>"
 starts anomaly detection of batch data from the given file with the given model and injection method
@@ -242,10 +242,14 @@ class BackendAPI:
         return self.__send_data(json.dumps(data))
 
     def __send_data(self, data: str) -> str:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((HOST, PORT))
-        sock.sendall(bytes(data, encoding="utf-8"))
-        return json.loads(sock.recv(1024))
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((HOST, PORT))
+            sock.sendall(bytes(data, encoding="utf-8"))
+            data = sock.recv(1024)
+        except Exception as e:
+            print(e)
+        return json.loads(data)
 
 if __name__ == "__main__":
     main(sys.argv)

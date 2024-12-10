@@ -8,8 +8,8 @@ import pandas as pd
 from dotenv import load_dotenv
 
 load_dotenv()
-HOST = os.getenv('HOST')
-PORT = int(os.getenv('PORT'))
+HOST = os.getenv('BACKEND_HOST')
+PORT = int(os.getenv('BACKEND_PORT'))
 
 DATASET_DIRECTORY = "../Datasets/"
 
