@@ -8,7 +8,7 @@ def to_timestamp(x: str):
     return datetime.timestamp(x)
 
 def main():
-    df = pd.read_csv(PATH, low_memory=False, parse_dates=["Date"], index_col=False)
+    df = pd.read_csv(DATASET_PATH, low_memory=False, parse_dates=["Date"], index_col=False)
     print(df)
     df.rename(columns={"Date": "timestamp"}, inplace=True)
     #df["timestamp"] = df["timestamp"].astype(str)

@@ -11,7 +11,7 @@ load_dotenv()
 HOST = os.getenv('BACKEND_HOST')
 PORT = int(os.getenv('BACKEND_PORT'))
 
-DATASET_DIRECTORY = "../Datasets/"
+DATASET_DIRECTORY = "./Datasets/"
 
 backend_data = {
     "batch-jobs": [],
@@ -20,6 +20,7 @@ backend_data = {
 }
 
 def main():
+    print("Hello from backend!")
     # Start a thread listening for requests
     listener_thread = threading.Thread(target=__request_listener)
     listener_thread.daemon = True
@@ -51,10 +52,13 @@ def __request_listener():
             conn, addr = sock.accept()
             print(f'Connected to {addr}')
             recv_data = conn.recv(1024)
+            recv_data = recv_data.decode("utf-8")
             recv_dict = json.loads(recv_data)
             __handle_api_call(conn, recv_dict)
             print(f"Received request: {recv_dict}")
         except Exception as e:
+            if str(e) != "timed out":
+                print(e)
             pass
 
 # Handles the incoming requests and sends a response back to the client
@@ -110,6 +114,7 @@ def __handle_api_call(conn, data: dict) -> None:
             injection_methods_json = json.dumps(injection_methods_dict)
             conn.sendall(bytes(injection_methods_json, encoding="utf-8"))
         case "get-datasets":
+            print("Getting datasets")
             datasets = execute_calls.get_datasets()
             datasets_dict = {
                                 "datasets": datasets
