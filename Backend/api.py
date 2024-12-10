@@ -41,7 +41,7 @@ gets all available injection methods for anomaly detection
 "python api.py get-datasets"
 gets all available datasets
 
-"python api.py upload-dataset <dataset-file-path>"
+"python api.py import-dataset <dataset-file-path> <timestamp-column-name>"
 uploads a dataset to the backend by adding the file to the Dataset directory
         
 "python api.py help"
