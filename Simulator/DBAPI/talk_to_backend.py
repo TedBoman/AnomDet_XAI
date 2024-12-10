@@ -20,8 +20,8 @@ class TalkToBackend:
 
     def Test(self):
         filepath = './Datasets/test_system.csv'
-        #TestAnomaly = AnomalySetting('lowered', 630, 2, 100, ["load-5m", "load-1m"], '2m')
-        TestAnomaly = AnomalySetting('lowered', 630, 2, 100, ["load-5m", "load-1m"])
+        TestAnomaly = AnomalySetting('lowered', 630, 2, 100, ["load-5m", "load-1m"], '2m')
+        #TestAnomaly = AnomalySetting('lowered', 630, 2, 100, ["load-5m", "load-1m"])
 
         TestMessage = Message(filepath, [TestAnomaly], 0)
         return TestMessage

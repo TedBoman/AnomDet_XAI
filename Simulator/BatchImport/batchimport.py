@@ -1,5 +1,5 @@
 # batchimport.py
-
+import time as t
 import multiprocessing as mp
 import numpy as np
 import pandas as pd
@@ -24,8 +24,18 @@ class BatchImporter:
             conn_params: A dictionary containing the parameters needed
                          to connect to the timeseries database.
         """
-        db_instance = db(conn_params)
-        return db_instance
+        retry = 0
+
+        while retry < 5:
+            db_instance = db(conn_params)
+            if db_instance:
+                return db_instance
+            else:
+                time = 3
+                while time > 0:
+                    print("Retrying in: {time}s")
+                    t.sleep(1)
+        return None
 
     def create_table(self, conn_params, tb_name, columns):
         """
@@ -41,6 +51,8 @@ class BatchImporter:
             str: The actual name of the table created (might include a suffix).
         """
         db_instance = self.init_db(conn_params)
+        if not db_instance:
+            return None
         
         try:
             db_instance.create_table(tb_name, columns)
@@ -96,11 +108,6 @@ class BatchImporter:
                 if (chunk_start_time <= end_time) and (chunk_end_time >= start_time):
                     # Inject anomalies
                     modified_chunk = injector.inject_anomaly(chunk, setting)
-                    
-                    # Mark the rows that were modified
-                    anomaly_mask = (modified_chunk['timestamp'] >= start_time) & \
-                                (modified_chunk['timestamp'] < end_time)
-                    chunk.loc[anomaly_mask, 'injected_anomaly'] = True
 
             return modified_chunk
 

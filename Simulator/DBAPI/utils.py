@@ -98,4 +98,4 @@ def parse_duration_seconds(duration_str):
             else:
                 raise ValueError(f"Invalid unit: {unit}")
 
-        return total_seconds
+        return total_seconds - 30

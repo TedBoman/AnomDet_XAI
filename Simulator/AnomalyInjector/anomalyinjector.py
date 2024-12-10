@@ -79,8 +79,9 @@ class TimeSeriesAnomalyInjector:
                             modified_data.loc[anomaly_indices, column],
                             data_range,
                             mean,
-                            setting
+                            setting # Class containing anomaly information
                         )
+                        modified_data.loc[anomaly_indices, 'injected_anomaly'] = True
 
         return modified_data
 

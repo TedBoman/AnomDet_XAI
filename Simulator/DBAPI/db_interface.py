@@ -16,9 +16,13 @@ class DBInterface(ABC):
                                  Example: {"dbname": "your_db", "user": "your_user", ...}
         """
 
-        CONNECTION = f"postgres://{conn_params['user']}:{conn_params['passwd']}@{conn_params.get('host', 'localhost')}:{conn_params.get('port', 5432)}/{conn_params['dbname']}"
-        self.conn = psycopg2.connect(CONNECTION)
-        self.cursor = self.conn.cursor()
+        try:
+            CONNECTION = f"postgres://{conn_params['user']}:{conn_params['passwd']}@{conn_params.get('host', 'localhost')}:{conn_params.get('port', 5432)}/{conn_params['dbname']}"
+            self.conn = psycopg2.connect(CONNECTION)
+            self.cursor = self.conn.cursor()
+        except Exception as e:
+            print(f"Could not connect to the database: {e}")
+            return None
 
     # Creates a hypertable called table_name with column-names columns
     def create_table(self, table_name: str, columns: list[str]):
