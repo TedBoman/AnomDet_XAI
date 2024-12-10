@@ -11,7 +11,7 @@ load_dotenv()
 HOST = os.getenv('BACKEND_HOST')
 PORT = int(os.getenv('BACKEND_PORT'))
 
-DATASET_DIRECTORY = "../Datasets/"
+DATASET_DIRECTORY = "./Datasets/"
 
 backend_data = {
     "batch-jobs": [],
