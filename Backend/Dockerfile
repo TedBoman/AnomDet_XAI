@@ -1,6 +1,4 @@
-FROM python:3.9-slim
-
-WORKDIR /app
+FROM python:3.10-slim
 
 COPY requirements.txt .
 
@@ -8,4 +6,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-ENTRYPOINT ["python", "backend_api.py"]
+ENTRYPOINT ["python", "engine.py"]

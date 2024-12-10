@@ -1,5 +1,5 @@
 
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 WORKDIR /app
 
@@ -11,4 +11,4 @@ COPY . /app/
 
 EXPOSE 8050
 
-CMD ["python", "app.py"]
+CMD ["python", "pages/app.py"]
