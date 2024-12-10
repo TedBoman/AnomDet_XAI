@@ -36,7 +36,7 @@ class DBInterface(ABC):
         self.cursor.execute(query_create_table)
         self.conn.commit()
 
-    def insert_data(self, table_name: str, data: pd.DataFrame, isAnomaly: bool = False):
+    def insert_data(self, table_name: str, data: pd.DataFrame):
         """
         Inserts data into the specified table and sets the "injected_anomaly" column.
 
@@ -47,7 +47,7 @@ class DBInterface(ABC):
         """
         with self.conn.cursor() as cur:
             # Add "injected_anomaly" to the columns
-            columns = ', '.join([f'"{col}"' for col in data.columns] + ['"injected_anomaly"'])  
+            columns = ', '.join([f'"{col}"' for col in data.columns])  
             query = f"INSERT INTO \"{table_name}\" ({columns}) VALUES %s"
 
             try:
@@ -55,7 +55,7 @@ class DBInterface(ABC):
                 values = [tuple(
                     float(x) if isinstance(x, (np.float64, np.float32)) else x 
                     for x in row
-                ) + (isAnomaly,) for row in data.values]  # Add the isAnomaly flag
+                ) for row in data.values]
 
                 execute_values(cur, query, values)
                 self.conn.commit()

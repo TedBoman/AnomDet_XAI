@@ -1,6 +1,7 @@
 # batchimport.py
 
 import multiprocessing as mp
+import numpy as np
 import pandas as pd
 from pathlib import Path
 from DBAPI.db_interface import DBInterface as db
@@ -63,7 +64,7 @@ class BatchImporter:
             else:
                 raise e
 
-    def process_chunk(self, conn_params, table_name, chunk, isAnomaly=False):
+    def process_chunk(self, conn_params, table_name, chunk):
         """
         Processes a chunk of data by creating a DBInterface instance
         and inserting the chunk into the database.
@@ -74,47 +75,38 @@ class BatchImporter:
             chunk (pd.DataFrame): A chunk of data to be inserted.
             isAnomaly (bool): Indicates if the chunk contains an anomaly.
         """
+        chunk['timestamp'] = chunk['timestamp'].astype(np.int64) / 1e9         
         db_instance = self.init_db(conn_params)
-        db_instance.insert_data(table_name, chunk, isAnomaly)  # Use isAnomaly flag
+        db_instance.insert_data(table_name, chunk)
 
     def inject_anomalies_into_chunk(self, chunk, anomaly_settings):
-        """
-        Inject anomalies into a chunk of data based on the given settings.
-        """
         try:
-            print("Injecting anomalies into chunk...")
-            print(f"Chunk shape: {chunk.shape}")
-            print(f"Anomaly settings: {anomaly_settings}")
-
-            if not isinstance(chunk, pd.DataFrame):
-                raise ValueError("Expected chunk to be a pandas DataFrame.")
-
             injector = TimeSeriesAnomalyInjector() 
-            chunk_start_time = chunk['timestamp'].min()  # Adjust to actual timestamp column
+            chunk_start_time = chunk['timestamp'].min()
             chunk_end_time = chunk['timestamp'].max()
 
-            anomaly_applied = False  # Flag to track if any anomaly was applied
+            # Create a new column to track anomalies
+            chunk['injected_anomaly'] = False
 
-            for anomaly in anomaly_settings:
+            for setting in anomaly_settings:
+                start_time = setting.timestamp
+                end_time = start_time + ut.parse_duration(setting.duration)
 
-                start_time = anomaly['timestamp']  # Start time is already an absolute timestamp
-                end_time = start_time + ut.parse_duration(anomaly.get('duration', '0s'))  # Calculate end time
-
-                # Check if the chunk overlaps with the anomaly’s time range
+                # Check if the chunk overlaps with the anomaly's time range
                 if (chunk_start_time <= end_time) and (chunk_end_time >= start_time):
-                    chunk = injector.inject_anomaly(chunk, anomaly)
-                    anomaly_applied = True
-                    print(f"Anomaly '{anomaly['anomaly_type']}' applied from {start_time} to {end_time}")
-                else:
-                    print(f"No overlap for anomaly '{anomaly['anomaly_type']}'.")
+                    # Inject anomalies
+                    modified_chunk = injector.inject_anomaly(chunk, setting)
+                    
+                    # Mark the rows that were modified
+                    anomaly_mask = (modified_chunk['timestamp'] >= start_time) & \
+                                (modified_chunk['timestamp'] < end_time)
+                    chunk.loc[anomaly_mask, 'injected_anomaly'] = True
 
-            # Debug: Log the result of anomaly injection
-            print(f"Anomaly applied: {anomaly_applied}")
-            return chunk, anomaly_applied
+            return modified_chunk
 
         except Exception as e:
             print(f"Error injecting anomalies into chunk: {e}")
-            return chunk, False
+            return chunk
 
     def filetype_csv(self, conn_params, anomaly_settings=None):
         """
@@ -135,8 +127,8 @@ class BatchImporter:
         if anomaly_settings:
             for setting in anomaly_settings:
                 # Convert timestamp to absolute time if it's not already
-                if not isinstance(setting['timestamp'], pd.Timestamp):
-                    setting['timestamp'] = self.start_time + pd.Timedelta(seconds=setting['timestamp'])
+                if not isinstance(setting.timestamp, pd.Timestamp):
+                    setting.timestamp = self.start_time + pd.to_timedelta(setting.timestamp, unit='s')
 
         # Create a list to store results from async processes
         results = []
@@ -155,8 +147,6 @@ class BatchImporter:
 
         # Process chunks with guaranteed anomaly injection
         for chunk in [full_df[i:i+self.chunksize] for i in range(0, len(full_df), self.chunksize)]:
-            anomaly_applied = False
-
             if anomaly_settings:
                 # If timestamps need adjustment, add start_time explicitly
                 chunk[chunk.columns[0]] = chunk[chunk.columns[0]].apply(
@@ -166,12 +156,12 @@ class BatchImporter:
                 )
 
                 # Inject anomalies across chunk boundaries
-                chunk, anomaly_applied = self.inject_anomalies_into_chunk(chunk, anomaly_settings)
+                chunk = self.inject_anomalies_into_chunk(chunk, anomaly_settings)
 
             # Use apply_async and collect results
             result = pool.apply_async(
                 self.process_chunk,
-                args=(conn_params, table_name, chunk, anomaly_applied),
+                args=(conn_params, table_name, chunk),
             )
             results.append(result)
 
