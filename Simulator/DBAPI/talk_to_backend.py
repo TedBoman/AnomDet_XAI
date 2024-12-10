@@ -2,7 +2,7 @@ from typing import List, Dict, Union
 
 class AnomalySetting:
     def __init__(self, anomaly_type: str, timestamp: int, magnitude: int, 
-                 percentage: int, duration: str, columns: List[str]):
+                 percentage: int, columns: List[str] = None, duration: str = None):
         self.anomaly_type = anomaly_type
         self.timestamp = timestamp
         self.magnitude = magnitude
@@ -20,7 +20,9 @@ class TalkToBackend:
 
     def Test(self):
         filepath = './Datasets/test_system.csv'
-        TestAnomaly = AnomalySetting('lowered', 630, 2, 100, '2m', ["load-5m", "load-1m"])
+        #TestAnomaly = AnomalySetting('lowered', 630, 2, 100, ["load-5m", "load-1m"], '2m')
+        TestAnomaly = AnomalySetting('lowered', 630, 2, 100, ["load-5m", "load-1m"])
+
         TestMessage = Message(filepath, [TestAnomaly], 0)
         return TestMessage
 

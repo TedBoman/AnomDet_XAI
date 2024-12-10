@@ -33,9 +33,7 @@ class TimeSeriesAnomalyInjector:
             start_time = setting.timestamp
             duration = ut.parse_duration_seconds(setting.duration)
             columns = setting.columns
-            anomaly_type = setting.anomaly_type
             percentage = setting.percentage
-            magnitude = setting.magnitude
 
             # Convert timestamp column to datetime
             modified_data[timestamp_col] = pd.to_datetime(modified_data[timestamp_col])
@@ -48,8 +46,8 @@ class TimeSeriesAnomalyInjector:
 
             # Create span mask
             span_mask = (modified_data[timestamp_col] >= start_time) & \
-                        (modified_data[timestamp_col] < end_time)
-
+                        (modified_data[timestamp_col] <= end_time)
+            
             # Select data within the span
             span_data = modified_data[span_mask]
 
@@ -81,15 +79,12 @@ class TimeSeriesAnomalyInjector:
                             modified_data.loc[anomaly_indices, column],
                             data_range,
                             mean,
-                            anomaly_type,
-                            magnitude,
+                            setting
                         )
-
-        print(modified_data['load-1m'])
 
         return modified_data
 
-    def _apply_anomaly(self, data, data_range, mean, anomaly_type, magnitude):
+    def _apply_anomaly(self, data, data_range, mean, settings: AnomalySetting):
         """
         Apply a specific type of anomaly to the data.
 
@@ -101,6 +96,9 @@ class TimeSeriesAnomalyInjector:
         Returns:
             pd.Series: Modified data
         """
+        anomaly_type = settings.anomaly_type
+        magnitude = settings.magnitude
+
         print("______________________")
         if anomaly_type == 'lowered':
             print("Injecting lowerd anomaly!")
