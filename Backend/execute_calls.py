@@ -21,9 +21,9 @@ def run_batch(model: str, injection_method: str, df: pd.DataFrame) -> str:
             lstm_instance.run(df.iloc[:, :-2], time_steps)
             anomalies = lstm_instance.detect(df.iloc[:, :-2])
             try: 
-                for i in range(time_steps):
-                    anomalies = np.append(anomalies, False)
                 df["is_anomaly"] = anomalies
+                test_df = df[df["is_anomaly"] == True]
+                print(test_df)
             except Exception as e:
                 print(f'ERROR: {e}')
             return df

@@ -65,7 +65,9 @@ def __handle_api_call(conn, data: dict) -> None:
             injection_method = data["injection_method"]
             dataset_path = DATASET_DIRECTORY + data["dataset"]
 
-            df = pd.read_csv("./ML_models/system-1.csv", low_memory=False, parse_dates=["timestamp"], index_col="timestamp")
+            print(dataset_path)
+
+            df = pd.read_csv(dataset_path, low_memory=False, parse_dates=["timestamp"], index_col="timestamp")
             df["is_anomaly"] = False
             df["injected_anomaly"] = False
             df = execute_calls.run_batch(model, injection_method, df)

@@ -19,6 +19,7 @@ class LSTMModel(model_interface.ModelInterface):
     #Preprocesses, trains and fits the model
     def run(self, df, time_steps=2880):
         train_size = int(len(df) * 0.5)
+        self.time_steps = time_steps
 
         try:
             train = df.iloc[0:train_size]
@@ -29,8 +30,6 @@ class LSTMModel(model_interface.ModelInterface):
             train.iloc[:, 1:] = scaler.transform(train.iloc[:, 1:])
 
             X_train, y_train = self.__create_dataset(train.iloc[:, 1:], train.iloc[:, 0], 30)
-
-            #y_train = y_train.reshape(-1, 1)
 
             self.model.add(layers.LSTM(units=64, input_shape=(X_train.shape[1], X_train.shape[2])))
             self.model.add(layers.Dropout(rate=0.2))
@@ -70,7 +69,10 @@ class LSTMModel(model_interface.ModelInterface):
             mae_loss = np.mean(np.abs(X_pred - X_test), axis=1)
             threshold = np.mean(mae_loss) + 3 * np.std(mae_loss)
             boolean_anomalies = mae_loss > threshold
+            boolean_anomalies = boolean_anomalies[:,0]
+            for i in range(self.time_steps):
+                boolean_anomalies = np.append(boolean_anomalies, False)
         except Exception as e:
             print(f'ERROR: {e}')
 
-        return boolean_anomalies[:,0]
+        return boolean_anomalies
