@@ -18,18 +18,18 @@ use = "batch"
 def process_file(file_path, conn_params, use, anomaly_settings, start_time ,speedup: int = 1):
     """Processes a single file based on the specified use case."""
     match use:
-        case "sim":
+        case "stream":
             sim = Simulator(file_path, x_speedup=speedup)
             file_extension = Path(file_path).suffix
             match file_extension:
                 case ".csv":
                     sim.filetype_csv(conn_params)
         case "batch":
-            importer = BatchImporter(file_path, start_time)
+            sim = BatchImporter(file_path, start_time)
             file_extension = Path(file_path).suffix
             match file_extension:
                 case ".csv":
-                    importer.filetype_csv(conn_params, anomaly_settings)
+                    sim.filetype_csv(conn_params, anomaly_settings)
 
 def listen_to_front():
     t = ttb()
@@ -51,28 +51,29 @@ def main(argv: list[str]):
     t = ttb()
     testMessage = t.Test()
 
-    print(f"{t}")
+    if testMessage:
+        print(f"{t}")
 
-    print(f"Filepath: {testMessage.filepath}")
-    threads = []
-    # Read the CSV file to get the start time 
-    df = pd.read_csv(testMessage.filepath)
-    start_time = pd.to_datetime(df.iloc[0, 0])  # Get start time as datetime object
+        print(f"Filepath: {testMessage.filepath}")
+        threads = []
+        # Read the CSV file to get the start time 
+        df = pd.read_csv(testMessage.filepath)
+        start_time = pd.to_datetime(df.iloc[0, 0])  # Get start time as datetime object
 
-    # Convert anomaly settings timestamps to datetime objects
-    if isinstance(testMessage, (ttb2.Message)) and testMessage.anomaly_settings:
-        for setting in testMessage.anomaly_settings:
-            # Access the timestamp attribute of the AnomalySetting object
-            setting.timestamp = pd.to_timedelta(setting.timestamp, unit='s') + start_time  
+        # Convert anomaly settings timestamps to datetime objects
+        if isinstance(testMessage, (ttb2.Message)) and testMessage.anomaly_settings:
+            for setting in testMessage.anomaly_settings:
+                # Access the timestamp attribute of the AnomalySetting object
+                setting.timestamp = pd.to_timedelta(setting.timestamp, unit='s') + start_time  
 
-        thread = threading.Thread(target=process_file, 
-                                args=(testMessage.filepath, conn_params, use, testMessage.anomaly_settings, start_time))
-        threads.append(thread)
-        thread.start()
+            thread = threading.Thread(target=process_file, 
+                                    args=(testMessage.filepath, conn_params, testMessage.simulation_type, testMessage.anomaly_settings, start_time))
+            threads.append(thread)
+            thread.start()
 
-    # Wait for all threads to finish
-    for thread in threads:
-        thread.join()
+        # Wait for all threads to finish
+        for thread in threads:
+            thread.join()
 
 if __name__ == "__main__":
     main([])

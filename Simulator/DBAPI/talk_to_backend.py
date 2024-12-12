@@ -11,10 +11,12 @@ class AnomalySetting:
         self.columns = columns
 
 class Message:
-    def __init__(self, filepath: str, anomaly_settings: List[AnomalySetting], speedup: int):
+    def __init__(self, filepath: str, anomaly_settings: List[AnomalySetting], simulation_type,speedup: int = None, table_name: str = None):
         self.filepath = filepath
         self.anomaly_settings = anomaly_settings
+        self.simulation_type = simulation_type
         self.speedup = speedup
+        self.table_name = table_name
 
 class TalkToBackend:
 
@@ -23,8 +25,11 @@ class TalkToBackend:
         TestAnomaly = AnomalySetting('lowered', 630, 2, 100, ["load-5m", "load-1m"], '2m')
         #TestAnomaly = AnomalySetting('lowered', 630, 2, 100, ["load-5m", "load-1m"])
 
-        TestMessage = Message(filepath, [TestAnomaly], 0)
-        return TestMessage
+        TestMessage = Message(filepath, [TestAnomaly], 'batch', 1)
+        #Uncomment to run the simulator on test dataset with 50 rows.
+        #return TestMessage
+        
+        return None
 
     def SendColumns(columns):
         print("Sending columns to backend!")
