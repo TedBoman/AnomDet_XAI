@@ -3,25 +3,35 @@ import pandas as pd
 import plotly.graph_objs as go
 import random
 
-# Generate fake data
-def generate_fake_data():
-    timestamps = pd.date_range(end=pd.Timestamp.now(), periods=100, freq='min')
-    data = {
-        'timestamp': timestamps,
-        'load-15m': [random.uniform(0, 10) for _ in range(100)],
-        'cpu-usage': [random.uniform(20, 90) for _ in range(100)],
-        'memory-usage': [random.uniform(30, 80) for _ in range(100)],
-    }
-    return pd.DataFrame(data)
+# Mock datasets
+datasets = {
+    f"Dataset {i}": pd.DataFrame({
+        "timestamp": pd.date_range(end=pd.Timestamp.now(), periods=100, freq='min'),
+        "load-15m": [random.uniform(0, 10) for _ in range(100)],
+        "cpu-usage": [random.uniform(20, 90) for _ in range(100)],
+        "memory-usage": [random.uniform(30, 80) for _ in range(100)],
+    }) for i in range(1, 6)
+}
 
-# Local dataframe for Stream Data
-df = generate_fake_data()
+# Default dataset
+current_dataset = list(datasets.keys())[0]
 
 # Layout for Stream Data Page
 layout = html.Div([
     html.H1("Stream Data Page", style={"textAlign": "center", "color": "#ffffff"}),
 
     html.Div("This page shows live streaming data.", style={"textAlign": "center", "color": "#ffffff"}),
+
+    # Dataset Selection Dropdown
+    html.Div([
+        html.Label("Select Dataset:", style={"fontSize": "20px", "color": "#ffffff"}),
+        dcc.Dropdown(
+            id="stream-dataset-dropdown",
+            options=[{"label": name, "value": name} for name in datasets.keys()],
+            value=current_dataset,
+            style={"width": "300px", "margin": "auto"}
+        )
+    ], style={"textAlign": "center", "marginBottom": "30px"}),
 
     # Interval for updating data
     dcc.Interval(id="stream-interval", interval=1000, n_intervals=0),
@@ -60,12 +70,13 @@ def register_callbacks(app):
             Output("stream-memory-graph", "figure"),
             Output("stream-anomaly-log", "children"),
         ],
-        Input("stream-interval", "n_intervals")
+        [Input("stream-interval", "n_intervals"),
+         Input("stream-dataset-dropdown", "value")]
     )
-    def update_stream_data(n_intervals):
-        global df  # Use the local dataframe instance
+    def update_stream_data(n_intervals, selected_dataset):
+        df = datasets[selected_dataset]  # Fetch selected dataset
 
-        # Generate new data
+        # Generate new data (only for demo purposes)
         new_data = {
             "timestamp": [pd.Timestamp.now()],
             "load-15m": [random.uniform(0, 10)],
@@ -105,7 +116,7 @@ def register_callbacks(app):
             )
         ])
         load_figure.update_layout(
-            title="15m Load Over Time",
+            title=f"15m Load Over Time ({selected_dataset})",
             xaxis_title="Timestamp",
             yaxis_title="Load (15m)",
             template="plotly_dark",
@@ -128,7 +139,7 @@ def register_callbacks(app):
             )
         ])
         cpu_figure.update_layout(
-            title="CPU Usage Over Time",
+            title=f"CPU Usage Over Time ({selected_dataset})",
             xaxis_title="Timestamp",
             yaxis_title="CPU Usage (%)",
             template="plotly_dark",
@@ -151,7 +162,7 @@ def register_callbacks(app):
             )
         ])
         memory_figure.update_layout(
-            title="Memory Usage Over Time",
+            title=f"Memory Usage Over Time ({selected_dataset})",
             xaxis_title="Timestamp",
             yaxis_title="Memory Usage (%)",
             template="plotly_dark",
