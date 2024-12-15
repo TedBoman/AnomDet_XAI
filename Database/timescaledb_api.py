@@ -15,7 +15,7 @@ class TimescaleDBAPI(DBInterface):
         database = conn_params["database"]
     
         self.connection_string = f'postgres://{user}:{password}@{host}:{port}/{database}'
-        self.chunk_size = 128   # The size of the chunks to split the data into when inserting into the database
+        self.chunk_size = 32   # The size of the chunks to split the data into when inserting into the database
     
     # Creates a hypertable called table_name with column-names columns copied from dataset
     # Also adds columns is_anomaly and injected_anomaly
@@ -47,7 +47,16 @@ class TimescaleDBAPI(DBInterface):
         cols = ', '.join([f'"{col}"' for col in data.columns.to_list()])
         query = f"INSERT INTO \"{table_name}\" ({cols}) VALUES %s"
         length = len(data.columns)
-        tuples = [tuple(x) for x in data]                       # Convert the dataframe to a list of tuples
+
+        data = data.astype(str)                                         # Convert all data to strings
+
+        first_column = data.columns[0]
+
+        # Convert the first column to a timestamp
+        data[first_column] = data[first_column].astype('int32')         
+        data[first_column] = data[first_column].apply(self.__add_to_timestamp)
+
+        tuples = [tuple(x) for x in data.to_numpy()]                    # Convert the dataframe to a list of tuples
 
         try:
             conn = psycopg2.connect(self.connection_string)     # Connect to the database
@@ -112,6 +121,9 @@ class TimescaleDBAPI(DBInterface):
             conn.close()
 
     # Helper function to insert data into the database
-    def __inserter(conn, query, chunk):
+    def __inserter(self, conn, query, chunk):
         extras.execute_values(conn.cursor(), query, chunk)
         conn.commit()
+
+    def __add_to_timestamp(self, x: str):
+        return datetime.fromtimestamp(x)
