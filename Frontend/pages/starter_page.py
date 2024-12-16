@@ -24,6 +24,23 @@ layout = html.Div([
                                     "fontSize": "20px", "backgroundColor": "#008CBA",
                                     "color": "#ffffff", "borderRadius": "10px"}), href="/stream-data")
     ], style={"textAlign": "center", "marginBottom": "30px"}),
+       # Select Detection Model Panel
+    html.Div([
+        html.Label("Select a Detection Model:", style={"fontSize": "22px", "color": "#ffffff"}),
+        dcc.Dropdown(
+            id="detection-model-dropdown",
+            options=[
+                {"label": "Model A", "value": "model_a"},
+                {"label": "Model B", "value": "model_b"},
+                {"label": "Model C", "value": "model_c"}
+            ],
+            placeholder="Select a detection model",
+            style={"width": "350px", "margin": "auto"}
+        )
+    ], style={"textAlign": "center", "marginTop": "30px"}),
+
+    html.Div(id="starter-feedback", style={"textAlign": "center", "marginTop": "20px"}),
+
 
     # Select Dataset to Activate Section
     html.Div([
