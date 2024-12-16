@@ -5,6 +5,14 @@ from dash.dependencies import ALL
 # Placeholder for active datasets
 active_datasets = []
 
+# Variables to store selected detection model and injection method
+selected_detection_model = None
+selected_injection_method = None
+selected_model = None
+
+# Placeholder for active datasets
+active_datasets = []
+
 layout = html.Div([
     html.H1("Starter Page", style={
         "textAlign": "center",
@@ -57,6 +65,9 @@ layout = html.Div([
         })
     ], style={"textAlign": "center", "marginBottom": "30px"}),
 
+
+
+
     # Active Datasets Section
     html.Div([
         html.H3("Active Datasets:", style={"color": "#ffffff", "textAlign": "center"}),
@@ -88,6 +99,9 @@ layout = html.Div([
     "minHeight": "100vh"
 })
 
+
+#TO DO: 
+#Change callbacks to store values
 
 # Callback to add and manage active datasets
 @callback(
