@@ -16,13 +16,15 @@ class TimescaleDBAPI(DBInterface):
         database = conn_params["database"]
     
         self.connection_string = f'postgres://{user}:{password}@{host}:{port}/{database}'
-        self.chunk_size = 5000   # The size of the chunks to split the data into when inserting into the database
+        self.chunk_size = 128   # The size of the chunks to split the data into when inserting into the database
 
+    # Helper function to convert a timestamp from epoch to a datetime object
     def __add_to_timestamp(self, x: str):
         return datetime.fromtimestamp(x)
 
     # Helper function to insert data into the database
     def __inserter(self, query, chunk):
+        print("test")
         try:
             retry = 0
 
@@ -37,7 +39,7 @@ class TimescaleDBAPI(DBInterface):
                     while time > 0:
                         print("Retrying in: {time}s")
                         sleep(1)
-                        time += 1
+                        time -= 1
                 retry += 1
             extras.execute_values(conn.cursor(), query, chunk)
             conn.commit()
@@ -102,9 +104,12 @@ class TimescaleDBAPI(DBInterface):
                 results = []                                    # Create a list to store results from async processes
                 
                 print("Starting to insert!")
+                inserter = self.__inserter
+                print(inserter)
+                print(self.create_table)
                 # Insert the data in chunks                  
                 for chunk in [tuples[i:i + self.chunk_size] for i in range(0, length, self.chunk_size)]:
-                    result = pool.apply_async(self.__inserter, args=(query_insert_data, chunk))
+                    result = pool.apply_async(inserter, args=(query_insert_data, chunk))
                     results.append(result)
 
                 # Wait for all processes to finish
