@@ -40,6 +40,14 @@ models = get_models()
 
 active_datasets = []
 
+# Variables to store selected detection model and injection method
+selected_detection_model = None
+selected_injection_method = None
+selected_model = None
+
+# Placeholder for active datasets
+active_datasets = []
+
 layout = html.Div([
     html.Div(
         [
