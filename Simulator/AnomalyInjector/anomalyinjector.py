@@ -103,8 +103,15 @@ class TimeSeriesAnomalyInjector:
         print("______________________")
         if anomaly_type == 'lowered':
             print("Injecting lowerd anomaly!")
-            random_factors = self.rng.uniform(0.3, 0.4)
-            step_value = -data_range * random_factors
+            # Handle single row case
+            if data_range == 0:
+                # Use mean as a reference point if data_range is zero
+                random_factors = self.rng.uniform(0.3, 0.4)
+                step_value = -mean * random_factors
+            else:
+                random_factors = self.rng.uniform(0.3, 0.4)
+                step_value = -data_range * random_factors
+
             print(f"Step: {step_value} = -datarange: -{data_range} * random: {random_factors} = {-data_range * random_factors}")
             print(f"OLD: {data}. NEW: {np.maximum(data + step_value, 0)}")
             print(f"return: {np.maximum(data + step_value, 0)}")
@@ -113,17 +120,17 @@ class TimeSeriesAnomalyInjector:
         
         elif anomaly_type == 'spike':
             print("Injecting spike anomaly!")
-            std_dev = data.std()
-            modifications = self.rng.normal(
-                loc=0, 
-                scale=std_dev * (magnitude * 2)
-            )
-            return data + modifications
+            random_factors = self.rng.uniform(1, magnitude)
+            return data * random_factors
         
         elif anomaly_type == 'step':
             print("Injecting step anomaly!")
             step_value = mean * magnitude
             return data + step_value
+        
+        elif anomaly_type == 'offline':
+            print("Injecting offline anomaly!")
+            return
         
         elif anomaly_type == 'custom':
             print("Injecting custom anomaly!")
