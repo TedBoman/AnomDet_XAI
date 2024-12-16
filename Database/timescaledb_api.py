@@ -23,7 +23,6 @@ class TimescaleDBAPI(DBInterface):
 
     # Helper function to insert data into the database
     def __inserter(self, query, chunk):
-        print(query)
         try:
             retry = 0
 
