@@ -17,6 +17,37 @@ class TimescaleDBAPI(DBInterface):
     
         self.connection_string = f'postgres://{user}:{password}@{host}:{port}/{database}'
         self.chunk_size = 5000   # The size of the chunks to split the data into when inserting into the database
+
+    def __add_to_timestamp(self, x: str):
+        return datetime.fromtimestamp(x)
+
+    # Helper function to insert data into the database
+    def __inserter(self, query, chunk):
+        print(query)
+        try:
+            retry = 0
+
+            while retry < 5:
+                print("Connecting to database")
+                conn = psycopg2.connect(self.connection_string)     # Connect to the database
+                print("Connected to database")
+                if conn:
+                    break
+                else:
+                    time = 3
+                    while time > 0:
+                        print("Retrying in: {time}s")
+                        sleep(1)
+                        time += 1
+                retry += 1
+            extras.execute_values(conn.cursor(), query, chunk)
+            conn.commit()
+        except Exception as error:
+            print("Error: %s" % error)
+            conn.rollback()
+            conn.close()
+        finally:
+            conn.close()
     
     # Creates a hypertable called table_name with column-names columns copied from dataset
     # Also adds columns is_anomaly and injected_anomaly
@@ -35,6 +66,7 @@ class TimescaleDBAPI(DBInterface):
             
             query_create_table = f'CREATE TABLE {table_name} ({",".join(columns)});'# Create query for creating a relational tabel
             
+            print("Creating table")
             cursor.execute(query_create_table)                                      # Exectute the query, creating a table in the database
             conn.commit()
         except Exception as error:
@@ -62,6 +94,7 @@ class TimescaleDBAPI(DBInterface):
         try:
 
             length = len(tuples)
+            #length = self.chunk_size
 
             if length > self.chunk_size:                        # If the data is too large to insert at once, do multiple inserts
                 num_processes = mp.cpu_count()
@@ -116,36 +149,6 @@ class TimescaleDBAPI(DBInterface):
             conn.commit()
         except Exception as error:
             print("Error: %s" % error)
-            conn.close()
-        finally:
-            conn.close()
-
-    def __add_to_timestamp(self, x: str):
-        return datetime.fromtimestamp(x)
-
-    # Helper function to insert data into the database
-    def __inserter(self, query, chunk):
-        try:
-            retry = 0
-
-            while retry < 5:
-                print("Connecting to database")
-                conn = psycopg2.connect(self.connection_string)     # Connect to the database
-                print("Connected to database")
-                if conn:
-                    break
-                else:
-                    time = 3
-                    while time > 0:
-                        print("Retrying in: {time}s")
-                        sleep(1)
-                        time += 1
-                retry += 1
-            extras.execute_values(conn.cursor(), query, chunk)
-            conn.commit()
-        except Exception as error:
-            print("Error: %s" % error)
-            conn.rollback()
             conn.close()
         finally:
             conn.close()
