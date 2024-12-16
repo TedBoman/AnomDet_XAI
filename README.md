@@ -59,7 +59,7 @@ What this command does:
 [Option 1]
 To access the database from within the Docker container, run the following command:
 ```sh
-docker exec -it TSdatabase psql -U AnomDet -d mytimescaleDB
+docker exec -it TSdatabase psql -U Anomdet -d TSdatabase
 ```
 What this command does and what the flags are for:
 ```sh
@@ -77,8 +77,8 @@ To access the database using an External PostgreSql Client such as "pgAdmin" or 
 ```sh
 -Host localhost
 -Port 5432
--Database mytimescaleDB
--Username AnomDet
+-Database TSdatabase
+-Username Anomdet
 -Password ******
 ```
 * Step 4: Stopping the Container
