@@ -8,7 +8,7 @@ MODEL_DIRECTORY = "./ML_models"
 INJECTION_METHOD_DIRECTORY = "./injection_methods"
 DATASET_DIRECTORY = "../Datasets"
 
-def run_batch(model: str, injection_method: str, df: pd.DataFrame) -> str:
+def run_batch(model: str, injection_method: str, path: str) -> str:
 
     #Removing the "is_injected" & "is_anomaly" columns
     feature_df = df.iloc[:, :-2]
@@ -26,14 +26,17 @@ def run_batch(model: str, injection_method: str, df: pd.DataFrame) -> str:
                 print(test_df)
             except Exception as e:
                 print(f'ERROR: {e}')
-            return df
+            return "finished"
         
         case "isolation_forest":
             if_instance = IsolationForest()
             if_instance.run(df.iloc[:, :-2])
+
+            # 
+
             anomalies = if_instance.detect(df.iloc[:, :-2])
             df["is_anoamaly"] = anomalies
-            return df
+            return "finished"
         
         case _:
             raise Exception("Model not found")

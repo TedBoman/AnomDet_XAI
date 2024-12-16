@@ -14,13 +14,11 @@ PORT = int(os.getenv('BACKEND_PORT'))
 DATASET_DIRECTORY = "./Datasets/"
 
 backend_data = {
-    "batch-jobs": [],
-    "stream-jobs": [],
-    "running-models": []
+    "started-jobs": [],
+    "running-jobs": []
 }
 
 def main():
-    print("Hello from backend!")
     # Start a thread listening for requests
     listener_thread = threading.Thread(target=__request_listener)
     listener_thread.daemon = True
@@ -68,15 +66,12 @@ def __handle_api_call(conn, data: dict) -> None:
             model = data["model"]
             injection_method = data["injection_method"]
             dataset_path = DATASET_DIRECTORY + data["dataset"]
+            name = data["name"]
 
-            print(dataset_path)
+            result = execute_calls.run_batch(model, injection_method, dataset_path)
 
-            df = pd.read_csv(dataset_path, low_memory=False, parse_dates=["timestamp"], index_col="timestamp")
-            df["is_anomaly"] = False
-            df["injected_anomaly"] = False
-            df = execute_calls.run_batch(model, injection_method, df)
-            test_json = json.dumps({"test": "run-batch-response" })
-            conn.sendall(bytes(test_json, encoding="utf-8"))
+            if result == "finished":
+
         case "run-stream":
             test_json = json.dumps({"test": "run-stream-response" })
             conn.sendall(bytes(test_json, encoding="utf-8"))
@@ -114,7 +109,6 @@ def __handle_api_call(conn, data: dict) -> None:
             injection_methods_json = json.dumps(injection_methods_dict)
             conn.sendall(bytes(injection_methods_json, encoding="utf-8"))
         case "get-datasets":
-            print("Getting datasets")
             datasets = execute_calls.get_datasets()
             datasets_dict = {
                                 "datasets": datasets

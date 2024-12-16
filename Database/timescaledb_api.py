@@ -94,8 +94,8 @@ class TimescaleDBAPI(DBInterface):
 
         try:
 
-            length = len(tuples)
-            #length = self.chunk_size
+            #length = len(tuples)
+            length = self.chunk_size
 
             if length > self.chunk_size:                        # If the data is too large to insert at once, do multiple inserts
                 num_processes = mp.cpu_count()
