@@ -15,7 +15,7 @@ class TimescaleDBAPI(DBInterface):
         database = conn_params["database"]
     
         self.connection_string = f'postgres://{user}:{password}@{host}:{port}/{database}'
-        self.chunk_size = 32   # The size of the chunks to split the data into when inserting into the database
+        self.chunk_size = 128   # The size of the chunks to split the data into when inserting into the database
     
     # Creates a hypertable called table_name with column-names columns copied from dataset
     # Also adds columns is_anomaly and injected_anomaly
@@ -46,8 +46,7 @@ class TimescaleDBAPI(DBInterface):
     def insert_data(self, table_name: str, data: pd.DataFrame):
         cols = ', '.join([f'"{col}"' for col in data.columns.to_list()])
         query = f"INSERT INTO \"{table_name}\" ({cols}) VALUES %s"
-        length = len(data.columns)
-
+        
         data = data.astype(str)                                         # Convert all data to strings
 
         first_column = data.columns[0]
@@ -61,20 +60,23 @@ class TimescaleDBAPI(DBInterface):
         try:
             conn = psycopg2.connect(self.connection_string)     # Connect to the database
 
+            length = len(tuples)
+
             if length > self.chunk_size:                        # If the data is too large to insert at once, do multiple inserts
                 num_processes = mp.cpu_count()
                 pool = mp.Pool(processes=num_processes)
                 
                 results = []                                    # Create a list to store results from async processes
-
+                
                 # Insert the data in chunks                  
                 for chunk in [tuples[i:i + self.chunk_size] for i in range(0, length, self.chunk_size)]:
-                    result = pool.apply_async(self.__inserter, args=(conn, query, chunk))
+                    result = pool.apply_async(self.__inserter, args=(self, conn, query, chunk))
                     results.append(result)
 
                 # Wait for all processes to finish
                 pool.close()
                 pool.join()
+
 
                 # Check if any of the processes failed
                 for result in results:
