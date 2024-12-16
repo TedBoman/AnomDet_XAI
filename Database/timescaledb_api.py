@@ -4,6 +4,7 @@ from datetime import datetime
 import psycopg2
 import psycopg2.extras as extras
 import multiprocessing as mp
+from time import sleep
 
 class TimescaleDBAPI(DBInterface):
     # Initialize the connection string that psycopg2 uses to connect to the database
@@ -15,7 +16,7 @@ class TimescaleDBAPI(DBInterface):
         database = conn_params["database"]
     
         self.connection_string = f'postgres://{user}:{password}@{host}:{port}/{database}'
-        self.chunk_size = 128   # The size of the chunks to split the data into when inserting into the database
+        self.chunk_size = 5000   # The size of the chunks to split the data into when inserting into the database
     
     # Creates a hypertable called table_name with column-names columns copied from dataset
     # Also adds columns is_anomaly and injected_anomaly
@@ -44,8 +45,9 @@ class TimescaleDBAPI(DBInterface):
 
     # Inserts data into the table_name table. The data is a pandas DataFrame with matching types and column names to the table
     def insert_data(self, table_name: str, data: pd.DataFrame):
-        cols = ', '.join([f'"{col}"' for col in data.columns.to_list()])
-        query = f"INSERT INTO \"{table_name}\" ({cols}) VALUES %s"
+        columns = data.columns.to_list()
+        cols = ', '.join([f'"{col}"' for col in columns])               # Create a string of the column names
+        query_insert_data = f"INSERT INTO \"{table_name}\" ({cols}) VALUES %s"
         
         data = data.astype(str)                                         # Convert all data to strings
 
@@ -58,7 +60,6 @@ class TimescaleDBAPI(DBInterface):
         tuples = [tuple(x) for x in data.to_numpy()]                    # Convert the dataframe to a list of tuples
 
         try:
-            conn = psycopg2.connect(self.connection_string)     # Connect to the database
 
             length = len(tuples)
 
@@ -68,9 +69,10 @@ class TimescaleDBAPI(DBInterface):
                 
                 results = []                                    # Create a list to store results from async processes
                 
+                print("Starting to insert!")
                 # Insert the data in chunks                  
                 for chunk in [tuples[i:i + self.chunk_size] for i in range(0, length, self.chunk_size)]:
-                    result = pool.apply_async(self.__inserter, args=(self, conn, query, chunk))
+                    result = pool.apply_async(self.__inserter, args=(query_insert_data, chunk))
                     results.append(result)
 
                 # Wait for all processes to finish
@@ -82,14 +84,10 @@ class TimescaleDBAPI(DBInterface):
                 for result in results:
                     result.get()
             else:
-                self.__inserter(conn, query, tuples)
+                self.__inserter(query_insert_data, tuples)
 
         except Exception as error:
             print("Error: %s" % error)
-            conn.rollback()
-            conn.close()
-        finally:
-            conn.close()
     
     # Reads each row of data in the table table_name that has a timestamp greater than or equal to time
     def read_data(self, table_name: str, time: datetime):
@@ -122,10 +120,32 @@ class TimescaleDBAPI(DBInterface):
         finally:
             conn.close()
 
-    # Helper function to insert data into the database
-    def __inserter(self, conn, query, chunk):
-        extras.execute_values(conn.cursor(), query, chunk)
-        conn.commit()
-
     def __add_to_timestamp(self, x: str):
         return datetime.fromtimestamp(x)
+
+    # Helper function to insert data into the database
+    def __inserter(self, query, chunk):
+        try:
+            retry = 0
+
+            while retry < 5:
+                print("Connecting to database")
+                conn = psycopg2.connect(self.connection_string)     # Connect to the database
+                print("Connected to database")
+                if conn:
+                    break
+                else:
+                    time = 3
+                    while time > 0:
+                        print("Retrying in: {time}s")
+                        sleep(1)
+                        time += 1
+                retry += 1
+            extras.execute_values(conn.cursor(), query, chunk)
+            conn.commit()
+        except Exception as error:
+            print("Error: %s" % error)
+            conn.rollback()
+            conn.close()
+        finally:
+            conn.close()

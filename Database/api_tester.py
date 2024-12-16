@@ -29,6 +29,9 @@ df = pd.read_csv("../Backend/Datasets/system-1.csv", low_memory=False)  # Read t
 
 api.create_table("system1", df.columns.to_list())                       # Create a table in the database
 
+df["is_anomaly"] = False
+df["injected_anomaly"] = False
+
 start_time = time.time()
 api.insert_data("system1", df)                                          # Insert the data into the database
 print(f"Time to insert data: {time.time() - start_time}")
