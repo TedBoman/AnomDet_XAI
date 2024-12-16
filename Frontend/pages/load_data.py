@@ -81,7 +81,19 @@ layout = html.Div([
         )
     ], style={"textAlign": "center"}),
 
-    html.A("Back to Home", href="/", style={"display": "block", "textAlign": "center", "marginTop": "20px", "color": "#ffffff"})
+    html.A("Back to Home →", href="/", style={
+            "fontSize": "24px",
+            "color": "#ffffff",
+            "fontWeight": "bold",
+            "textDecoration": "none",
+            "position": "absolute",
+            "top": "10px",
+            "right": "20px",  # Sağ üste taşımak için
+            "padding": "5px 10px",
+            "backgroundColor": "#4CAF50",
+            "borderRadius": "5px",
+            "boxShadow": "0px 0px 10px rgba(0,0,0,0.3)"
+        })
 ], style={"backgroundColor": "#282c34", "padding": "50px", "minHeight": "100vh"})
 
 

@@ -29,8 +29,8 @@ services:
 
   backend:
     build:
-      context: ../Backend
-      dockerfile: Dockerfile
+      context: ../
+      dockerfile: ./Backend/Dockerfile
       args:
         - BACKEND_PORT=${BACKEND_PORT}
     container_name: Backend
@@ -38,28 +38,11 @@ services:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     depends_on:
       - timescaledb
-    env_file:
-      - ../Backend/.env
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: always
 
-  simulator:
-    build:
-      context: ../Simulator
-    container_name: Simulator
-    extra_hosts:
-      - "host.docker.internal:host-gateway"  # Add this line
-    environment:
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - SIMULATOR_PORT=${SIMULATOR_PORT}
-    ports:
-      - "${SIMULATOR_PORT}:8150"
-    depends_on:
-      - timescaledb
-    restart: no
+  
 
 volumes:
   timescaledb_data:
