@@ -1,4 +1,4 @@
-from dash import dcc, html, Input, Output,callback
+"""from dash import dcc, html, Input, Output,callback
 import pandas as pd
 import plotly.graph_objs as go
 import random
@@ -183,3 +183,4 @@ def update_anomaly_log(n_intervals):
             anomalies.append(f"{row['timestamp']} - Memory anomaly detected: {row['memory-usage']:.2f}")
 
     return [html.Div(anomaly) for anomaly in anomalies[-10:]]  # Display the last 10 anomalies
+    """
