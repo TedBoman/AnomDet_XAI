@@ -149,15 +149,15 @@ def __handle_api_call(conn, data: dict) -> None:
             conn.sendall(bytes(datasets_json, encoding="utf-8"))
         case "import-dataset":
             path = DATASET_DIRECTORY + data["name"]
+            conn.settimeout(1)
+            # If the file does not exist, read the file contents written to the socket
             if not os.path.isfile(path):
-                file = open(path, "w")
+                execute_calls.import_dataset(conn, path, data["timestamp_column"])
+            # If the file already exists, empty the socket buffer and do nothing
+            else:
                 data = conn.recv(1024)
                 while data:
-                    file.write(data)
                     data = conn.recv(1024)
-                
-            test_json = json.dumps({"test": "import-dataset-response" })
-            conn.sendall(bytes(test_json, encoding="utf-8"))
         case _: 
             response_json = json.dumps({"error": "method-error-response" })
             conn.sendall(bytes(response_json, encoding="utf-8"))        
