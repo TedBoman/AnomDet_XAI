@@ -8,8 +8,16 @@ import pandas as pd
 from dotenv import load_dotenv
 
 load_dotenv()
-HOST = os.getenv('BACKEND_HOST')
-PORT = int(os.getenv('BACKEND_PORT'))
+BACKEND_HOST = os.getenv('BACKEND_HOST')
+BACKEND_PORT = int(os.getenv('BACKEND_PORT'))
+DATABASE = {
+    "HOST": os.getenv('DATABASE_HOST')
+    "PORT": int(os.getenv('DATABASE_PORT'))
+    "USER": os.getenv('DATABASE_USER')
+    "PASSWORD": os.getenv('DATABASE_PASSWORD')
+    "DATABASE": os.getenv('DATABASE_NAME')
+}
+DATABASE_PORT = 
 
 DATASET_DIRECTORY = "./Datasets/"
 
@@ -24,13 +32,32 @@ def main():
     listener_thread.daemon = True
     listener_thread.start()
 
-    i = 1
-    print("Counting in main thread...")
+    connection_string = f"postgres://{DATABASE['USER']}:{DATABASE['PASSWORD']}@{DATABASE['HOST']}:{DATABASE['PORT']}/{DATABASE['DATABASE']}"
+
+    print("Main thread started...")
     # Main loop serving the backend logic
     try:
         while True:
-            print(i)
-            i += 1
+            for job, job_type in backend_data["started-jobs"]:
+                # If the job is a batch job, check if the job is finished to move it to the running-jobs list
+                if job_type == "batch":
+                    if backend_data["job"].is_alive() == False:
+                        backend_data["running-jobs"].append(job)
+                        backend_data["started-jobs"].remove((job, job_type))
+                        del backend_data["job"]
+                # If the job is a stream job, check if there is a table with the name of the job in the database to add to run job
+                else:
+                    conn = psycopg2.connect(self.connection_string) # Connect to the database
+                    cursor = conn.cursor()
+
+                    query = f"SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '{job}'"
+
+                    cursor.execute(query)
+                    result = cursor.fetchall()
+
+                    if len(result) > 0:
+                        backend_data["running-jobs"].append(job)
+                        backend_data["started-jobs"].remove((job, job_type))
             sleep(1)
     except KeyboardInterrupt:
         print("Exiting backend...")
@@ -39,7 +66,7 @@ def main():
 def __request_listener():
     try: 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind((HOST, PORT))
+        sock.bind((BACKEND_HOST, BACKEND_PORT))
         sock.listen()
         sock.settimeout(1)
     except Exception as e:
@@ -68,10 +95,7 @@ def __handle_api_call(conn, data: dict) -> None:
             dataset_path = DATASET_DIRECTORY + data["dataset"]
             name = data["name"]
 
-            result = execute_calls.run_batch(model, injection_method, dataset_path)
-
-            if result == "finished":
-
+            execute_calls.run_batch(model, injection_method, dataset_path)
         case "run-stream":
             test_json = json.dumps({"test": "run-stream-response" })
             conn.sendall(bytes(test_json, encoding="utf-8"))

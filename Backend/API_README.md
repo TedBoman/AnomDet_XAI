@@ -1,4 +1,4 @@
-# Backend API and CLI-tool readme
+# Backend API and CLI-tool documentation
 
 ## CLI-tool
 
