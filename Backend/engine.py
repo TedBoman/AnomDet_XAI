@@ -95,9 +95,17 @@ def __handle_api_call(conn, data: dict) -> None:
             dataset_path = DATASET_DIRECTORY + data["dataset"]
             name = data["name"]
 
-            execute_calls.run_batch(model, injection_method, dataset_path)
+            backend_data[name] = threading.Thread(target=__request_listener, args=(model, injection_method, dataset_path, name))
+            backend_data[name].daemon = True
+            backend_data[name].start()
+            backend_data["started-jobs"].append((name, "batch"))
+            
         case "run-stream":
-            test_json = json.dumps({"test": "run-stream-response" })
+            model = data["model"]
+            injection_method = data["injection_method"]
+            dataset_path = DATASET_DIRECTORY + data["dataset"]
+            name = data["name"]
+
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case "change-model":
             test_json = json.dumps({"test": "change-model-respons" })
@@ -139,8 +147,16 @@ def __handle_api_call(conn, data: dict) -> None:
                             }
             datasets_json = json.dumps(datasets_dict)
             conn.sendall(bytes(datasets_json, encoding="utf-8"))
-        case "upload-dataset":
-            test_json = json.dumps({"test": "upload-dataset-response" })
+        case "import-dataset":
+            path = DATASET_DIRECTORY + data["name"]
+            if not os.path.isfile(path):
+                file = open(path, "w")
+                data = conn.recv(1024)
+                while data:
+                    file.write(data)
+                    data = conn.recv(1024)
+                
+            test_json = json.dumps({"test": "import-dataset-response" })
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case _: 
             response_json = json.dumps({"error": "method-error-response" })
