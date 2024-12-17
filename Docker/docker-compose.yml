@@ -15,16 +15,22 @@ services:
 
   dash-frontend:
     build:
-      context: ../Frontend
+      context: ../
+      dockerfile: ./Frontend/Dockerfile
+      args:
+        - FRONTEND_PORT=${FRONTEND_PORT}
     container_name: Frontend
     ports:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     depends_on:
-      - timescaledb
+      - backend
     environment:
-      DB_HOST: ${DATABASE_HOST}
+      BACKEND_HOST: ${BACKEND_HOST}
+      BACKEND_PORT: ${BACKEND_PORT}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - ./Frontend:/app
     restart: always
 
   backend:
