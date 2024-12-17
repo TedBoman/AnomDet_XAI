@@ -11,13 +11,13 @@ load_dotenv()
 BACKEND_HOST = os.getenv('BACKEND_HOST')
 BACKEND_PORT = int(os.getenv('BACKEND_PORT'))
 DATABASE = {
-    "HOST": os.getenv('DATABASE_HOST')
-    "PORT": int(os.getenv('DATABASE_PORT'))
-    "USER": os.getenv('DATABASE_USER')
-    "PASSWORD": os.getenv('DATABASE_PASSWORD')
+    "HOST": os.getenv('DATABASE_HOST'),
+    "PORT": int(os.getenv('DATABASE_PORT')),
+    "USER": os.getenv('DATABASE_USER'),
+    "PASSWORD": os.getenv('DATABASE_PASSWORD'),
     "DATABASE": os.getenv('DATABASE_NAME')
 }
-DATABASE_PORT = 
+DATABASE_PORT = os.getenv('DATABASE_HOST')
 
 DATASET_DIRECTORY = "./Datasets/"
 
