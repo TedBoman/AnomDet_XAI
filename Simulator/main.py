@@ -13,18 +13,19 @@ from BatchImport.batchimport import BatchImporter
 from DBAPI.talk_to_backend import TalkToBackend as ttb
 from DBAPI import talk_to_backend as ttb2
 
-use = "batch"
-
-def process_file(file_path, conn_params, use, anomaly_settings, start_time ,speedup: int = 1):
+def process_file(file_path, conn_params, simulation_type, anomaly_settings, start_time ,speedup: int = 1):
     """Processes a single file based on the specified use case."""
-    match use:
+    print("Starting to process file!")
+    match simulation_type:
         case "stream":
-            sim = Simulator(file_path, x_speedup=speedup)
+            print("Starting stream job...")
+            sim = Simulator(file_path, start_time, x_speedup=speedup)
             file_extension = Path(file_path).suffix
             match file_extension:
                 case ".csv":
-                    sim.filetype_csv(conn_params)
+                    sim.filetype_csv(conn_params, anomaly_settings)
         case "batch":
+            print("Starting batch job...")
             sim = BatchImporter(file_path, start_time)
             file_extension = Path(file_path).suffix
             match file_extension:
@@ -51,8 +52,9 @@ def main(argv: list[str]):
     t = ttb()
     testMessage = t.Test()
 
+    print(f"{t}")
+
     if testMessage:
-        print(f"{t}")
 
         print(f"Filepath: {testMessage.filepath}")
         threads = []
@@ -67,7 +69,7 @@ def main(argv: list[str]):
                 setting.timestamp = pd.to_timedelta(setting.timestamp, unit='s') + start_time  
 
             thread = threading.Thread(target=process_file, 
-                                    args=(testMessage.filepath, conn_params, testMessage.simulation_type, testMessage.anomaly_settings, start_time))
+                                    args=(testMessage.filepath, conn_params, testMessage.simulation_type, testMessage.anomaly_settings, start_time, testMessage.speedup))
             threads.append(thread)
             thread.start()
 
