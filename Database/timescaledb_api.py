@@ -156,3 +156,23 @@ class TimescaleDBAPI(DBInterface):
             conn.close()
         finally:
             conn.close()
+
+    # Checks if the table_name table exists in the database
+    def table_exists(self, table_name: str):
+        try:
+            conn = psycopg2.connect(self.connection_string)
+            cursor = conn.cursor()
+
+            query = f"SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '{table_name}'"
+
+            cursor.execute(query)
+            result = cursor.fetchall()
+        except Exception as error:
+            print("Error: %s" % error)
+            conn.close()
+        finally:
+            conn.close()
+            if len(result) > 0:
+                return True
+            else:
+                return False
