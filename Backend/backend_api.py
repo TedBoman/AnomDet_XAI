@@ -153,7 +153,7 @@ class BackendAPI:
             "METHOD": "run-batch",
             "model": model,
             "injection_method": injection_method,
-            "dataset": dataset
+            "dataset": dataset,
             "name": name
         }
         return self.__send_data(json.dumps(data))
