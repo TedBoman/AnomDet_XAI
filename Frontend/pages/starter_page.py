@@ -1,5 +1,6 @@
 from dash import dcc, html, Input, Output, State, callback, ctx
 import dash
+import action_handler
 from dash.dependencies import ALL
 
 # Placeholder for active datasets
@@ -93,6 +94,12 @@ layout = html.Div([
         html.Div(id="injection-panel", style={"display": "none"})
     ], style={"marginTop": "30px"}),
 
+
+    dcc.Store(id='selected_dataset'),
+    dcc.Store(id='selected_model'),
+    dcc.Store(id='selected_inj_method'),
+
+
 ], style={
     "backgroundColor": "#282c34",
     "padding": "50px",
@@ -100,8 +107,45 @@ layout = html.Div([
 })
 
 
-#TO DO: 
-#Change callbacks to store values
+#TO DO: Add callbacks to store values of user choices
+
+#Add callbacks to manage active datasets
+@callback(
+    Output('selected_dataset', 'data'),
+    Input('dataset-dropdown', 'value')
+)
+def store_selected_dataset(selected_dataset):
+    return selected_dataset
+
+#callback to store selected detection model
+@callback(
+    Output('selected_model', 'data'),
+    Input('detection-model-dropdown', 'value')
+)
+def store_selected_model(selected_model):
+    return selected_model
+
+#callback to store selected injection method
+@callback(Output('selected_inj_method', 'data'),
+          Input('injection-check', 'value')
+)
+def store_selected_inj_method(selected_inj_method):
+    if "use_injection" in selected_inj_method:
+        return selected_inj_method
+    return None
+
+#Callback to use stored values
+@callback(
+    Output('starter-feedback', 'children'),  
+    [Input('selected_dataset', 'data'),
+     Input('selected_model', 'data'),
+     Input('selected_inj_method', 'data')]
+)
+def get_values(selected_dataset, selected_model, selected_inj_method):
+    action_handler.user_request(selected_dataset, selected_model, selected_inj_method)
+    return ""
+
+    
 
 # Callback to add and manage active datasets
 @callback(
@@ -110,6 +154,7 @@ layout = html.Div([
      Input({"type": "remove-dataset-btn", "index": ALL}, "n_clicks")],
     [State("dataset-dropdown", "value")]
 )
+
 def manage_active_datasets(add_clicks, remove_clicks, selected_dataset):
     global active_datasets
     ctx = dash.callback_context
