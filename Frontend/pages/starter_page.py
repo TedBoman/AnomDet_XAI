@@ -6,23 +6,25 @@ from dash.dependencies import ALL
 active_datasets = []
 
 layout = html.Div([
-    html.H1("Starter Page", style={
+    html.H1("AnomDet", style={
         "textAlign": "center",
         "marginBottom": "30px",
         "color": "#ffffff",
         "fontSize": "40px"
     }),
 
-    # Load and Stream Data Buttons
     html.Div([
-        dcc.Link(html.Button("Load Data", id="load-data-btn",
-                             style={"margin": "10px", "width": "300px", "height": "70px",
-                                    "fontSize": "20px", "backgroundColor": "#4CAF50",
-                                    "color": "#ffffff", "borderRadius": "10px"}), href="/load-data"),
-        dcc.Link(html.Button("Stream Data", id="stream-data-btn",
-                             style={"margin": "10px", "width": "300px", "height": "70px",
-                                    "fontSize": "20px", "backgroundColor": "#008CBA",
-                                    "color": "#ffffff", "borderRadius": "10px"}), href="/stream-data")
+        html.Label("Select Dataset:", style={"fontSize": "22px", "color": "#ffffff"}),
+        dcc.Dropdown(
+            id="dataset-dropdown",
+            options=[{"label": f"Dataset {i}", "value": f"dataset_{i}"} for i in range(1, 11)],
+            placeholder="Select a dataset",
+            style={"width": "350px", "fontSize": "18px", "margin": "auto"}
+        ),
+        html.Button("Start Job", id="add-dataset-btn", style={
+            "marginTop": "10px", "width": "12rem", "height": "40px", "fontSize": "16px",
+            "backgroundColor": "#4CAF50", "color": "#ffffff", "borderRadius": "5px"
+        })
     ], style={"textAlign": "center", "marginBottom": "30px"}),
        # Select Detection Model Panel
     html.Div([
@@ -41,31 +43,6 @@ layout = html.Div([
 
     html.Div(id="starter-feedback", style={"textAlign": "center", "marginTop": "20px"}),
 
-
-    # Select Dataset to Activate Section
-    html.Div([
-        html.Label("Select Dataset to Activate:", style={"fontSize": "22px", "color": "#ffffff"}),
-        dcc.Dropdown(
-            id="dataset-dropdown",
-            options=[{"label": f"Dataset {i}", "value": f"dataset_{i}"} for i in range(1, 11)],
-            placeholder="Select a dataset",
-            style={"width": "350px", "fontSize": "18px", "margin": "auto"}
-        ),
-        html.Button("Add Dataset", id="add-dataset-btn", style={
-            "marginTop": "10px", "width": "150px", "height": "40px", "fontSize": "16px",
-            "backgroundColor": "#4CAF50", "color": "#ffffff", "borderRadius": "5px"
-        })
-    ], style={"textAlign": "center", "marginBottom": "30px"}),
-
-    # Active Datasets Section
-    html.Div([
-        html.H3("Active Datasets:", style={"color": "#ffffff", "textAlign": "center"}),
-        html.Div(id="active-datasets-list", style={
-            "textAlign": "center", "color": "#ffffff", "marginTop": "10px",
-            "padding": "10px", "border": "1px solid #444", "borderRadius": "5px"
-        })
-    ], style={"marginTop": "30px"}),
-
     html.Div(id="starter-feedback", style={"textAlign": "center", "marginTop": "20px"}),
 
     # Additional Panel Section
@@ -80,6 +57,15 @@ layout = html.Div([
             style={"textAlign": "center", "fontSize": "20px", "color": "#ffffff"}
         ),
         html.Div(id="injection-panel", style={"display": "none"})
+    ], style={"marginTop": "30px"}),
+
+    # Active Datasets Section
+    html.Div([
+        html.H3("Currently Running Jobs:", style={"color": "#ffffff", "textAlign": "center"}),
+        html.Div(id="active-datasets-list", style={
+            "textAlign": "center", "color": "#ffffff", "marginTop": "4px",
+            "width": "25rem", "margin": "10px auto", "padding": "10px", "border": "4px solid #464", "borderRadius": "5px"
+        })
     ], style={"marginTop": "30px"}),
 
 ], style={
@@ -124,9 +110,9 @@ def manage_active_datasets(add_clicks, remove_clicks, selected_dataset):
     return [
         html.Div([
             html.Span(dataset, style={"marginRight": "10px"}),
-            html.Button("Remove", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
-                "fontSize": "14px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
-                "borderRadius": "5px", "padding": "5px"
+            html.Button("Stop", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
+                "fontSize": "12px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
+                "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
             })
         ]) for dataset in active_datasets
     ]
