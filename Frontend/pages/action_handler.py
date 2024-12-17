@@ -1,8 +1,7 @@
-from api import BckendAPI
+
 
 
 def user_request(selected_dataset, selected_model, selected_inj_method):
-    
     match selected_inj_method:
         case None:
             BckendAPI.get_dataset(selected_dataset)
