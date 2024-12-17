@@ -1,8 +1,43 @@
+import os
+import requests
+import socket
+import json
 from dash import dcc, html, Input, Output, State, callback, ctx
 import dash
 from dash.dependencies import ALL
 
-# Placeholder for active datasets
+BACKEND_HOST = 'Backend'
+BACKEND_PORT = int(os.getenv('BACKEND_PORT'))
+
+def send_socket_request(data):
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((BACKEND_HOST, BACKEND_PORT))
+        sock.sendall(bytes(data, encoding="utf-8"))
+        response = sock.recv(1024).decode('utf-8')
+        sock.close()
+        return json.loads(response) if response else None
+    except Exception as e:
+        print(f"Socket error: {e}")
+        return None
+
+def get_datasets():
+    data = json.dumps({"METHOD": "get-datasets"})
+    response = send_socket_request(data)
+    if "datasets" in response:
+        return response["datasets"]
+    return []
+
+def get_models():
+    data = json.dumps({"METHOD": "get-models"})
+    response = send_socket_request(data)
+    if "models" in response:
+        return response["models"]
+    return []
+
+datasets = get_datasets()
+models = get_models()
+
 active_datasets = []
 
 layout = html.Div([
@@ -17,21 +52,17 @@ layout = html.Div([
         html.Label("Select Dataset:", style={"fontSize": "22px", "color": "#ffffff"}),
         dcc.Dropdown(
             id="dataset-dropdown",
-            options=[{"label": f"Dataset {i}", "value": f"dataset_{i}"} for i in range(1, 11)],
+            options=[{"label": dataset, "value": dataset} for dataset in datasets],
             placeholder="Select a dataset",
             style={"width": "350px", "fontSize": "18px", "margin": "auto"}
         )
     ], style={"textAlign": "center", "marginBottom": "30px"}),
-       # Select Detection Model Panel
+
     html.Div([
         html.Label("Select a Detection Model:", style={"fontSize": "22px", "color": "#ffffff"}),
         dcc.Dropdown(
             id="detection-model-dropdown",
-            options=[
-                {"label": "Model A", "value": "model_a"},
-                {"label": "Model B", "value": "model_b"},
-                {"label": "Model C", "value": "model_c"}
-            ],
+            options=[{"label": model, "value": model} for model in models],
             placeholder="Select a detection model",
             style={"width": "350px", "margin": "auto"}
         )
@@ -157,7 +188,7 @@ def manage_active_datasets(add_clicks, remove_clicks, selected_dataset):
             html.Div([
                 dcc.Link(
                     dataset,
-                    href=f"/details/{dataset}",  # Dynamisk URL baserad på dataset-namnet
+                    href=f"/stream-data",  # Dynamisk URL baserad på dataset-namnet
                     style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
                 ),
                 html.Button("Stop", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
@@ -181,7 +212,7 @@ def manage_active_datasets(add_clicks, remove_clicks, selected_dataset):
         html.Div([
             dcc.Link(
                 dataset,
-                href=f"/details/{dataset}",
+                href=f"/stream-data",
                 style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
             ),
             html.Button("Stop", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
