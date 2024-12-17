@@ -20,11 +20,7 @@ layout = html.Div([
             options=[{"label": f"Dataset {i}", "value": f"dataset_{i}"} for i in range(1, 11)],
             placeholder="Select a dataset",
             style={"width": "350px", "fontSize": "18px", "margin": "auto"}
-        ),
-        html.Button("Start Job", id="add-dataset-btn", style={
-            "marginTop": "10px", "width": "12rem", "height": "40px", "fontSize": "16px",
-            "backgroundColor": "#4CAF50", "color": "#ffffff", "borderRadius": "5px"
-        })
+        )
     ], style={"textAlign": "center", "marginBottom": "30px"}),
        # Select Detection Model Panel
     html.Div([
@@ -59,14 +55,74 @@ layout = html.Div([
         html.Div(id="injection-panel", style={"display": "none"})
     ], style={"marginTop": "30px"}),
 
-    # Active Datasets Section
     html.Div([
+        html.Label("", style={}),
+        dcc.RadioItems(
+            id="mode-selection",
+            options=[
+                {"label": "Batch", "value": "batch"},
+                {"label": "Stream", "value": "stream"}
+            ],
+            value="batch",  # Default selection
+            labelStyle={"display": "inline-block", "marginRight": "20px"},
+            style={"textAlign": "center", "fontSize": "25px", "color": "#ffffff"},
+            inputStyle={"height": "22px", "width": "30px", "marginRight": "10px"}
+        )
+    ], style={"textAlign": "center", "marginTop": "20px"}),
+    
+    html.Div([
+        html.Button("Start Job", id="add-dataset-btn", style={
+            "marginTop": "20px",
+            "width": "150px",
+            "height": "40px",
+            "fontSize": "16px",
+            "backgroundColor": "#4CAF50",
+            "color": "#ffffff",
+            "borderRadius": "5px",
+            "display": "block",
+            "margin": "auto"
+        })
+    ], style={"textAlign": "center", "marginTop": "30px"}), 
+
+    html.Div(
+        id="popup",
+        children="Job has started!",
+        style={
+            "backgroundColor": "#4CAF50",
+            "color": "#ffffff",
+            "fontSize": "20px",
+            "padding": "10px",
+            "borderRadius": "5px",
+            "textAlign": "center",
+            "width": "250px",
+            "margin": "auto",
+            "position": "fixed",
+            "top": "20px",
+            "left": "50%",
+            "transform": "translateX(-50%)",
+            "zIndex": "1000",
+            "display": "none"
+        }),
+        dcc.Interval(
+        id="popup-interval",
+        interval=3000,
+        n_intervals=0,
+        disabled=True 
+        ),
+    
+    # Active Datasets Section
+html.Div(
+    id="active-jobs-section",
+    children=[
         html.H3("Currently Running Jobs:", style={"color": "#ffffff", "textAlign": "center"}),
         html.Div(id="active-datasets-list", style={
             "textAlign": "center", "color": "#ffffff", "marginTop": "4px",
             "width": "25rem", "margin": "10px auto", "padding": "10px", "border": "4px solid #464", "borderRadius": "5px"
         })
-    ], style={"marginTop": "30px"}),
+    ],
+    style={"display": "none", "marginTop": "30px"}  # Hidden by default
+),
+
 
 ], style={
     "backgroundColor": "#282c34",
@@ -74,6 +130,16 @@ layout = html.Div([
     "minHeight": "100vh"
 })
 
+
+@callback(
+    Output("active-jobs-section", "style"),
+    Input("active-datasets-list", "children")
+)
+def toggle_active_jobs_section(children):
+    # Visa sektionen om det finns några aktiva jobb, annars dölj den
+    if children:
+        return {"display": "block", "marginTop": "30px"}
+    return {"display": "none"}
 
 # Callback to add and manage active datasets
 @callback(
@@ -89,10 +155,14 @@ def manage_active_datasets(add_clicks, remove_clicks, selected_dataset):
     if not ctx.triggered:
         return [
             html.Div([
-                html.Span(dataset, style={"marginRight": "10px"}),
-                html.Button("Remove", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
-                    "fontSize": "14px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
-                    "borderRadius": "5px", "padding": "5px"
+                dcc.Link(
+                    dataset,
+                    href=f"/details/{dataset}",  # Dynamisk URL baserad på dataset-namnet
+                    style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
+                ),
+                html.Button("Stop", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
+                    "fontSize": "12px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
+                    "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
                 })
             ]) for dataset in active_datasets
         ]
@@ -109,13 +179,37 @@ def manage_active_datasets(add_clicks, remove_clicks, selected_dataset):
 
     return [
         html.Div([
-            html.Span(dataset, style={"marginRight": "10px"}),
+            dcc.Link(
+                dataset,
+                href=f"/details/{dataset}",
+                style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
+            ),
             html.Button("Stop", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
                 "fontSize": "12px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
                 "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
             })
         ]) for dataset in active_datasets
     ]
+
+@callback(
+    [Output("popup", "style"), Output("popup-interval", "disabled")],
+    [Input("add-dataset-btn", "n_clicks"), Input("popup-interval", "n_intervals")],
+    [State("popup", "style")]
+)
+def handle_popup(n_clicks, n_intervals, style):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return style, True
+
+    trigger = ctx.triggered[0]["prop_id"]
+    if trigger == "add-dataset-btn.n_clicks" and n_clicks:
+        style.update({"display": "block"})
+        return style, False 
+    elif trigger == "popup-interval.n_intervals":
+        style.update({"display": "none"})
+        return style, True 
+
+    return style, True
 
 
 # Callback to show/hide injection panel
