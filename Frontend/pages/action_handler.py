@@ -1,6 +1,7 @@
 
 
 
+<<<<<<< HEAD
 def user_request(selected_dataset, selected_model, selected_inj_method):
     match selected_inj_method:
         case None:
@@ -11,3 +12,8 @@ def user_request(selected_dataset, selected_model, selected_inj_method):
             BckendAPI.get_model(selected_model)
             BckendAPI.get_injection_method(selected_inj_method)
     
+=======
+def user_actions():
+    
+    pass
+>>>>>>> parent of e2ec95a (Adding Callbacks)
