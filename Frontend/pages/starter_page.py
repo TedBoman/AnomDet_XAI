@@ -47,7 +47,7 @@ layout = html.Div([
         "textAlign": "center",
         "marginBottom": "30px",
         "color": "#ffffff",
-        "fontSize": "40px"
+        "fontSize": "3.5rem"
     }),
 
     html.Div([
@@ -56,7 +56,7 @@ layout = html.Div([
             id="dataset-dropdown",
             options=[{"label": dataset, "value": dataset} for dataset in datasets],
             placeholder="Select a dataset",
-            style={"width": "350px", "fontSize": "18px", "margin": "auto"}
+            style={"width": "350px", "fontSize": "18px", "margin": "auto", "border": "0.05rem solid black"}
         )
     ], style={"textAlign": "center", "marginBottom": "30px"}),
 
@@ -66,7 +66,7 @@ layout = html.Div([
             id="detection-model-dropdown",
             options=[{"label": model, "value": model} for model in models],
             placeholder="Select a detection model",
-            style={"width": "350px", "margin": "auto"}
+            style={"width": "350px", "margin": "auto", "border": "0.05rem solid black"}
         )
     ], style={"textAlign": "center", "marginTop": "30px"}),
 
@@ -111,7 +111,7 @@ layout = html.Div([
             "fontSize": "16px",
             "backgroundColor": "#4CAF50",
             "color": "#ffffff",
-            "borderRadius": "5px",
+            "borderRadius": "0.3rem",
             "display": "block",
             "margin": "auto"
         })
@@ -157,16 +157,16 @@ html.Div(
 ),
         ],style={
             "padding": "30px",
-            "backgroundColor": "#5187a8",
+            "backgroundColor": "#104E78",
             "maxWidth": "40rem",
             "borderRadius": "2rem",
             "margin": "auto",
-            "boxShadow": "0 4px 10px rgba(0, 0, 0, 0.1)",
+            "boxShadow": "0 4px 10px rgb(0, 0, 0)",
             "textAlign": "center",
         }),
 
 ], style={
-    "backgroundColor": "#104E78",
+    "backgroundColor": "#105E90",#5187a8
     "padding": "40px",
     "minHeight": "100vh",
 
