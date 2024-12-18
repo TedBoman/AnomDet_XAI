@@ -2,8 +2,8 @@ import os
 import requests
 import socket
 import json
-from dash import dcc, html, Input, Output, State, callback, ctx
 import dash
+from dash import dcc, html, Input, Output, State, callback, ctx
 from dash.dependencies import ALL
 BACKEND_HOST = 'Backend'
 BACKEND_PORT = int(os.getenv('BACKEND_PORT'))
