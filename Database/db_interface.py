@@ -34,3 +34,7 @@ class DBInterface(ABC):
     @abstractmethod
     def drop_table(self, table_name: str):
         pass
+    # Checks if the table_name table exists in the database
+    @abstractmethod
+    def table_exists(self, table_name: str):
+        pass
