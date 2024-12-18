@@ -2,6 +2,7 @@ import sys
 import os
 import socket
 import json
+from time import sleep
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -120,7 +121,7 @@ def main(argv: list[str]) -> None:
                 handle_error(1, "Invalid number of arguments")
             result = api.get_datasets()
 
-        # Upload a dataset to the backend if the command is "upload-dataset"
+        # Upload a dataset to the backend if the command is "import-dataset"
         case "import-dataset":
             if (arg_len != 4):
                 handle_error(1, "Invalid number of arguments")
@@ -140,7 +141,8 @@ def main(argv: list[str]) -> None:
         
 def handle_error(code: int, message: str) -> None:
         print(message)
-        exit(code)        
+        exit(code)    
+
 class BackendAPI:
     # Constructor setting host adress and port for the the backend container
     def __init__(self, host: str, port: int) -> None:
@@ -153,10 +155,10 @@ class BackendAPI:
             "METHOD": "run-batch",
             "model": model,
             "injection_method": injection_method,
-            "dataset": dataset
+            "dataset": dataset,
             "name": name
         }
-        return self.__send_data(json.dumps(data))
+        self.__send_data(data, response=False)
 
     # Sends a request to the backend to start a stream job
     def run_stream(self, model: str, injection_method: str, dataset: str, name: str) -> str:
@@ -166,7 +168,7 @@ class BackendAPI:
             "injection_method": injection_method,
             "dataset": dataset
         }
-        return self.__send_data(json.dumps(data))
+        self.__send_data(data, response=False)
 
     # Sends a request to the backend to change the model used for a running job
     def change_model(self, model: str, name: str) -> str:
@@ -175,7 +177,7 @@ class BackendAPI:
             "model": model,
             "job_name": name
         }
-        return self.__send_data(json.dumps(data))
+        self.__send_data(data, response=False)
 
     # Sends a request to the backend to change the injection method used for a running job
     def change_method(self, injection_method: str, name: str) -> str:
@@ -184,7 +186,7 @@ class BackendAPI:
             "injection-method": injection_method,
             "job_name": name
         }
-        return self.__send_data(json.dumps(data))
+        self.__send_data(data, response=False)
 
     # Requests each row of data of a running job from timestamp and forward
     def get_data(self, timestamp: str, name: str) -> str:
@@ -193,23 +195,23 @@ class BackendAPI:
             "timestamp": timestamp,
             "job_name": name
         }
-        return self.__send_data(json.dumps(data))
+        return self.__send_data(data)
 
-    # Injects anomalies manually into a running job
+    # Injects anomalies into a running job
     def inject_anomaly(self, timestamps: list[int], name: str) -> str:
         data = {
             "METHOD": "inject-anomaly",
             "timestamps": timestamps,
             "job_name": name
         }
-        return self.__send_data(json.dumps(data))
+        self.__send_data(data, response=False)
 
     # Get all running jobs
     def get_running(self) -> str:
         data = {
             "METHOD": "get-running"
         }
-        return self.__send_data(json.dumps(data))
+        return self.__send_data(data)
     
     # Cancels a running job, deletes the data and stops the anomaly detection
     def cancel_job(self, name: str) -> str:
@@ -217,51 +219,67 @@ class BackendAPI:
             "METHOD": "cancel-job",
             "job_name": name
         }
-        return self.__send_data(json.dumps(data))
+        self.__send_data(data, response=False)
     
     # Get all available models for anomaly detection
     def get_models(self) -> str:
         data = {
             "METHOD": "get-models"
         }
-        return self.__send_data(json.dumps(data))
+        return self.__send_data(data)
     
     # Get all available anomaly injection methods
     def get_injection_methods(self) -> str:
         data = {
             "METHOD": "get-injection-methods"
         }
-        return self.__send_data(json.dumps(data))
+        return self.__send_data(data)
     
     # Get all available datasets
     def get_datasets(self) -> str:
         data = {
             "METHOD": "get-datasets"
         }
-        return self.__send_data(json.dumps(data))
+        return self.__send_data(data)
     
     # Uploads a complete dataset to the backend
-    def import_dataset(self, file_path: str) -> str:
+    def import_dataset(self, file_path: str, timestamp_column: str) -> str:
         if not os.path.isfile(file_path):
             handle_error(2, "File not found")
+
+        file = open(file_path, "r")
+        file_content = file.read()
         data = {
-            "METHOD": "upload-dataset",
-            "name": file_path
+            "METHOD": "import-dataset",
+            "name": os.path.basename(file_path),
+            "timestamp_column": timestamp_column,
+            "file_content": file_content
         }
-        return self.__send_data(json.dumps(data))
+        
+        self.__send_data(data, response=False)
 
     # Initates connection to backend and sends json data through the socket
-    def __send_data(self, data: str) -> str:
+    def __send_data(self, data: str, response: bool=True) -> str:
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect((self.host, self.port))
-            sock.sendall(bytes(data, encoding="utf-8"))
-            data = sock.recv(1024)
+
+            # Send two messages through the same connection if the method is import-dataset
+            if data["METHOD"] == "import-dataset":
+                file_content = data["file_content"]
+                del data["file_content"]
+                data = json.dumps(data)
+                sock.sendall(bytes(data, encoding="utf-8"))
+                sleep(0.5)
+                sock.sendall(bytes(file_content, encoding="utf-8"))
+            else:
+                data = json.dumps(data)
+                sock.sendall(bytes(data, encoding="utf-8"))
+            if response:
+                data = sock.recv(1024)
+                return self.__receive_data(sock)
         except Exception as e:
             print(e)
-
-        if data:
-            return json.loads(data)
 
 if __name__ == "__main__":
     main(sys.argv)
