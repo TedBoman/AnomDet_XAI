@@ -48,15 +48,15 @@ def get_models() -> list:
     models = []
     for path in os.listdir(MODEL_DIRECTORY):
         file_path = MODEL_DIRECTORY + "/" + path
-        print(file_path)
         if os.path.isfile(file_path):
             model_name = path.split(".")[0]
             models.append(model_name)
 
+    # Removing the __init__, setup files and the .env file
+    models.remove("")
     models.remove("model_interface")
     models.remove("__init__")
     models.remove("setup")
-    models.remove("LSTM")
     
     return models
 
@@ -76,7 +76,6 @@ def get_datasets() -> list:
     datasets = []
     for path in os.listdir(DATASET_DIRECTORY):
         file_path = DATASET_DIRECTORY + "/" + path
-        print(file_path)
         if os.path.isfile(file_path):
             dataset = path
             datasets.append(dataset)
