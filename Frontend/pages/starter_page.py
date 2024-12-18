@@ -41,6 +41,8 @@ models = get_models()
 active_datasets = []
 
 layout = html.Div([
+    html.Div(
+        [
     html.H1("AnomDet", style={
         "textAlign": "center",
         "marginBottom": "30px",
@@ -153,12 +155,21 @@ html.Div(
     ],
     style={"display": "none", "marginTop": "30px"}  # Hidden by default
 ),
-
+        ],style={
+            "padding": "30px",
+            "backgroundColor": "#5187a8",
+            "maxWidth": "40rem",
+            "borderRadius": "2rem",
+            "margin": "auto",
+            "boxShadow": "0 4px 10px rgba(0, 0, 0, 0.1)",
+            "textAlign": "center",
+        }),
 
 ], style={
-    "backgroundColor": "#282c34",
-    "padding": "50px",
-    "minHeight": "100vh"
+    "backgroundColor": "#104E78",
+    "padding": "40px",
+    "minHeight": "100vh",
+
 })
 
 
@@ -188,7 +199,7 @@ def manage_active_datasets(add_clicks, remove_clicks, selected_dataset):
             html.Div([
                 dcc.Link(
                     dataset,
-                    href=f"/stream-data",  # Dynamisk URL baserad på dataset-namnet
+                    href=f"/stream-data",
                     style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
                 ),
                 html.Button("Stop", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
