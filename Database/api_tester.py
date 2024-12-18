@@ -9,9 +9,9 @@ from timescaledb_api import TimescaleDBAPI
 load_dotenv()
 HOST = 'localhost'
 PORT = int(os.getenv('DATABASE_PORT'))
-USER = os.getenv('DATABASE__USER')
-PASSWORD = os.getenv('DATABASE__PASSWORD')
-DB = os.getenv('DATABASE__DB')
+USER = os.getenv('POSTGRES_USER')
+PASSWORD = os.getenv('POSTGRES_PASSWORD')
+DB = os.getenv('POSTGRES_DB')
 
 # Assuming the docker container is started, connect to the database
 conn_params = {
