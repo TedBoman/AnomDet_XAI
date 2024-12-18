@@ -1,17 +1,44 @@
+import os
+import requests
+import socket
+import json
 from dash import dcc, html, Input, Output, State, callback, ctx
 import dash
 import action_handler
 from dash.dependencies import ALL
 
-# Placeholder for active datasets
-active_datasets = []
+BACKEND_HOST = 'Backend'
+BACKEND_PORT = int(os.getenv('BACKEND_PORT'))
 
-# Variables to store selected detection model and injection method
-selected_detection_model = None
-selected_injection_method = None
-selected_model = None
+def send_socket_request(data):
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((BACKEND_HOST, BACKEND_PORT))
+        sock.sendall(bytes(data, encoding="utf-8"))
+        response = sock.recv(1024).decode('utf-8')
+        sock.close()
+        return json.loads(response) if response else None
+    except Exception as e:
+        print(f"Socket error: {e}")
+        return None
 
-# Placeholder for active datasets
+def get_datasets():
+    data = json.dumps({"METHOD": "get-datasets"})
+    response = send_socket_request(data)
+    if "datasets" in response:
+        return response["datasets"]
+    return []
+
+def get_models():
+    data = json.dumps({"METHOD": "get-models"})
+    response = send_socket_request(data)
+    if "models" in response:
+        return response["models"]
+    return []
+
+datasets = get_datasets()
+models = get_models()
+
 active_datasets = []
 
 # Variables to store selected detection model and injection method
@@ -23,68 +50,36 @@ selected_model = None
 active_datasets = []
 
 layout = html.Div([
-    html.H1("Starter Page", style={
+    html.Div(
+        [
+    html.H1("AnomDet", style={
         "textAlign": "center",
         "marginBottom": "30px",
         "color": "#ffffff",
-        "fontSize": "40px"
+        "fontSize": "3.5rem"
     }),
 
-    # Load and Stream Data Buttons
     html.Div([
-        dcc.Link(html.Button("Load Data", id="load-data-btn",
-                             style={"margin": "10px", "width": "300px", "height": "70px",
-                                    "fontSize": "20px", "backgroundColor": "#4CAF50",
-                                    "color": "#ffffff", "borderRadius": "10px"}), href="/load-data"),
-        dcc.Link(html.Button("Stream Data", id="stream-data-btn",
-                             style={"margin": "10px", "width": "300px", "height": "70px",
-                                    "fontSize": "20px", "backgroundColor": "#008CBA",
-                                    "color": "#ffffff", "borderRadius": "10px"}), href="/stream-data")
+        html.Label("Select Dataset:", style={"fontSize": "22px", "color": "#ffffff"}),
+        dcc.Dropdown(
+            id="dataset-dropdown",
+            options=[{"label": dataset, "value": dataset} for dataset in datasets],
+            placeholder="Select a dataset",
+            style={"width": "350px", "fontSize": "18px", "margin": "auto", "border": "0.05rem solid black"}
+        )
     ], style={"textAlign": "center", "marginBottom": "30px"}),
-       # Select Detection Model Panel
+
     html.Div([
         html.Label("Select a Detection Model:", style={"fontSize": "22px", "color": "#ffffff"}),
         dcc.Dropdown(
             id="detection-model-dropdown",
-            options=[
-                {"label": "Model A", "value": "model_a"},
-                {"label": "Model B", "value": "model_b"},
-                {"label": "Model C", "value": "model_c"}
-            ],
+            options=[{"label": model, "value": model} for model in models],
             placeholder="Select a detection model",
-            style={"width": "350px", "margin": "auto"}
+            style={"width": "350px", "margin": "auto", "border": "0.05rem solid black"}
         )
     ], style={"textAlign": "center", "marginTop": "30px"}),
 
     html.Div(id="starter-feedback", style={"textAlign": "center", "marginTop": "20px"}),
-
-
-    # Select Dataset to Activate Section
-    html.Div([
-        html.Label("Select Dataset to Activate:", style={"fontSize": "22px", "color": "#ffffff"}),
-        dcc.Dropdown(
-            id="dataset-dropdown",
-            options=[{"label": f"Dataset {i}", "value": f"dataset_{i}"} for i in range(1, 11)],
-            placeholder="Select a dataset",
-            style={"width": "350px", "fontSize": "18px", "margin": "auto"}
-        ),
-        html.Button("Add Dataset", id="add-dataset-btn", style={
-            "marginTop": "10px", "width": "150px", "height": "40px", "fontSize": "16px",
-            "backgroundColor": "#4CAF50", "color": "#ffffff", "borderRadius": "5px"
-        })
-    ], style={"textAlign": "center", "marginBottom": "30px"}),
-
-
-
-
-    # Active Datasets Section
-    html.Div([
-        html.H3("Active Datasets:", style={"color": "#ffffff", "textAlign": "center"}),
-        html.Div(id="active-datasets-list", style={
-            "textAlign": "center", "color": "#ffffff", "marginTop": "10px",
-            "padding": "10px", "border": "1px solid #444", "borderRadius": "5px"
-        })
-    ], style={"marginTop": "30px"}),
 
     html.Div(id="starter-feedback", style={"textAlign": "center", "marginTop": "20px"}),
 
@@ -102,7 +97,6 @@ layout = html.Div([
         html.Div(id="injection-panel", style={"display": "none"})
     ], style={"marginTop": "30px"}),
 
-<<<<<<< HEAD
 <<<<<<< HEAD
     html.Div([
         html.Label("", style={}),
@@ -188,16 +182,14 @@ html.Div(
 
 >>>>>>> f9a5d42 (Adding Callbacks)
 
-=======
->>>>>>> 66f7567397aa842c9b48bcad4b6b4a0cca5c9dcb
 ], style={
-    "backgroundColor": "#282c34",
-    "padding": "50px",
-    "minHeight": "100vh"
+    "backgroundColor": "#105E90",#5187a8
+    "padding": "40px",
+    "minHeight": "100vh",
+
 })
 
 
-<<<<<<< HEAD
 <<<<<<< HEAD
 @callback(
     Output("active-jobs-section", "style"),
@@ -249,10 +241,6 @@ def get_values(selected_dataset, selected_model, selected_inj_method):
 
     
 >>>>>>> f9a5d42 (Adding Callbacks)
-=======
-#TO DO: 
-#Change callbacks to store values
->>>>>>> 66f7567397aa842c9b48bcad4b6b4a0cca5c9dcb
 
 # Callback to add and manage active datasets
 @callback(
@@ -269,10 +257,14 @@ def manage_active_datasets(add_clicks, remove_clicks, selected_dataset):
     if not ctx.triggered:
         return [
             html.Div([
-                html.Span(dataset, style={"marginRight": "10px"}),
-                html.Button("Remove", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
-                    "fontSize": "14px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
-                    "borderRadius": "5px", "padding": "5px"
+                dcc.Link(
+                    dataset,
+                    href=f"/stream-data",
+                    style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
+                ),
+                html.Button("Stop", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
+                    "fontSize": "12px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
+                    "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
                 })
             ]) for dataset in active_datasets
         ]
@@ -289,13 +281,37 @@ def manage_active_datasets(add_clicks, remove_clicks, selected_dataset):
 
     return [
         html.Div([
-            html.Span(dataset, style={"marginRight": "10px"}),
-            html.Button("Remove", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
-                "fontSize": "14px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
-                "borderRadius": "5px", "padding": "5px"
+            dcc.Link(
+                dataset,
+                href=f"/stream-data",
+                style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
+            ),
+            html.Button("Stop", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
+                "fontSize": "12px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
+                "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
             })
         ]) for dataset in active_datasets
     ]
+
+@callback(
+    [Output("popup", "style"), Output("popup-interval", "disabled")],
+    [Input("add-dataset-btn", "n_clicks"), Input("popup-interval", "n_intervals")],
+    [State("popup", "style")]
+)
+def handle_popup(n_clicks, n_intervals, style):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return style, True
+
+    trigger = ctx.triggered[0]["prop_id"]
+    if trigger == "add-dataset-btn.n_clicks" and n_clicks:
+        style.update({"display": "block"})
+        return style, False 
+    elif trigger == "popup-interval.n_intervals":
+        style.update({"display": "none"})
+        return style, True 
+
+    return style, True
 
 
 # Callback to show/hide injection panel

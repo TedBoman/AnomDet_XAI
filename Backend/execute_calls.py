@@ -3,12 +3,14 @@ from ML_models.isolation_forest import IsolationForest
 import pandas as pd
 import numpy as np
 import os
+from socket import socket
 
 MODEL_DIRECTORY = "./ML_models"
 INJECTION_METHOD_DIRECTORY = "./injection_methods"
-DATASET_DIRECTORY = "../Datasets"
+DATASET_DIRECTORY = "./Datasets"
 
-def run_batch(model: str, injection_method: str, df: pd.DataFrame) -> str:
+# Starts processing of dataset in one batch
+def run_batch(model: str, injection_method: str, path: str, name: str) -> str:
 
     #Removing the "is_injected" & "is_anomaly" columns
     feature_df = df.iloc[:, :-2]
@@ -22,22 +24,24 @@ def run_batch(model: str, injection_method: str, df: pd.DataFrame) -> str:
             anomalies = lstm_instance.detect(df.iloc[:, :-2])
             try: 
                 df["is_anomaly"] = anomalies
-                test_df = df[df["is_anomaly"] == True]
-                print(test_df)
             except Exception as e:
                 print(f'ERROR: {e}')
-            return df
+            return "finished"
         
         case "isolation_forest":
             if_instance = IsolationForest()
             if_instance.run(df.iloc[:, :-2])
+
             anomalies = if_instance.detect(df.iloc[:, :-2])
             df["is_anoamaly"] = anomalies
-            return df
+            return "finished"
         
         case _:
             raise Exception("Model not found")
 
+# Starts processing of dataset in one batch
+def run_stream(model: str, injection_method: str, path: str, name: str) -> str:
+    pass
 
 # Returns a list of models implemented in MODEL_DIRECTORY
 def get_models() -> list:
@@ -56,7 +60,7 @@ def get_models() -> list:
     
     return models
 
-#Returns a list of injection methods implemented in INJECTION_METHOD_DIRECTORY
+# Returns a list of injection methods implemented in INJECTION_METHOD_DIRECTORY
 def get_injection_methods() -> list:
     injection_methods = ["not implemented"]
     '''
@@ -67,7 +71,7 @@ def get_injection_methods() -> list:
     '''
     return injection_methods
 
-#Fetching datasets from the dataset directory
+# Fetching datasets from the dataset directory
 def get_datasets() -> list:
     datasets = []
     for path in os.listdir(DATASET_DIRECTORY):
@@ -78,3 +82,22 @@ def get_datasets() -> list:
             datasets.append(dataset)
 
     return datasets
+
+# Gets content of complete file to the backend
+def import_dataset(conn: socket, path: str, timestamp_column: str) -> None:
+    file = open(path, "w")
+    data = conn.recv(1024).decode("utf-8")
+    while data:
+        file.write(data)
+        data = conn.recv(1024).decode("utf-8")
+
+    file.close()
+    
+    # Change the timestamp column name to timestamp and move it to the first column
+    df = pd.read_csv(path)
+    df.rename(columns={timestamp_column: "timestamp"}, inplace=True)
+    cols = df.columns.tolist()
+    cols.remove("timestamp")
+    cols = ["timestamp"] + cols
+    df = df[cols]
+    df.to_csv(path, index=False)

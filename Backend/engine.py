@@ -5,35 +5,62 @@ from time import sleep
 import os
 import execute_calls
 import pandas as pd
+from timescaledb_api import TimescaleDBAPI
 from dotenv import load_dotenv
 
 load_dotenv()
-HOST = os.getenv('BACKEND_HOST')
-PORT = int(os.getenv('BACKEND_PORT'))
+BACKEND_HOST = os.getenv('BACKEND_HOST')
+BACKEND_PORT = int(os.getenv('BACKEND_PORT'))
+DATABASE = {
+    "HOST": os.getenv('DATABASE_HOST'),
+    "PORT": int(os.getenv('DATABASE_PORT')),
+    "USER": os.getenv('DATABASE_USER'),
+    "PASSWORD": os.getenv('DATABASE_PASSWORD'),
+    "DATABASE": os.getenv('DATABASE_NAME')
+}
+DATABASE_PORT = os.getenv('DATABASE_HOST')
 
 DATASET_DIRECTORY = "./Datasets/"
 
 backend_data = {
-    "batch-jobs": [],
-    "stream-jobs": [],
-    "running-models": []
+    "started-jobs": [],
+    "running-jobs": []
 }
 
 def main():
-    print("Hello from backend!")
     # Start a thread listening for requests
     listener_thread = threading.Thread(target=__request_listener)
     listener_thread.daemon = True
     listener_thread.start()
 
-    i = 1
-    print("Counting in main thread...")
+    db_conn_params = {
+        "user": DATABASE["USER"],
+        "password": DATABASE["PASSWORD"],
+        "host": DATABASE["HOST"],
+        "port": DATABASE["PORT"],
+        "database": DATABASE["DATABASE"]
+    }
+
+    backend_data["db_api"] = TimescaleDBAPI(db_conn_params)
+
+    print("Main thread started...")
     # Main loop serving the backend logic
     try:
         while True:
-            print(i)
-            i += 1
-            sleep(1)
+            for job, job_type in backend_data["started-jobs"]:
+                # If the job is a batch job, check if the job is finished to move it to the running-jobs list
+                if job_type == "batch":
+                    if backend_data["job"].is_alive() == False:
+                        backend_data["running-jobs"].append(job)
+                        backend_data["started-jobs"].remove((job, job_type))
+                        del backend_data["job"]
+                # If the job is a stream job, check if there is a table with the name of the job in the database to add to run job
+                else:
+                    found = backend_data["db_api"].table_exists(job)
+                    if found:
+                        backend_data["running-jobs"].append(job)
+                        backend_data["started-jobs"].remove((job, job_type))
+                sleep(1)
     except KeyboardInterrupt:
         print("Exiting backend...")
 
@@ -41,7 +68,7 @@ def main():
 def __request_listener():
     try: 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind((HOST, PORT))
+        sock.bind((BACKEND_HOST, BACKEND_PORT))
         sock.listen()
         sock.settimeout(1)
     except Exception as e:
@@ -68,17 +95,19 @@ def __handle_api_call(conn, data: dict) -> None:
             model = data["model"]
             injection_method = data["injection_method"]
             dataset_path = DATASET_DIRECTORY + data["dataset"]
+            name = data["name"]
 
-            print(dataset_path)
-
-            df = pd.read_csv(dataset_path, low_memory=False, parse_dates=["timestamp"], index_col="timestamp")
-            df["is_anomaly"] = False
-            df["injected_anomaly"] = False
-            df = execute_calls.run_batch(model, injection_method, df)
-            test_json = json.dumps({"test": "run-batch-response" })
-            conn.sendall(bytes(test_json, encoding="utf-8"))
+            backend_data[name] = threading.Thread(target=__request_listener, args=(model, injection_method, dataset_path, name))
+            backend_data[name].daemon = True
+            backend_data[name].start()
+            backend_data["started-jobs"].append((name, "batch"))
+            
         case "run-stream":
-            test_json = json.dumps({"test": "run-stream-response" })
+            model = data["model"]
+            injection_method = data["injection_method"]
+            dataset_path = DATASET_DIRECTORY + data["dataset"]
+            name = data["name"]
+
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case "change-model":
             test_json = json.dumps({"test": "change-model-respons" })
@@ -93,8 +122,11 @@ def __handle_api_call(conn, data: dict) -> None:
             test_json = json.dumps({"test": "inject-anomaly-response" })
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case "get-running":
-            test_json = json.dumps({"test": "get-running-response" })
-            conn.sendall(bytes(test_json, encoding="utf-8"))
+            running_dict = {
+                                "running": backend_data["running-jobs"]
+                            }
+            running_json = json.dumps(running_dict)
+            conn.sendall(bytes(running_json, encoding="utf-8"))
         case "cancel":
             
             test_json = json.dumps({"test": "cancel-response" })
@@ -114,16 +146,23 @@ def __handle_api_call(conn, data: dict) -> None:
             injection_methods_json = json.dumps(injection_methods_dict)
             conn.sendall(bytes(injection_methods_json, encoding="utf-8"))
         case "get-datasets":
-            print("Getting datasets")
             datasets = execute_calls.get_datasets()
             datasets_dict = {
                                 "datasets": datasets
                             }
             datasets_json = json.dumps(datasets_dict)
             conn.sendall(bytes(datasets_json, encoding="utf-8"))
-        case "upload-dataset":
-            test_json = json.dumps({"test": "upload-dataset-response" })
-            conn.sendall(bytes(test_json, encoding="utf-8"))
+        case "import-dataset":
+            path = DATASET_DIRECTORY + data["name"]
+            conn.settimeout(1)
+            # If the file does not exist, read the file contents written to the socket
+            if not os.path.isfile(path):
+                execute_calls.import_dataset(conn, path, data["timestamp_column"])
+            # If the file already exists, empty the socket buffer and do nothing
+            else:
+                data = conn.recv(1024)
+                while data:
+                    data = conn.recv(1024)
         case _: 
             response_json = json.dumps({"error": "method-error-response" })
             conn.sendall(bytes(response_json, encoding="utf-8"))        
