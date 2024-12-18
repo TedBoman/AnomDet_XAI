@@ -142,7 +142,7 @@ def store_selected_inj_method(selected_inj_method):
      Input('selected_inj_method', 'data')]
 )
 def get_values(selected_dataset, selected_model, selected_inj_method):
-    action_handler.user_request(selected_dataset, selected_model, selected_inj_method)
+    action_handler.job_request(selected_dataset, selected_model, selected_inj_method)
     return ""
 
     
