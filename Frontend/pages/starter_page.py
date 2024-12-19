@@ -1,11 +1,11 @@
 import os
 import requests
 import socket
+import frontend_handler
 import json
-from dash import dcc, html, Input, Output, State, callback, ctx
 import dash
+from dash import dcc, html, Input, Output, State, callback, ctx
 from dash.dependencies import ALL
-
 BACKEND_HOST = 'Backend'
 BACKEND_PORT = int(os.getenv('BACKEND_PORT'))
 
@@ -37,7 +37,6 @@ def get_models():
 
 datasets = get_datasets()
 models = get_models()
-
 active_datasets = []
 
 layout = html.Div([
@@ -173,6 +172,11 @@ html.Div(
 })
 
 
+        
+
+
+
+
 @callback(
     Output("active-jobs-section", "style"),
     Input("active-datasets-list", "children")
@@ -297,3 +301,13 @@ def update_injection_panel(selected):
         ])
     return ""
 
+@callback(
+        Output("starter-feedback", "children"),
+        Input("dataset-dropdown", "value"),
+        Input("detection-model-dropdown", "value"),
+        Input("mode-selection", "value"),
+        )
+def store_current_job_request(selected_dataset, selected_model, selected_mode):    
+    frontend_handler.user_request(selected_dataset, selected_model, selected_mode)
+    return
+    

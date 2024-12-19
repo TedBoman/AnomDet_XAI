@@ -13,4 +13,6 @@ COPY ./Backend/api/api.py /app/pages/
 
 EXPOSE ${FRONTEND_PORT}
 
-CMD ["python", "pages/app.py"]
+CMD ["python", "-u", "pages/app.py"]
+
+
