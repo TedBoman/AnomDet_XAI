@@ -38,7 +38,7 @@ def run_batch(model: str, path: str, name: str, inj_params: dict=None) -> None:
             raise Exception("Model not found")
 
 # Starts processing of dataset in one batch
-def run_stream(model: str, path: str, name: str, inj_params: dict=None) -> None:
+def run_stream(model: str, path: str, name: str, speedup: int, inj_params: dict=None) -> None:
     pass
 
 # Returns a list of models implemented in MODEL_DIRECTORY
