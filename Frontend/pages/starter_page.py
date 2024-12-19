@@ -1,6 +1,7 @@
 import os
 import requests
 import socket
+import frontend_handler
 import json
 import dash
 from dash import dcc, html, Input, Output, State, callback, ctx
@@ -36,7 +37,6 @@ def get_models():
 
 datasets = get_datasets()
 models = get_models()
-
 active_datasets = []
 
 layout = html.Div([
@@ -172,23 +172,15 @@ html.Div(
 })
 
 #callback to save values of a job that the user is instantiating
-#@callback(
-#    Output("starter-feedback", "children"),
-#    Input("dataset-dropdown", "value"),
-#    Input("detection-model-dropdown", "value"),
-#    Input("")
-    
-
-#def save_user_choices(n_clicks, job_type, selected_dataset, selected_model selected_inj_method):
-
- #   pass
-
-
-
-
-
-
-
+@callback(
+        Output("starter-feedback", "children"),
+        Input("dataset-dropdown", "value"),
+        Input("detection-model-dropdown", "value"),
+        Input("mode-selection", "value")
+        )
+def store_current_job_request(selected_dataset, selected_model, selected_inj_method, selected_mode):
+    frontend_handler.user_request(selected_dataset, selected_model, selected_inj_method, selected_mode)
+        
 
 
 
