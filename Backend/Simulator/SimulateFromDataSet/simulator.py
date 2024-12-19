@@ -5,6 +5,7 @@ import time as t
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import psycopg2
 
 from DBAPI.db_interface import DBInterface as db
 from AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
@@ -60,28 +61,27 @@ class Simulator:
         db_instance = self.init_db(conn_params)
         if not db_instance:
             return None
-        
-        try:
-            db_instance.create_table(tb_name, columns)
-            return tb_name  # Return the original name if successful
-        except Exception as e:
-            db_instance.conn.rollback()
-            if "already exists" in str(e):
-                i = 1
+
+        i = 1
+        new_table_name = tb_name
+        while True:
+            try:
+                db_instance.create_table(new_table_name, columns)
+                return new_table_name
+            except psycopg2.errors.DuplicateTable:  # Catch the specific exception
+                db_instance.conn.rollback()
+                i += 1
                 new_table_name = f"{tb_name}_{i}"
-                while True:
-                    try:
-                        db_instance.create_table(new_table_name, columns)
-                        return new_table_name  # Return the new table name
-                    except Exception as ex:
-                        db_instance.conn.rollback()
-                        if "already exists" in str(ex):
-                            i += 1
-                            new_table_name = f"{tb_name}_{i}"
-                        else:
-                            raise ex
-            else:
-                raise e
+            except (psycopg2.errors.OperationalError, 
+                    psycopg2.errors.ProgrammingError) as e:
+                # Handle or log other database-related errors
+                db_instance.conn.rollback()
+                print(f"Database error creating table: {e}")
+                raise  # Or re-raise if you want to stop execution
+            except Exception as e:  # Catch other unexpected errors
+                db_instance.conn.rollback()
+                print(f"Unexpected error creating table: {e}")
+                raise
 
     def process_row(self, conn_params, table_name, row, anomaly_settings=None):
         """
@@ -128,7 +128,7 @@ class Simulator:
                         sys.stdout.flush()
         
         # Insert the row (modified or not) into the database
-        df['timestamp'] = pd.to_datetime(df['timestamp'].astype(np.int64), unit='s') 
+        df['timestamp'] = pd.to_datetime(df['timestamp'].astype(np.int64), unit='s')
 
         db_instance = self.init_db(conn_params)
         db_instance.insert_data(table_name, df)

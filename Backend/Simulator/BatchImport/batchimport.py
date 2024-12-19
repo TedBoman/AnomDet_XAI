@@ -1,4 +1,5 @@
 # batchimport.py
+import psycopg2
 import time as t
 import multiprocessing as mp
 from pathlib import Path
@@ -74,14 +75,21 @@ class BatchImporter:
         while True:
             try:
                 db_instance.create_table(new_table_name, columns)
-                return new_table_name  # Return the table name
-            except Exception as e:
+                return new_table_name
+            except psycopg2.errors.DuplicateTable:  # Catch the specific exception
                 db_instance.conn.rollback()
-                if "already exists" in str(e):
-                    i += 1
-                    new_table_name = f"{tb_name}_{i}"
-                else:
-                    raise e  # Re-raise other exceptions
+                i += 1
+                new_table_name = f"{tb_name}_{i}"
+            except (psycopg2.errors.OperationalError, 
+                    psycopg2.errors.ProgrammingError) as e:
+                # Handle or log other database-related errors
+                db_instance.conn.rollback()
+                print(f"Database error creating table: {e}")
+                raise  # Or re-raise if you want to stop execution
+            except Exception as e:  # Catch other unexpected errors
+                db_instance.conn.rollback()
+                print(f"Unexpected error creating table: {e}")
+                raise
 
     def process_chunk(self, conn_params, table_name, chunk):
         """
