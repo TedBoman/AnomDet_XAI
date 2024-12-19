@@ -1,4 +1,4 @@
-from backend_api import BackendAPI
+from api import BackendAPI
 
 
 def user_request(selected_dataset, selected_model, job_type):
