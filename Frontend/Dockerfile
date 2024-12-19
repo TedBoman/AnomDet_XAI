@@ -10,7 +10,7 @@ COPY ./Frontend/requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ./Frontend/ /app/
-COPY ./Backend/backend_api.py /app/
+COPY ./Backend/backend_api.py /app/pages
 
 EXPOSE ${FRONTEND_PORT}
 

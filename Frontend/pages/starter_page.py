@@ -1,7 +1,7 @@
 import os
 import requests
 import socket
-import frontend_handler
+#import frontend_handler
 import json
 import dash
 from dash import dcc, html, Input, Output, State, callback, ctx
@@ -179,7 +179,8 @@ html.Div(
         Input("mode-selection", "value")
         )
 def store_current_job_request(selected_dataset, selected_model, selected_inj_method, selected_mode):
-    frontend_handler.user_request(selected_dataset, selected_model, selected_inj_method, selected_mode)
+    #frontend_handler.user_request(selected_dataset, selected_model, selected_inj_method, selected_mode)
+    return
         
 
 
