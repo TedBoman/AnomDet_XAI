@@ -1,7 +1,7 @@
 import os
 import requests
 import socket
-#import frontend_handler
+import frontend_handler
 import json
 import dash
 from dash import dcc, html, Input, Output, State, callback, ctx
@@ -171,16 +171,7 @@ html.Div(
 
 })
 
-#callback to save values of a job that the user is instantiating
-@callback(
-        Output("starter-feedback", "children"),
-        Input("dataset-dropdown", "value"),
-        Input("detection-model-dropdown", "value"),
-        Input("mode-selection", "value")
-        )
-def store_current_job_request(selected_dataset, selected_model, selected_inj_method, selected_mode):
-    #frontend_handler.user_request(selected_dataset, selected_model, selected_inj_method, selected_mode)
-    return
+
         
 
 
@@ -309,3 +300,14 @@ def update_injection_panel(selected):
             ], style={"marginTop": "20px", "textAlign": "center"})
         ])
     return ""
+
+@callback(
+        Output("starter-feedback", "children"),
+        Input("dataset-dropdown", "value"),
+        Input("detection-model-dropdown", "value"),
+        Input("mode-selection", "value"),
+        )
+def store_current_job_request(selected_dataset, selected_model, selected_mode):    
+    frontend_handler.user_request(selected_dataset, selected_model, selected_mode)
+    return
+    
