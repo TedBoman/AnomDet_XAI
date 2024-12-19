@@ -30,7 +30,7 @@ services:
       - "host.docker.internal:host-gateway"
     #volumes:
      # - ../Frontend:/app
-    #restart: always
+    restart: always
 
   backend:
     build:
