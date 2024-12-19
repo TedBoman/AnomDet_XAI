@@ -1,10 +1,40 @@
 # Backend API and CLI-tool documentation
 
+Found in the "./Backend/api/" directory, we have a API to interact with the backend that is used by our Fronted as well as our CLI-tool.
+
 ## CLI-tool
 
 We've made it possible to send requests to the backend with the backend api through the command-line. This is made possible by the invoking "./Backend/api/cli_tool.py". The main function parses the command-line arguments and calls, handles errors and calls appropiate function sending data to the backend. Run "python cli_tool.py help" for CLI-tool documentation.
 
+The options used for the CLI-tool are:
+- run-batch
+- run-stream
+- change-model
+- change-injection-method
+- get-data
+- inject-anomaly
+- get-running
+- cancel
+- get-models
+- get-injection-methods
+- get-datasets
+- get-all-jobs
+- import-datasets
+
+Most of the options will ask the user to provide details needed for that specific option. E.g., the "run-batch" option requires the user to specify which model to use for detection, on what dataset they want to do detection on, what to name the batch job and prompt for anomaly injection details if they choose to inject anomalies.
+
 ## BackendAPI
+
+To use the backend api, first you'll need to import the BackendAPI class and then instantiate a BackendAPI object providing it with a host and port
+
+```py
+from api import BackendAPI
+
+HOST = "secret"
+PORT = 1234
+
+api = BackendAPI(HOST, PORT)
+```
 
 Class designed to serve all requests/responses to and from the backend. It is initialized with a host and port sent to the constructor to use for connecting to the backend socket. 
 
