@@ -9,11 +9,11 @@ load_dotenv()
 HOST = 'localhost'
 PORT = int(os.getenv('BACKEND_PORT'))
 
-DOC = """"python backend_api.py run-batch <model> <injection-method> <dataset> <name>"
-starts anomaly detection of batch data from the given file with the given model and injection method
+DOC = """"python backend_api.py run-batch <model> <injection-y/n> <dataset> <name>"
+starts anomaly detection of batch data from the given file with the given model and asks for injection details if injectin is "y"
 
-"python backend_api.py run-stream <model> <injection-method> <dataset> <name>" 
-starts anomaly detection of stream data from the given file with the given model and injection method
+"python backend_api.py run-stream <model> <injection-y/n> <dataset> <name> <speedup-optional>" 
+starts anomaly detection of stream data from the given file with the given model and asks for injection details if injectin is "y". Speedup is "1" for 1x speed, "2" for 2x speed etc.
 
 "python backend_api.py change-model <model> <name>"
 changes the model used for anomaly detection for the currently run batch named <name> to <model>
@@ -56,15 +56,55 @@ def main(argv: list[str]) -> None:
     match argv[1]:
         # Start a batch job in the backend if the command is "run-batch"
         case "run-batch":
-            if arg_len != 6:
+            if arg_len != o:
                 handle_error(1, "Invalid number of arguments")
-            result = api.run_batch(argv[2], argv[3], argv[4], argv[5])
+            if argv[3] == "y":
+                anomaly_type = input("Enter the type of anomaly: ")
+                timestamp = input("Enter the timestamp to start anomaly: ")
+                magnitude = input("Enter the magnitude of the anomaly: ")
+                percentage = input("Enter the percentage of data: ")
+                duration = input("Enter the duration of the anomalies: ")
+                columns_string = input("Enter the columns to inject anomalies into, as a comma separated list (a,b,c,d,...): ")
+                inj_params = {
+                    "anomaly_type": anomaly_type,
+                    "timestamp": timestamp,
+                    "magnitude": magnitude,
+                    "percentage": percentage,
+                    "duration": duration,
+                    "columns": columns_string.split(',')
+                }
+                api.run_batch(argv[2], argv[4], argv[5], inj_params)
+            else:
+                api.run_batch(argv[2], argv[4], argv[5])
 
         # Start a stream job in the backend if the command is "run-stream"
         case "run-stream":
-            if arg_len != 6:
+            if arg_len != 6 and arg_len != 7:
                 handle_error(1, "Invalid number of arguments")
-            result = api.run_stream(argv[2], argv[3], argv[4], argv[5])
+            if argv[3] == "y":
+                anomaly_type = input("Enter the type of anomaly: ")
+                timestamp = input("Enter the timestamp to start anomaly: ")
+                magnitude = input("Enter the magnitude of the anomaly: ")
+                percentage = input("Enter the percentage of data: ")
+                duration = input("Enter the duration of the anomalies: ")
+                columns_string = input("Enter the columns to inject anomalies into, as a comma separated list (a,b,c,d,...): ")
+                inj_params = {
+                    "anomaly_type": anomaly_type,
+                    "timestamp": timestamp,
+                    "magnitude": magnitude,
+                    "percentage": percentage,
+                    "duration": duration,
+                    "columns": columns_string.split(',')
+                }
+                if arg_len == 7:
+                    api.run_stream(argv[2], argv[4], argv[5], speedup=argv[6], inj_params=inj_params)
+                else:
+                    api.run_stream(argv[2], argv[4], argv[5], inj_params=inj_params)
+            else:
+                if arg_len == 7:
+                    api.run_stream(argv[2], argv[4], argv[5], speedup=argv[6])
+                else:
+                    api.run_stream(argv[2], argv[4], argv[5])
             
         # Change the model used for a running job if the command is "change-model"
         case "change-model":
@@ -150,28 +190,35 @@ class BackendAPI:
         self.port = port
 
     # Sends a request to the backend to start a batch job
-    def run_batch(self, model: str, injection_method: str, dataset: str, name: str) -> str:
+    def run_batch(self, model: str, dataset: str, name: str, inj_params: dict=None) -> None:
         data = {
             "METHOD": "run-batch",
             "model": model,
-            "injection_method": injection_method,
             "dataset": dataset,
             "name": name
         }
+        if inj_params:
+            data["injection_params"] = inj_params
+
         self.__send_data(data, response=False)
 
     # Sends a request to the backend to start a stream job
-    def run_stream(self, model: str, injection_method: str, dataset: str, name: str) -> str:
+    def run_stream(self, model: str,dataset: str, name: str, speedup: str=None, inj_params: dict=None) -> None:
         data = {
             "METHOD": "run-stream",
             "model": model,
-            "injection_method": injection_method,
-            "dataset": dataset
+            "dataset": dataset,
+            "name": name
         }
+        if inj_params:
+            data["injection_params"] = inj_params
+        if speedup:
+            data["speedup"] = speedup
+            
         self.__send_data(data, response=False)
 
     # Sends a request to the backend to change the model used for a running job
-    def change_model(self, model: str, name: str) -> str:
+    def change_model(self, model: str, name: str) -> None:
         data = {
             "METHOD": "change-model",
             "model": model,
@@ -180,7 +227,7 @@ class BackendAPI:
         self.__send_data(data, response=False)
 
     # Sends a request to the backend to change the injection method used for a running job
-    def change_method(self, injection_method: str, name: str) -> str:
+    def change_method(self, injection_method: str, name: str) -> None:
         data = {
             "METHOD": "change-method",
             "injection-method": injection_method,
@@ -198,7 +245,7 @@ class BackendAPI:
         return self.__send_data(data)
 
     # Injects anomalies into a running job
-    def inject_anomaly(self, timestamps: list[int], name: str) -> str:
+    def inject_anomaly(self, timestamps: list[int], name: str) -> None:
         data = {
             "METHOD": "inject-anomaly",
             "timestamps": timestamps,
@@ -214,7 +261,7 @@ class BackendAPI:
         return self.__send_data(data)
     
     # Cancels a running job, deletes the data and stops the anomaly detection
-    def cancel_job(self, name: str) -> str:
+    def cancel_job(self, name: str) -> None:
         data = {
             "METHOD": "cancel-job",
             "job_name": name
@@ -243,7 +290,7 @@ class BackendAPI:
         return self.__send_data(data)
     
     # Uploads a complete dataset to the backend
-    def import_dataset(self, file_path: str, timestamp_column: str) -> str:
+    def import_dataset(self, file_path: str, timestamp_column: str) -> None:
         if not os.path.isfile(file_path):
             handle_error(2, "File not found")
 
@@ -277,7 +324,7 @@ class BackendAPI:
                 sock.sendall(bytes(data, encoding="utf-8"))
             if response:
                 data = sock.recv(1024)
-                return self.__receive_data(sock)
+                return data
         except Exception as e:
             print(e)
 

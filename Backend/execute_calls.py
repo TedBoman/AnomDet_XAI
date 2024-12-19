@@ -10,7 +10,7 @@ INJECTION_METHOD_DIRECTORY = "./injection_methods"
 DATASET_DIRECTORY = "./Datasets"
 
 # Starts processing of dataset in one batch
-def run_batch(model: str, injection_method: str, path: str, name: str) -> str:
+def run_batch(model: str, path: str, name: str, inj_params: dict=None) -> None:
 
     #Removing the "is_injected" & "is_anomaly" columns
     feature_df = df.iloc[:, :-2]
@@ -26,7 +26,6 @@ def run_batch(model: str, injection_method: str, path: str, name: str) -> str:
                 df["is_anomaly"] = anomalies
             except Exception as e:
                 print(f'ERROR: {e}')
-            return "finished"
         
         case "isolation_forest":
             if_instance = IsolationForest()
@@ -34,13 +33,12 @@ def run_batch(model: str, injection_method: str, path: str, name: str) -> str:
 
             anomalies = if_instance.detect(df.iloc[:, :-2])
             df["is_anoamaly"] = anomalies
-            return "finished"
         
         case _:
             raise Exception("Model not found")
 
 # Starts processing of dataset in one batch
-def run_stream(model: str, injection_method: str, path: str, name: str) -> str:
+def run_stream(model: str, path: str, name: str, inj_params: dict=None) -> None:
     pass
 
 # Returns a list of models implemented in MODEL_DIRECTORY
@@ -48,15 +46,15 @@ def get_models() -> list:
     models = []
     for path in os.listdir(MODEL_DIRECTORY):
         file_path = MODEL_DIRECTORY + "/" + path
-        print(file_path)
         if os.path.isfile(file_path):
             model_name = path.split(".")[0]
             models.append(model_name)
 
+    # Removing the __init__, setup files and the .env file
+    models.remove("")
     models.remove("model_interface")
     models.remove("__init__")
     models.remove("setup")
-    models.remove("LSTM")
     
     return models
 
@@ -76,7 +74,6 @@ def get_datasets() -> list:
     datasets = []
     for path in os.listdir(DATASET_DIRECTORY):
         file_path = DATASET_DIRECTORY + "/" + path
-        print(file_path)
         if os.path.isfile(file_path):
             dataset = path
             datasets.append(dataset)
