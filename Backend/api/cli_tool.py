@@ -126,6 +126,12 @@ def main(argv: list[str]) -> None:
             if (arg_len != 2):
                 handle_error(1, "Invalid number of arguments")
             result = api.get_datasets()
+        
+        # Get all started and/or running jobs
+        case "get-all-jobs":
+            if (arg_len != 2):
+                handle_error(1, "Invalid number of arguments")
+            result = api.get_all_jobs()
 
         # Upload a dataset to the backend if the command is "import-dataset"
         case "import-dataset":
