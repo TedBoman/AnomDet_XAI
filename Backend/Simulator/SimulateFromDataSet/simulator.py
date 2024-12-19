@@ -2,18 +2,33 @@
 
 import sys
 import time as t
-import multiprocessing as mp
+from pathlib import Path
 import numpy as np
 import pandas as pd
-from pathlib import Path
+
 from DBAPI.db_interface import DBInterface as db
 from AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
-from DBAPI import utils as ut
-import datetime
+import DBAPI.utils as ut
+import FileFormats.read_csv as rcsv
 
 class Simulator:
-    def __init__(self, file_path, start_time, x_speedup=1, chunksize=1):
+    """
+    Simulates streaming data from a file to a database, with optional anomaly injection.
+
+    Attributes:
+        file_path (str): Path to the data file.
+        file_extention (str): Extension of the data file.
+        x_speedup (int, optional): Speedup factor for the simulation (default: 1).
+        chunksize (int, optional): Chunk size for reading the file (default: 1).
+        start_time (pd.Timestamp): Start time for the simulation.
+    """
+
+    def __init__(self, file_path, file_extention, start_time, x_speedup=1, chunksize=1):
+        """
+        Initializes Simulator with file path, extension, start time, speedup, and chunk size.
+        """
         self.file_path = file_path
+        self.file_extention = file_extention
         self.x_speedup = x_speedup
         self.chunksize = chunksize
         self.start_time = start_time
@@ -58,13 +73,13 @@ class Simulator:
                     try:
                         db_instance.create_table(new_table_name, columns)
                         return new_table_name  # Return the new table name
-                    except Exception as e:
+                    except Exception as ex:
                         db_instance.conn.rollback()
-                        if "already exists" in str(e):
+                        if "already exists" in str(ex):
                             i += 1
                             new_table_name = f"{tb_name}_{i}"
                         else:
-                            raise e
+                            raise ex
             else:
                 raise e
 
@@ -113,15 +128,17 @@ class Simulator:
                         sys.stdout.flush()
         
         # Insert the row (modified or not) into the database
-        df['timestamp'] = df['timestamp'].astype(np.int64) / 1e9
+        df['timestamp'] = pd.to_datetime(df['timestamp'].astype(np.int64), unit='s') 
+
         db_instance = self.init_db(conn_params)
         db_instance.insert_data(table_name, df)
         print("Inserted row.")
         sys.stdout.flush()
 
-    def filetype_csv(self, conn_params,anomaly_settings=None):
+    def start_simulation(self, conn_params, anomaly_settings=None):
         """
-        Processes a CSV file row by row with optional anomaly injection.
+        Reads the data file, preprocesses anomaly settings, and inserts data
+        into the database row by row, with optional anomaly injection.
 
         Args:
             conn_params: Database connection parameters
@@ -134,25 +151,50 @@ class Simulator:
         
         table_name = self.create_table(conn_params, Path(self.file_path).stem, columns)
 
+        full_df = self.read_file()
+        if full_df == None:
+            print(f"Fileformat {self.file_extention} not supported!")
+            print("Canceling job")
+            return
+
         # Preprocess anomaly settings to convert timestamps to absolute times
         if anomaly_settings:
             for setting in anomaly_settings:
                 # Convert timestamp to absolute time if it's not already
                 if not isinstance(setting.timestamp, pd.Timestamp):
                     setting.timestamp = self.start_time + pd.to_timedelta(setting.timestamp, unit='s').astype(np.int64) / 1e9
+                
+                if setting.columns:
+                    setting.data_range = []
+                    setting.mean = []
+                    for col in setting.columns:
+                        # Calculate and store the data range of this column
+                        data_range = full_df[col].max() - full_df[col].min()
+                        setting.data_range.append(data_range)
 
-        # Read the CSV and process row by row
-        full_df = pd.read_csv(self.file_path)
+                        # Calculate and store the mean of this column
+                        mean = full_df[col].mean()
+                        setting.mean.append(mean)
+
         time_between_input = full_df.iloc[:, 0].diff().mean()
         print(f"Speedup: {self.x_speedup}")
         print(f"Time between inputs: {time_between_input} seconds")
 
-        full_df = pd.read_csv(self.file_path)
+        # Convert the first column (assume it's timestamps)
+        try:
+            # Try converting the first column to datetime objects directly
+            full_df[full_df.columns[0]] = pd.to_datetime(full_df[full_df.columns[0]])
+        except ValueError:
+            # If direct conversion fails, try converting to numeric first
+            try:
+                full_df[full_df.columns[0]] = pd.to_numeric(full_df[full_df.columns[0]])
+                full_df[full_df.columns[0]] = pd.to_datetime(full_df[full_df.columns[0]], unit='s')  # Assuming seconds if numeric
+            except ValueError:
+                print("Error: Could not convert the first column to datetime. Please ensure it's in a valid format.")
+                return
 
-        # Convert the first column (assume it's timestamps in seconds)
-        full_df[full_df.columns[0]] = self.start_time + pd.to_timedelta(
-            full_df[full_df.columns[0]].astype(float), unit='s'
-        )
+        # Calculate time difference in seconds
+        time_between_input = full_df.iloc[:, 0].diff().dt.total_seconds().mean()
 
         # Drop rows with invalid timestamps
         full_df = full_df.dropna(subset=[full_df.columns[0]])
@@ -162,22 +204,29 @@ class Simulator:
 
         for index, row in full_df.iterrows():
             print(f"Inserting row {index + 1}")
-            
+
             # Process the row with potential anomaly injection
             self.process_row(conn_params, table_name, row, anomaly_settings)
-            
+
             # Sleep between rows, adjusted by speedup
             t.sleep(time_between_input / self.x_speedup)
 
         print("Inserting done!")
         sys.stdout.flush()
 
-    def get_time_diffs_pandas(self):
-        """Reads the CSV file and calculates time differences between entries in the first column.
+    def read_file(self):
+        """
+        Reads the data file based on its extension.
 
         Returns:
-            pandas.Series: A pandas Series containing the time differences.
+            pd.DataFrame: DataFrame containing the data from the file, or None 
+                         if the file format is not supported.
         """
-        df = pd.read_csv(self.file_path)
-        time_diffs = df.iloc[:, 0].diff()  # Calculate differences between consecutive values in the first column
-        return time_diffs
+        match self.file_extention:
+            case '.csv':
+                # File is a CSV file. Return a dataframe containing it.
+                return rcsv.filetype_csv(self.file_path)
+            # Add more fileformats here
+            case _:
+                # Fileformat not supported
+                return None

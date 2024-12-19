@@ -1,20 +1,35 @@
 # batchimport.py
 import time as t
 import multiprocessing as mp
+from pathlib import Path
+import datetime
 import numpy as np
 import pandas as pd
-from pathlib import Path
+
 from DBAPI.db_interface import DBInterface as db
 from AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
-from DBAPI import utils as ut
-import datetime
+import DBAPI.utils as ut
+import FileFormats.read_csv as rcsv
 
 class BatchImporter:
+    """
+    Imports data from a file into a database in batches, with optional anomaly injection.
 
-    def __init__(self, file_path, start_time, chunksize=100):
+    Attributes:
+        file_path (str): Path to the data file.
+        file_extention (str): Extension of the data file.
+        start_time (pd.Timestamp): Start time for the data.
+        chunksize (int, optional): Size of each batch (default: 100).
+    """
+
+    def __init__(self, file_path, file_extention, start_time, chunksize=100):
+        """
+        Initializes BatchImporter with file path, extension, start time, and chunk size.
+        """
         self.file_path = file_path
         self.chunksize = chunksize
         self.start_time = start_time
+        self.file_extention = file_extention
 
     def init_db(self, conn_params) -> db:
         """
@@ -53,28 +68,20 @@ class BatchImporter:
         db_instance = self.init_db(conn_params)
         if not db_instance:
             return None
-        
-        try:
-            db_instance.create_table(tb_name, columns)
-            return tb_name  # Return the original name if successful
-        except Exception as e:
-            db_instance.conn.rollback()
-            if "already exists" in str(e):
-                i = 1
-                new_table_name = f"{tb_name}_{i}"
-                while True:
-                    try:
-                        db_instance.create_table(new_table_name, columns)
-                        return new_table_name  # Return the new table name
-                    except Exception as e:
-                        db_instance.conn.rollback()
-                        if "already exists" in str(e):
-                            i += 1
-                            new_table_name = f"{tb_name}_{i}"
-                        else:
-                            raise e
-            else:
-                raise e
+
+        i = 1
+        new_table_name = tb_name
+        while True:
+            try:
+                db_instance.create_table(new_table_name, columns)
+                return new_table_name  # Return the table name
+            except Exception as e:
+                db_instance.conn.rollback()
+                if "already exists" in str(e):
+                    i += 1
+                    new_table_name = f"{tb_name}_{i}"
+                else:
+                    raise e  # Re-raise other exceptions
 
     def process_chunk(self, conn_params, table_name, chunk):
         """
@@ -85,20 +92,31 @@ class BatchImporter:
             conn_params: The parameters needed to connect to the database.
             table_name: The name of the table.
             chunk (pd.DataFrame): A chunk of data to be inserted.
-            isAnomaly (bool): Indicates if the chunk contains an anomaly.
         """
-        chunk['timestamp'] = chunk['timestamp'].astype(np.int64) / 1e9         
+        chunk['timestamp'] = pd.to_datetime(chunk['timestamp'].astype(np.int64), unit='s')
         db_instance = self.init_db(conn_params)
         db_instance.insert_data(table_name, chunk)
 
     def inject_anomalies_into_chunk(self, chunk, anomaly_settings):
+        """
+        Injects anomalies into a chunk of data.
+
+        Args:
+            chunk (pd.DataFrame): The chunk of data to inject anomalies into.
+            anomaly_settings (list): List of anomaly settings.
+
+        Returns:
+            pd.DataFrame: The modified chunk with injected anomalies.
+        """
         try:
-            injector = TimeSeriesAnomalyInjector() 
+            injector = TimeSeriesAnomalyInjector()
             chunk_start_time = chunk['timestamp'].min()
             chunk_end_time = chunk['timestamp'].max()
 
             # Create a new column to track anomalies
             chunk['injected_anomaly'] = False
+            
+            modified_chunk = None # Init the modified chunk
 
             for setting in anomaly_settings:
                 start_time = setting.timestamp
@@ -109,16 +127,25 @@ class BatchImporter:
                     # Inject anomalies
                     modified_chunk = injector.inject_anomaly(chunk, setting)
 
-            return modified_chunk
+            if modified_chunk:
+                return modified_chunk
+            else:
+                return chunk
 
         except Exception as e:
             print(f"Error injecting anomalies into chunk: {e}")
             return chunk
 
-    def filetype_csv(self, conn_params, anomaly_settings=None):
+    def start_simulation(self, conn_params, anomaly_settings=None):
         """
-        Processes a CSV file, injects anomalies, and inserts the data into the database.
-        Ensures consistent anomaly injection across chunks.
+        Starts the batch data import process.
+
+        Reads the data file, preprocesses anomaly settings, and inserts data
+        into the database in chunks, with optional anomaly injection.
+
+        Args:
+            conn_params: Database connection parameters.
+            anomaly_settings (list, optional): List of anomaly settings to apply.
         """
         num_processes = mp.cpu_count()
         pool = mp.Pool(processes=num_processes)
@@ -140,17 +167,32 @@ class BatchImporter:
         # Create a list to store results from async processes
         results = []
 
-        full_df = pd.read_csv(self.file_path)
+        full_df = self.read_file()
+        if full_df is None:
+            print(f"Fileformat {self.file_extention} not supported!")
+            print("Canceling job")
+            return
 
-        # Convert the first column (assume it's timestamps in seconds)
-        full_df[full_df.columns[0]] = self.start_time + pd.to_timedelta(
-            full_df[full_df.columns[0]].astype(float), unit='s'
-        )
-
+        # Convert the first column (assume it's timestamps)
+        try:
+            # Try converting the first column to datetime objects directly
+            full_df[full_df.columns[0]] = pd.to_datetime(full_df[full_df.columns[0]])
+        except ValueError:
+            # If direct conversion fails, try converting to numeric first
+            try:
+                full_df[full_df.columns[0]] = pd.to_numeric(full_df[full_df.columns[0]])
+                full_df[full_df.columns[0]] = pd.to_datetime(full_df[full_df.columns[0]], unit='s')  # Assuming seconds if numeric
+            except ValueError:
+                print("Error: Could not convert the first column to datetime. Please ensure it's in a valid format.")
+                return
+            
         # Drop rows with invalid timestamps
         full_df = full_df.dropna(subset=[full_df.columns[0]])
 
         print(full_df.head())  # Inspect the parsed DataFrame
+
+        # Set the chunksize to the number of rows in the file / cpu cores available
+        self.chunksize = len(full_df.index) / num_processes
 
         # Process chunks with guaranteed anomaly injection
         for chunk in [full_df[i:i+self.chunksize] for i in range(0, len(full_df), self.chunksize)]:
@@ -181,3 +223,21 @@ class BatchImporter:
             result.get()  # This will raise any exceptions that occurred in the process
 
         print("Inserting done!")
+
+    def read_file(self):
+        """
+        Reads the data file based on its extension.
+
+        Returns:
+            pd.DataFrame: DataFrame containing the data from the file, or None 
+                         if the file format is not supported.
+        """
+        match self.file_extention:
+            case '.csv':
+                # File is a CSV file. Return a dataframe containing it.
+                return rcsv.filetype_csv(self.file_path)
+            
+            case _:
+                # Fileformat not supported
+                return None
+            # Add more fileformats here

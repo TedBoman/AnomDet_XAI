@@ -2,8 +2,14 @@ import pandas as pd
 import numpy as np
 from typing import Union, List, Optional, Dict
 from DBAPI import utils as ut
-from DBAPI.talk_to_backend import AnomalySetting
 import datetime as dt
+
+from DBAPI.talk_to_backend import AnomalySetting
+from InjectionMethods.lowerd import LoweredAnomaly
+from InjectionMethods.spike import SpikeAnomaly
+from InjectionMethods.step import StepAnomaly
+from InjectionMethods.custom import CustomAnomaly
+from InjectionMethods.offline import OfflineAnomaly
 
 class TimeSeriesAnomalyInjector:
     def __init__(self, seed: int = 42):
@@ -58,8 +64,8 @@ class TimeSeriesAnomalyInjector:
             # Inject anomalies for each specified column
             for column in columns:
                 if column in span_data.columns:
-                    data_range = modified_data[column].max() - modified_data[column].min()
-                    mean = modified_data[column].mean()
+                    data_range = modified_data[column].max() - modified_data[column].min() if setting.data_range == None else setting.data_range
+                    mean = modified_data[column].mean() if setting.mean == None else setting.mean
                     
                     # Calculate number of anomalies to inject
                     num_anomalies = min(len(span_data), max(1, int(len(span_data) * percentage)))
@@ -102,39 +108,23 @@ class TimeSeriesAnomalyInjector:
 
         print("______________________")
         if anomaly_type == 'lowered':
-            print("Injecting lowerd anomaly!")
-            # Handle single row case
-            if data_range == 0:
-                # Use mean as a reference point if data_range is zero
-                random_factors = self.rng.uniform(0.3, 0.4)
-                step_value = -mean * random_factors
-            else:
-                random_factors = self.rng.uniform(0.3, 0.4)
-                step_value = -data_range * random_factors
+            injector = LoweredAnomaly()
+            return injector.inject_anomaly(data, self.rng)
 
-            print(f"Step: {step_value} = -datarange: -{data_range} * random: {random_factors} = {-data_range * random_factors}")
-            print(f"OLD: {data}. NEW: {np.maximum(data + step_value, 0)}")
-            print(f"return: {np.maximum(data + step_value, 0)}")
-
-            return np.maximum(data + step_value, 0)
-        
         elif anomaly_type == 'spike':
-            print("Injecting spike anomaly!")
-            random_factors = self.rng.uniform(1, magnitude)
-            return data * random_factors
+            injector = SpikeAnomaly()
+            return injector.inject_anomaly(data, self.rng, settings.magnitude)
         
         elif anomaly_type == 'step':
-            print("Injecting step anomaly!")
-            step_value = mean * magnitude
-            return data + step_value
+            injector = StepAnomaly()
+            return injector.inject_anomaly(data, mean, settings.magnitude)
         
         elif anomaly_type == 'offline':
-            print("Injecting offline anomaly!")
-            return
+            injector = OfflineAnomaly()
+            return injector.inject_anomaly()
         
         elif anomaly_type == 'custom':
-            print("Injecting custom anomaly!")
-            return data * magnitude
-        
+            injector = CustomAnomaly()
+            return injector.inject_anomaly(data, settings.magnitude)
         else:
             return data
