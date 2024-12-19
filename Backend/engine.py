@@ -97,7 +97,11 @@ def __handle_api_call(conn, data: dict) -> None:
             dataset_path = DATASET_DIRECTORY + data["dataset"]
             name = data["name"]
 
-            backend_data[name] = threading.Thread(target=__request_listener, args=(model, injection_method, dataset_path, name))
+            if data["inj_param"]:
+                backend_data[name] = threading.Thread(target=execute_calls.run_batch, args=(model, dataset_path, name, data["inj_param"]))
+            else:
+                backend_data[name] = threading.Thread(target=execute_calls.run_batch, args=(model, dataset_path, name))
+
             backend_data[name].daemon = True
             backend_data[name].start()
             backend_data["started-jobs"].append((name, "batch"))
@@ -107,6 +111,11 @@ def __handle_api_call(conn, data: dict) -> None:
             injection_method = data["injection_method"]
             dataset_path = DATASET_DIRECTORY + data["dataset"]
             name = data["name"]
+
+            if data["inj_params"]:
+                pass
+            if data["speedup"]:
+                pass
 
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case "change-model":
