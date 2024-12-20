@@ -1,17 +1,29 @@
 from api import BackendAPI
+from dotenv import load_dotenv
+import os
 
-
-def user_request(selected_dataset, selected_model, job_type):
-    print(selected_dataset, selected_model, job_type)
+def user_request(selected_dataset, selected_model, job_type, selected_injection_method=None, range=None):
+    
+    load_dotenv()
+    HOST = 'Backend'
+    PORT = int(os.getenv('BACKEND_PORT'))
+    api = BackendAPI(HOST, PORT)
+    print(selected_dataset, selected_model, job_type, selected_injection_method, range)
     match job_type:
         case "batch":
-            BackendAPI().run_batch(selected_model, None, selected_dataset)
+            if selected_injection_method:
+                api.run_batch(selected_model, selected_dataset, "name", selected_injection_method)
+            else: 
+                api.run_batch(selected_model, selected_dataset, "name")
             return
         case "stream":
-            BackendAPI().run_stream(selected_model, None, selected_dataset)
+            if selected_injection_method:
+                api.run_stream(selected_model, selected_dataset, "name", range, selected_injection_method)
+            else:
+                api.run_stream(selected_model, selected_dataset, "name")
             return
         
-#@MaxStrang, here implement backend api defined functions.
+
 
 
     
