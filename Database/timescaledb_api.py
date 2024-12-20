@@ -24,14 +24,11 @@ class TimescaleDBAPI(DBInterface):
 
     # Helper function to insert data into the database
     def __inserter(self, query, chunk):
-        print("test")
         try:
             retry = 0
 
             while retry < 5:
-                print("Connecting to database")
                 conn = psycopg2.connect(self.connection_string)     # Connect to the database
-                print("Connected to database")
                 if conn:
                     break
                 else:
@@ -187,9 +184,14 @@ class TimescaleDBAPI(DBInterface):
 
             cursor.execute(query)
             result = cursor.fetchall()
+
         except Exception as error:
             print("Error: %s" % error)
             conn.close()
         finally:
             conn.close()
-            return [x[0] for x in result]
+            columns = [x[0] for x in result]
+            columns.remove("is_anomaly")
+            columns.remove("injected_anomaly")
+
+            return columns
