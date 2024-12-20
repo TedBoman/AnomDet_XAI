@@ -80,6 +80,10 @@ def get_datasets() -> list:
 
     return datasets
 
+# Get all columns of the table of a running job
+def get_columns(name: str) -> list:
+    pass
+
 # Gets content of complete file to the backend
 def import_dataset(conn: socket, path: str, timestamp_column: str) -> None:
     file = open(path, "w")

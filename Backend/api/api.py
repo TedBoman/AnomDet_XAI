@@ -131,6 +131,14 @@ class BackendAPI:
         }
         return self.__send_data(data)
 
+    # Get columns of a running job
+    def get_columns(self, name: str) -> str:
+        data = {
+            "METHOD": "get-columns",
+            "name": name
+        }
+        return self.__send_data(data)
+
     # Initates connection to backend and sends json data through the socket
     def __send_data(self, data: str, response: bool=True) -> str:
         try:

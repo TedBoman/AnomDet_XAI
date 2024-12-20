@@ -52,7 +52,7 @@ class TimescaleDBAPI(DBInterface):
     
     # Creates a hypertable called table_name with column-names columns copied from dataset
     # Also adds columns is_anomaly and injected_anomaly
-    def create_table(self, table_name: str, columns: list[str]):
+    def create_table(self, table_name: str, columns: list[str]) -> None:
         length = len(columns)
         
         # The first column is of type TIMESTAMPTZ NOT NULL and the rest are VARCHAR(50)
@@ -77,7 +77,7 @@ class TimescaleDBAPI(DBInterface):
             conn.close()
 
     # Inserts data into the table_name table. The data is a pandas DataFrame with matching types and column names to the table
-    def insert_data(self, table_name: str, data: pd.DataFrame):
+    def insert_data(self, table_name: str, data: pd.DataFrame) -> None:
         columns = data.columns.to_list()
         cols = ', '.join([f'"{col}"' for col in columns])               # Create a string of the column names
         query_insert_data = f"INSERT INTO \"{table_name}\" ({cols}) VALUES %s"
@@ -144,7 +144,7 @@ class TimescaleDBAPI(DBInterface):
             conn.close()
 
     # Deletes the table_name table along with all its data
-    def drop_table(self, table_name: str):
+    def drop_table(self, table_name: str) -> None:
         try:
             conn = psycopg2.connect(self.connection_string)
             cursor = conn.cursor()
@@ -158,7 +158,7 @@ class TimescaleDBAPI(DBInterface):
             conn.close()
 
     # Checks if the table_name table exists in the database
-    def table_exists(self, table_name: str):
+    def table_exists(self, table_name: str) -> bool:
         try:
             conn = psycopg2.connect(self.connection_string)
             cursor = conn.cursor()
@@ -176,3 +176,20 @@ class TimescaleDBAPI(DBInterface):
                 return True
             else:
                 return False
+
+    # Returns a list of all columns in the table_name table
+    def get_columns(self, table_name: str) -> list[str]:
+        try:
+            conn = psycopg2.connect(self.connection_string)
+            cursor = conn.cursor()
+
+            query = f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'"
+
+            cursor.execute(query)
+            result = cursor.fetchall()
+        except Exception as error:
+            print("Error: %s" % error)
+            conn.close()
+        finally:
+            conn.close()
+            return [x[0] for x in result]
