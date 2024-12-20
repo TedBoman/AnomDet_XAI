@@ -2,14 +2,14 @@
 
 ## 📑 Table of contents
 
-- [About The Project](#-about-the-project)
-- [How To Build](#-how-to-build)
-- [Tools And Frameworks](#-tools-and-frameworks)
-- [Guide](#-guide)
-- [For Developers](#-for-developers)
-- [License](#-license)
-- [Authors](#-authors)
-- [Acknowledgements](#-acknowledgements)
+- [About The Project](#about-the-project)
+- [How To Build](#how-to-build)
+- [Tools And Frameworks](#tools-and-frameworks)
+- [Guide](#guide)
+- [For Developers](#for-developers)
+- [License](#license)
+- [Authors](#authors)
+- [Acknowledgements](#acknowledgements)
 
 ## 💻 About The Project
 
@@ -19,15 +19,15 @@ Anomaly detection of real-world data consists of recognizing outlier data points
 
 AnomDet is a system which can manage different anomaly detection algorithms and anomaly injection methods by either simulating a real-time data stream or by reading data in batches. With AnomDet, you're provided a working framework for evaluating the performance of pre-defined anomaly detection models and how they respond to pre-defined anomaly injections.
 
-How to interact with our system through our [Frontend](#-frontend) and [CLI-tool](#-cli-tool) is covered under [Guide](#-guide). Also covered in our [Guide](#-guide) is how the interaction with the [Backend API](#-backend-api) and the [Database API](#-database-api) works.
+How to interact with our system through our [Frontend](#frontend) and [CLI-tool](#cli-tool) is covered under [Guide](#guide). Also covered in our [Guide](#guide) is how the interaction with the [Backend API](#backend-api) and the [Database API](#database-api) works.
 
-The system architecture is modular by design and a simple way to add your own models and anomaly detection methods are provided in our [For Developers](#-for-developers). If the choice of database doesn't suit you, we have abstracted away the API between the backend and the database with an interface described in [For Developers](#-for-developers).
+The system architecture is modular by design and a simple way to add your own models and anomaly detection methods are provided in our [For Developers](#for-developers). If the choice of database doesn't suit you, we have abstracted away the API between the backend and the database with an interface described in [For Developers](#for-developers).
 
 ### Features provided
 
 AnomDet allows for anomaly detection by importing a complete dataset in one batch or by simulating a real-time stream of the imported data. A machine learning model will process the data that is fed to the system and visualize the results in a frontend.
 
-The system also provides a set of self-defined anomaly detection algorithms and anomaly injection methods. The backend API offers the user to initiate a batch or stream job from the frontend or by invoking it from the command line. The API provides ways to check what models and injection methods are provided as well as listing jobs currently running. More details can be found in the [Guide](#-guide).
+The system also provides a set of self-defined anomaly detection algorithms and anomaly injection methods. The backend API offers the user to initiate a batch or stream job from the frontend or by invoking it from the command line. The API provides ways to check what models and injection methods are provided as well as listing jobs currently running. More details can be found in the [Guide](#guide).
 
 ## 📝 How To Build
 
