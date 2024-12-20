@@ -17,9 +17,11 @@
 
 Anomaly detection of real-world data consists of recognizing outlier data points. These outliers are what's called anomalies and anomaly detection algortihms have been researched extensively. The performance of these algorithms can be very dependent on the dataset it is used on. This means that if an algorithm performs well on one data set, it doesn't necessarily mean that it performs well on another.
 
-AnomDet is a system which can manage different anomaly detection algorithms and anomaly injection methods by either simulating a real-time data stream or by reading data in batches. With AnomDet, you're provided a working framework for evaluating the performance of pre-defined anomaly detection models and how they respond to pre-defined anomaly injections. 
+AnomDet is a system which can manage different anomaly detection algorithms and anomaly injection methods by either simulating a real-time data stream or by reading data in batches. With AnomDet, you're provided a working framework for evaluating the performance of pre-defined anomaly detection models and how they respond to pre-defined anomaly injections.
 
-The system architecture is modular by design and a simple way to add your own models and anomaly detection methods are provided in our [Guide](#-guide). If the choice of database doesn't suit you, we have abstracted away the API between the backend and the database with an interface described in our [Guide](#-guide) under [Migrating to a different database manager](#-migrating-to-a-different-database-manager).
+How to interact with our system through our [Frontend](#-frontend) and [CLI-tool](#-cli-tool) is covered under [Guide](#-guide). Also covered in our [Guide](#-guide) is how the interaction with the [Backend API](#-backend-api) and the [Database API](#-database-api) works.
+
+The system architecture is modular by design and a simple way to add your own models and anomaly detection methods are provided in our [For Developers](#-for-developers). If the choice of database doesn't suit you, we have abstracted away the API between the backend and the database with an interface described in [For Developers](#-for-developers).
 
 ### Features provided
 
