@@ -9,9 +9,37 @@ from dash.dependencies import ALL
 BACKEND_HOST = 'Backend'
 BACKEND_PORT = int(os.getenv('BACKEND_PORT'))
 
+
+def send_socket_request(data):
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((BACKEND_HOST, BACKEND_PORT))
+        sock.sendall(bytes(data, encoding="utf-8"))
+        response = sock.recv(1024).decode('utf-8')
+        sock.close()
+        return json.loads(response) if response else None
+    except Exception as e:
+        print(f"Socket error: {e}")
+        return None
+
+def get_datasets():
+    data = json.dumps({"METHOD": "get-datasets"})
+    response = send_socket_request(data)
+    if "datasets" in response:
+        return response["datasets"]
+    return []
+
+def get_models():
+    data = json.dumps({"METHOD": "get-models"})
+    response = send_socket_request(data)
+    if "models" in response:
+        return response["models"]
+    return []
+
+datasets = get_datasets()
+models = get_models()
 active_datasets = []
-datasets = []
-models = []
+
 layout = html.Div([
     html.Div(
         [
