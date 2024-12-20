@@ -6,6 +6,7 @@
 - [How To Build](#-how-to-build)
 - [Tools And Frameworks](#-tools-and-frameworks)
 - [Guide](#-guide)
+- [For Developers](#-for-developers)
 - [License](#-license)
 - [Authors](#-authors)
 - [Acknowledgements](#-acknowledgements)
@@ -18,7 +19,7 @@ Anomaly detection of real-world data consists of recognizing outlier data points
 
 AnomDet is a system which can manage different anomaly detection algorithms and anomaly injection methods by either simulating a real-time data stream or by reading data in batches. With AnomDet, you're provided a working framework for evaluating the performance of pre-defined anomaly detection models and how they respond to pre-defined anomaly injections. 
 
-The system architecture is modular by design and a simple way to add your own models and anomaly detection methods are provided in our [Guide](#-guide). If the choice of database doesn't suit you, we have abstracted away the API between the backend and the database with an interface described in our [Guide](#-guide) under [Database APi](#-database-api).
+The system architecture is modular by design and a simple way to add your own models and anomaly detection methods are provided in our [Guide](#-guide). If the choice of database doesn't suit you, we have abstracted away the API between the backend and the database with an interface described in our [Guide](#-guide) under [Migrating to a different database manager](#-migrating-to-a-different-database-manager).
 
 ### Features provided
 
@@ -110,11 +111,23 @@ docker exec -it timescaledb bash
 
 ### CLI-tool
 
+### Backend API
+
+### Database API
+
+## ☕ For Developers
+
 ### Adding a model
 
 ### Adding an injection method
 
-### Database API
+### Changing Frontend
+
+Since our system provides information to the Frontend through a generalized API, it is easy to create your own Frontend to interact with the system rather than the one provided. All necessary information provided to the Frontend is accessed by sending requests to the backend and no system information is stored in the Frontend.
+
+### Migrating to a different database manager
+
+Since we have designed a database interface for our system to be more modular, changing database manager does not affect the rest of the system. To change database manager, all that is needed is to provide an API that follows our database interface and then provide the right connection parameters when instantiating a API object.
 
 ## 📄 License
 
