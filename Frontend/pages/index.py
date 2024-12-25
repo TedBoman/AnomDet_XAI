@@ -7,7 +7,7 @@ import dash
 from dash import dcc, html, Input, Output, State, callback, ctx
 from dash.dependencies import ALL
 BACKEND_HOST = 'Backend'
-BACKEND_PORT = int(os.getenv('BACKEND_PORT'))
+BACKEND_PORT = int(os.getenv('BACKEND_PORT',5000))
 
 
 def send_socket_request(data):
@@ -110,7 +110,63 @@ layout = html.Div([
                     display_format="YYYY-MM-DD",
                     style={"marginTop": "10px"}
                 )
-            ], style={"marginTop": "20px", "textAlign": "center"})
+            ], style={"marginTop": "20px", "textAlign": "center"}),
+            html.Div([
+               html.Label("Select Time for Timestamp (Hour):", style={"fontSize": "18px", "color": "#ffffff"}),
+               dcc.Input(
+                   id="timestamp-hour",
+                   type="number",
+                   min=0,
+                   max=23,
+                   step=1,
+                   placeholder="Hour (0-23)",
+                   style={"width": "200px", "marginTop": "10px"}
+               ) 
+            ], style={"marginTop": "20px", "textAlign": "center"}),
+            html.Div([
+                html.Label("Enter Magnitude (Default: 1):", style={"fontSize": "18px", "color": "#ffffff"}),
+                dcc.Input(
+                    id="magnitude-input",
+                    type="number",
+                    placeholder="Magnitude",
+                    value=1,
+                    style={"width": "200px", "marginTop": "10px"}
+                )
+
+            ], style={"marginTop": "20px", "textAlign": "center"}),
+            html.Div([
+                html.Label("Enter Anomaly Percentage (%):", style={"fontSize": "18px", "color": "#ffffff"}),
+                dcc.Input(
+                    id="percentage-input",
+                    type="number",
+                    min=0,
+                    max=100,
+                    step=1,
+                    placeholder="Percentage",
+                    style={"width": "200px", "marginTop": "10px"}
+                )
+            ], style={"marginTop": "20px", "textAlign": "center"}),
+             html.Div([
+                 html.Label("Select Column from Dataset:", style={"fontSize": "18px", "color": "#ffffff"}),
+                 dcc.Dropdown(
+                     id="column-dropdown",
+                     options=[
+                         {"label": "Column 1", "value": "column_1"},
+                         {"label": "Column 2", "value": "column_2"}
+                    ],
+                    placeholder="Select a Column",
+                    style={"width": "350px", "marginTop": "10px"}
+                )
+            ], style={"marginTop": "20px", "textAlign": "center"}),
+            html.Div([
+                html.Label("Enter Duration (in seconds):", style={"fontSize": "18px", "color": "#ffffff"}),
+                dcc.Input(
+                    id="duration-input",
+                    type="number",
+                    placeholder="Duration (sec)",
+                    style={"width": "200px", "marginTop": "10px"}
+                )
+            ], style={"marginTop": "20px", "textAlign": "center"}),
         ], id="injection", style={"display": "none"}),
 
 
