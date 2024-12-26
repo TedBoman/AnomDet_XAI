@@ -81,8 +81,8 @@ def __request_listener():
             recv_data = conn.recv(1024)
             recv_data = recv_data.decode("utf-8")
             recv_dict = json.loads(recv_data)
-            __handle_api_call(conn, recv_dict)
             print(f"Received request: {recv_dict}")
+            __handle_api_call(conn, recv_dict)
         except Exception as e:
             if str(e) != "timed out":
                 print(e)
@@ -93,12 +93,11 @@ def __handle_api_call(conn, data: dict) -> None:
     match data["METHOD"]:
         case "run-batch":
             model = data["model"]
-            injection_method = data["injection_method"]
             dataset_path = DATASET_DIRECTORY + data["dataset"]
             name = data["name"]
 
-            if data["inj_param"]:
-                backend_data[name] = threading.Thread(target=execute_calls.run_batch, args=(model, dataset_path, name, data["inj_param"]))
+            if data["inj_params"]:
+                backend_data[name] = threading.Thread(target=execute_calls.run_batch, args=(model, dataset_path, name, inj_params))
             else:
                 backend_data[name] = threading.Thread(target=execute_calls.run_batch, args=(model, dataset_path, name))
 
@@ -108,15 +107,14 @@ def __handle_api_call(conn, data: dict) -> None:
             
         case "run-stream":
             model = data["model"]
-            injection_method = data["injection_method"]
             dataset_path = DATASET_DIRECTORY + data["dataset"]
             name = data["name"]
 
-            if data["inj_params"]:
-                pass
-            if data["speedup"]:
-                pass
+            speedup = data["speedup"]
+            if data["inj_param"]:
+                inj_param = data["inj_param"]
 
+            print("Stream job started")
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case "change-model":
             test_json = json.dumps({"test": "change-model-respons" })
@@ -172,6 +170,15 @@ def __handle_api_call(conn, data: dict) -> None:
                 data = conn.recv(1024)
                 while data:
                     data = conn.recv(1024)
+        case "get-all-jobs":
+            running = backend_data["running-jobs"]
+            started = backend_data["started-jobs"]
+            all_jobs = running + started
+            jobs_dict = {
+                            "jobs": all_jobs
+                        }
+            jobs_json = json.dumps(jobs_dict)
+            conn.sendall(bytes(jobs_json, encoding="utf-8"))
         case _: 
             response_json = json.dumps({"error": "method-error-response" })
             conn.sendall(bytes(response_json, encoding="utf-8"))        

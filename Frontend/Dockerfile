@@ -9,8 +9,10 @@ COPY ./Frontend/ /app/
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY ./Backend/backend_api.py /app/pages/
+COPY ./Backend/api/api.py /app/pages/
 
 EXPOSE ${FRONTEND_PORT}
 
-CMD ["python", "pages/app.py"]
+CMD ["python", "-u", "pages/app.py"]
+
+

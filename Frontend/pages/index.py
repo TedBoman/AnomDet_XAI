@@ -1,13 +1,14 @@
 import os
 import requests
 import socket
+import frontend_handler
 import json
-from dash import dcc, html, Input, Output, State, callback, ctx
 import dash
+from dash import dcc, html, Input, Output, State, callback, ctx
 from dash.dependencies import ALL
-
 BACKEND_HOST = 'Backend'
 BACKEND_PORT = int(os.getenv('BACKEND_PORT'))
+
 
 def send_socket_request(data):
     try:
@@ -37,7 +38,6 @@ def get_models():
 
 datasets = get_datasets()
 models = get_models()
-
 active_datasets = []
 
 layout = html.Div([
@@ -87,6 +87,32 @@ layout = html.Div([
         ),
         html.Div(id="injection-panel", style={"display": "none"})
     ], style={"marginTop": "30px"}),
+
+
+    html.Div(children=[
+            html.Label("Select an Injection Method:", style={"fontSize": "22px", "color": "#ffffff"}),
+            dcc.Dropdown(
+                id="injection-method-dropdown",
+                options=[
+                    {"label": "Method 1", "value": "method_1"},
+                    {"label": "Method 2", "value": "method_2"},
+                    {"label": "Method 3", "value": "method_3"}
+                ],
+                placeholder="Select a method",
+                style={"width": "350px", "margin": "auto"}
+            ),
+            html.Div([
+                html.Label("Select Date Range:", style={"fontSize": "18px", "color": "#ffffff"}),
+                dcc.DatePickerRange(
+                    id="date-picker-range",
+                    start_date_placeholder_text="Start Date",
+                    end_date_placeholder_text="End Date",
+                    display_format="YYYY-MM-DD",
+                    style={"marginTop": "10px"}
+                )
+            ], style={"marginTop": "20px", "textAlign": "center"})
+        ], id="injection", style={"display": "none"}),
+
 
     html.Div([
         html.Label("", style={}),
@@ -143,6 +169,9 @@ layout = html.Div([
         disabled=True 
         ),
     
+    
+
+
     # Active Datasets Section
 html.Div(
     id="active-jobs-section",
@@ -171,6 +200,15 @@ html.Div(
     "minHeight": "100vh",
 
 })
+
+@callback(
+    Output("injection", "style"),
+    Input("injection-check", "value")
+)
+def update_injection_panel(selected):
+    if "use_injection" in selected:
+        return {"display": "block"}
+    return {"display": "none"}
 
 
 @callback(
@@ -253,47 +291,18 @@ def handle_popup(n_clicks, n_intervals, style):
 
     return style, True
 
-
-# Callback to show/hide injection panel
 @callback(
-    Output("injection-panel", "style"),
-    Input("injection-check", "value")
-)
-def toggle_injection_panel(selected):
-    if "use_injection" in selected:
-        return {"display": "block", "marginTop": "20px", "textAlign": "center"}
-    return {"display": "none"}
-
-
-# Callback to update injection panel content
-@callback(
-    Output("injection-panel", "children"),
-    Input("injection-check", "value")
-)
-def update_injection_panel(selected):
-    if "use_injection" in selected:
-        return html.Div([
-            html.Label("Select an Injection Method:", style={"fontSize": "22px", "color": "#ffffff"}),
-            dcc.Dropdown(
-                id="injection-method-dropdown",
-                options=[
-                    {"label": "Method 1", "value": "method_1"},
-                    {"label": "Method 2", "value": "method_2"},
-                    {"label": "Method 3", "value": "method_3"}
-                ],
-                placeholder="Select a method",
-                style={"width": "350px", "margin": "auto"}
-            ),
-            html.Div([
-                html.Label("Select Date Range:", style={"fontSize": "18px", "color": "#ffffff"}),
-                dcc.DatePickerRange(
-                    id="date-picker-range",
-                    start_date_placeholder_text="Start Date",
-                    end_date_placeholder_text="End Date",
-                    display_format="YYYY-MM-DD",
-                    style={"marginTop": "10px"}
-                )
-            ], style={"marginTop": "20px", "textAlign": "center"})
-        ])
-    return ""
-
+        Output("starter-feedback", "children"),
+        State("dataset-dropdown", "value"),
+        State("detection-model-dropdown", "value"),
+        State("mode-selection", "value"),
+        State("injection-method-dropdown", "value"),
+        State("date-picker-range", "start_date"),
+        State("date-picker-range", "end_date"),
+        Input("add-dataset-btn", "n_clicks")
+        )
+def store_current_job_request(selected_dataset, selected_model, selected_mode, selected_injection_method, start_date, end_date, n_clicks):   
+        range = (start_date, end_date)
+        frontend_handler.user_request(selected_dataset, selected_model, selected_mode, selected_injection_method, range)
+    
+    

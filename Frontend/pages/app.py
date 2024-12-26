@@ -2,7 +2,7 @@ import dash
 from dash import dcc, html, Input, Output
 from load_data import layout as load_data_layout
 from stream_data import layout as stream_data_layout, register_callbacks
-from starter_page import layout as starter_page_layout
+from index import layout as starter_page_layout
 #from anomaly_detection import layout as anomaly_detection_layout
 
 # Dash application
