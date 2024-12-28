@@ -179,6 +179,13 @@ def __handle_api_call(conn, data: dict) -> None:
                         }
             jobs_json = json.dumps(jobs_dict)
             conn.sendall(bytes(jobs_json, encoding="utf-8"))
+        case "get-columns":
+            columns = execute_calls.get_columns(data["name"])
+            columns_dict = {
+                                "columns": columns
+                            }
+            columns_json = json.dumps(columns_dict)
+            conn.sendall(bytes(columns_json, encoding="utf-8"))
         case _: 
             response_json = json.dumps({"error": "method-error-response" })
             conn.sendall(bytes(response_json, encoding="utf-8"))        

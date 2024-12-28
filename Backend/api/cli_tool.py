@@ -10,43 +10,48 @@ load_dotenv()
 HOST = 'localhost'
 PORT = int(os.getenv('BACKEND_PORT'))
 
-DOC = """"python backend_api.py run-batch"
+DOC = """"python api.py run-batch"
 starts anomaly detection of batch data after user has been prompted to enter details of the job
 
-"python backend_api.py run-stream" 
+"python api.py run-stream" 
 starts anomaly detection of stream data after user has been prompted to enter details of the job
 
-"python backend_api.py change-model <model> <name>"
+"python api.py change-model <model> <name>"
 changes the model used for anomaly detection for the currently run batch named <name> to <model>
 
-"python backend_api.py change-injection <injection-method> <name>"
+"python api.py change-injection <injection-method> <name>"
 changes the injection method used for anomaly detection for the currently run batch named <name> to <injection-method>
 
-"python backend_api.py get-data <timestamp> <name>"
+"python api.py get-data <timestamp> <name>"
 get all processed data from <name>, meaning just the data that has gone through our detection model. <timestamp> allows for filtering of data
     
-"python backend_api.py inject-anomaly <timestamps> <name>"    
-injects anomalies in the data set <name> if manual injection is enabled, <timestamps> is a comma separated list of timestamps in seconds from now to inject anomalies at. (python backend_api.py inject-anomaly 10,20,30 system1 injects an anomaly at 10, 20 and 30 seconds from now)
+"python api.py inject-anomaly <timestamps> <name>"    
+injects anomalies in the data set <name> if manual injection is enabled, <timestamps> is a comma separated list of timestamps in seconds from now to inject anomalies at. (python api.py inject-anomaly 10,20,30 system1 injects an anomaly at 10, 20 and 30 seconds from now)
 
-"python backend_api.py get-running"
+"python api.py get-running"
 get all running datasets
 
-"python backend_api.py cancel <name>" 
+"python api.py cancel <name>" 
 cancels the currently running batch or stream named <name>
 
-"python backend_api.py get-models"
+"python api.py get-models"
 gets all available models for anomaly detection
 
-"python backend_api.py get-injection-methods"
+"python api.py get-injection-methods"
 gets all available injection methods for anomaly detection
 
-"python backend_api.py get-datasets"
+"python api.py get-datasets"
 gets all available datasets
 
-"python backend_api.py import-dataset <dataset-file-path> <timestamp-column-name>"
+"python api.py get-all-jobs"
+gets all started and/or running jobs
+
+"python api.py get-columns <name>"
+
+"python api.py import-dataset <dataset-file-path> <timestamp-column-name>"
 uploads a dataset to the backend by adding the file to the Dataset directory
         
-"python backend_api.py help"
+"python api.py help"
 prints this help message
 """
 
@@ -132,6 +137,12 @@ def main(argv: list[str]) -> None:
             if (arg_len != 2):
                 handle_error(1, "Invalid number of arguments")
             result = api.get_all_jobs()
+
+        # Get columns of a running job
+        case "get-columns":
+            if (arg_len != 3):
+                handle_error(1, "Invalid number of arguments")
+            result = api.get_columns(argv[2])
 
         # Upload a dataset to the backend if the command is "import-dataset"
         case "import-dataset":
