@@ -1,4 +1,5 @@
 # batchimport.py
+import sys
 import psycopg2
 import time as t
 import multiprocessing as mp
@@ -7,10 +8,10 @@ import datetime
 import numpy as np
 import pandas as pd
 
-from DBAPI.db_interface import DBInterface as db
-from AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
-import DBAPI.utils as ut
-import FileFormats.read_csv as rcsv
+from Simulator.DBAPI.db_interface import DBInterface as db
+from Simulator.AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
+import Simulator.DBAPI.utils as ut
+from Simulator.FileFormats.read_csv import read_csv
 
 class BatchImporter:
     """
@@ -101,7 +102,18 @@ class BatchImporter:
             table_name: The name of the table.
             chunk (pd.DataFrame): A chunk of data to be inserted.
         """
-        chunk['timestamp'] = pd.to_datetime(chunk['timestamp'].astype(np.int64), unit='s')
+        # Insert the row (modified or not) into the database
+        # Handle timestamp conversion safely
+        if isinstance(chunk['timestamp'].iloc[0], pd.Timestamp):
+            # Already a timestamp, no conversion needed
+            pass
+        else:
+            try:
+                # First try direct conversion from Unix timestamp
+                chunk['timestamp'] = pd.to_datetime(chunk['timestamp'], unit='s')
+            except (ValueError, OutOfBoundsDatetime):
+                # If that fails, try converting through datetime
+                chunk['timestamp'] = pd.to_datetime(chunk['timestamp'])
         db_instance = self.init_db(conn_params)
         db_instance.insert_data(table_name, chunk)
 
@@ -118,27 +130,31 @@ class BatchImporter:
         """
         try:
             injector = TimeSeriesAnomalyInjector()
-            chunk_start_time = chunk['timestamp'].min()
-            chunk_end_time = chunk['timestamp'].max()
+            chunk_start_time = pd.to_datetime(chunk['timestamp'].min(), unit='s')
+            chunk_end_time = pd.to_datetime(chunk['timestamp'].max(), unit='s')
 
             # Create a new column to track anomalies
             chunk['injected_anomaly'] = False
             
-            modified_chunk = None # Init the modified chunk
-
             for setting in anomaly_settings:
-                start_time = setting.timestamp
-                end_time = start_time + ut.parse_duration(setting.duration)
+                anomaly_start = setting.timestamp
+                anomaly_end = anomaly_start + pd.Timedelta(seconds=ut.parse_duration(setting.duration).total_seconds())
+
+                print(f"chunk_start_time: {chunk_start_time}")
+                print(f"chunk_end_time: {chunk_end_time}")
+                print(f"anomaly_start: {anomaly_start}")
+                print(f"anomaly_end: {anomaly_end}")
+                sys.stdout.flush()
 
                 # Check if the chunk overlaps with the anomaly's time range
-                if (chunk_start_time <= end_time) and (chunk_end_time >= start_time):
+                if (chunk_start_time <= anomaly_end) and (chunk_end_time >= anomaly_start):
                     # Inject anomalies
-                    modified_chunk = injector.inject_anomaly(chunk, setting)
-
-            if modified_chunk:
-                return modified_chunk
-            else:
-                return chunk
+                    print("Anomaly within chunk!")
+                    sys.stdout.flush()
+                    chunk = injector.inject_anomaly(chunk, setting)
+                    print(chunk)
+                
+            return chunk
 
         except Exception as e:
             print(f"Error injecting anomalies into chunk: {e}")
@@ -163,7 +179,12 @@ class BatchImporter:
 
         table_name = self.create_table(conn_params, Path(self.file_path).stem, columns)
 
+
+        print(self.file_path)
+        print(self.chunksize)
+        print(self.start_time)
         print("Starting to insert!")
+        sys.stdout.flush()
 
         # Preprocess anomaly settings to convert timestamps to absolute times
         if anomaly_settings:
@@ -176,23 +197,11 @@ class BatchImporter:
         results = []
 
         full_df = self.read_file()
-        if full_df is None:
+        if full_df is None or full_df.empty:
             print(f"Fileformat {self.file_extention} not supported!")
             print("Canceling job")
+            sys.stdout.flush()
             return
-
-        # Convert the first column (assume it's timestamps)
-        try:
-            # Try converting the first column to datetime objects directly
-            full_df[full_df.columns[0]] = pd.to_datetime(full_df[full_df.columns[0]])
-        except ValueError:
-            # If direct conversion fails, try converting to numeric first
-            try:
-                full_df[full_df.columns[0]] = pd.to_numeric(full_df[full_df.columns[0]])
-                full_df[full_df.columns[0]] = pd.to_datetime(full_df[full_df.columns[0]], unit='s')  # Assuming seconds if numeric
-            except ValueError:
-                print("Error: Could not convert the first column to datetime. Please ensure it's in a valid format.")
-                return
             
         # Drop rows with invalid timestamps
         full_df = full_df.dropna(subset=[full_df.columns[0]])
@@ -202,11 +211,12 @@ class BatchImporter:
         # Set the chunksize to the number of rows in the file / cpu cores available
         self.chunksize = len(full_df.index) / num_processes
 
-        # Process chunks with guaranteed anomaly injection
-        for chunk in [full_df[i:i+self.chunksize] for i in range(0, len(full_df), self.chunksize)]:
+        # Process chunks with anomaly injection
+        for chunk in [full_df[i:i+int(self.chunksize)] for i in range(0, int(len(full_df)), int(self.chunksize))]:
             if anomaly_settings:
+                chunk = chunk.copy()
                 # If timestamps need adjustment, add start_time explicitly
-                chunk[chunk.columns[0]] = chunk[chunk.columns[0]].apply(
+                chunk.loc[:, chunk.columns[0]] = chunk.loc[:, chunk.columns[0]].apply(
                     lambda x: self.start_time + pd.Timedelta(seconds=x.timestamp())
                     if isinstance(x, datetime.datetime) and x < self.start_time
                     else x
@@ -231,6 +241,7 @@ class BatchImporter:
             result.get()  # This will raise any exceptions that occurred in the process
 
         print("Inserting done!")
+        sys.stdout.flush()
 
     def read_file(self):
         """
@@ -243,9 +254,10 @@ class BatchImporter:
         match self.file_extention:
             case '.csv':
                 # File is a CSV file. Return a dataframe containing it.
-                return rcsv.filetype_csv(self.file_path)
-            
+                csv = read_csv(self.file_path)
+                full_df = csv.filetype_csv()
+                return full_df
+            # Add more fileformats here
             case _:
                 # Fileformat not supported
                 return None
-            # Add more fileformats here

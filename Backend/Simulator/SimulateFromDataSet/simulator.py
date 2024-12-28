@@ -7,10 +7,10 @@ import numpy as np
 import pandas as pd
 import psycopg2
 
-from DBAPI.db_interface import DBInterface as db
-from AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
-import DBAPI.utils as ut
-import FileFormats.read_csv as rcsv
+from Simulator.DBAPI.db_interface import DBInterface as db
+from Simulator.AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
+import Simulator.DBAPI.utils as ut
+from Simulator.FileFormats.read_csv import read_csv
 
 class Simulator:
     """
@@ -112,7 +112,7 @@ class Simulator:
                     row_timestamp = row['timestamp']
 
                     anomaly_start = setting.timestamp
-                    anomaly_end = anomaly_start + ut.parse_duration(setting.duration)
+                    anomaly_end = anomaly_start + pd.Timedelta(seconds=ut.parse_duration(setting.duration).total_seconds())
                     
                     print(anomaly_start)
                     print(anomaly_end)
@@ -128,7 +128,17 @@ class Simulator:
                         sys.stdout.flush()
         
         # Insert the row (modified or not) into the database
-        df['timestamp'] = pd.to_datetime(df['timestamp'].astype(np.int64), unit='s')
+        # Handle timestamp conversion safely
+        if isinstance(df['timestamp'].iloc[0], pd.Timestamp):
+            # Already a timestamp, no conversion needed
+            pass
+        else:
+            try:
+                # First try direct conversion from Unix timestamp
+                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+            except (ValueError, OutOfBoundsDatetime):
+                # If that fails, try converting through datetime
+                df['timestamp'] = pd.to_datetime(df['timestamp'])
 
         db_instance = self.init_db(conn_params)
         db_instance.insert_data(table_name, df)
@@ -152,7 +162,7 @@ class Simulator:
         table_name = self.create_table(conn_params, Path(self.file_path).stem, columns)
 
         full_df = self.read_file()
-        if full_df == None:
+        if full_df is None or full_df.empty:
             print(f"Fileformat {self.file_extention} not supported!")
             print("Canceling job")
             return
@@ -183,7 +193,7 @@ class Simulator:
         # Convert the first column (assume it's timestamps)
         try:
             # Try converting the first column to datetime objects directly
-            full_df[full_df.columns[0]] = pd.to_datetime(full_df[full_df.columns[0]])
+            full_df[full_df.columns[0]] = pd.to_datetime(full_df[full_df.columns[0]], unit='s')
         except ValueError:
             # If direct conversion fails, try converting to numeric first
             try:
@@ -225,7 +235,9 @@ class Simulator:
         match self.file_extention:
             case '.csv':
                 # File is a CSV file. Return a dataframe containing it.
-                return rcsv.filetype_csv(self.file_path)
+                csv = read_csv(self.file_path)
+                full_df = csv.filetype_csv()
+                return full_df
             # Add more fileformats here
             case _:
                 # Fileformat not supported

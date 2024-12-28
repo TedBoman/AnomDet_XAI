@@ -5,12 +5,57 @@ import numpy as np
 import os
 from socket import socket
 
+# Third-Party
+import threading
+from pathlib import Path
+import multiprocessing as mp
+import pandas as pd
+from typing import Union, List, Optional, Dict
+
+# Custom
+from Simulator.SimulatorEngine import SimulatorEngine as se
+
 MODEL_DIRECTORY = "./ML_models"
-INJECTION_METHOD_DIRECTORY = "./injection_methods"
+INJECTION_METHOD_DIRECTORY = "./Simulator/AnomalyInjector/InjectionMethods"
 DATASET_DIRECTORY = "./Datasets"
+
+class AnomalySetting:
+    def __init__(self, anomaly_type: str, timestamp: int, magnitude: int, 
+                 percentage: int, columns: List[str] = None, duration: str = None,
+                 data_range: List[float] = None, mean: List[float] = None):
+        self.anomaly_type = anomaly_type
+        self.timestamp = timestamp
+        self.magnitude = magnitude
+        self.percentage = percentage
+        self.duration = duration
+        self.columns = columns
+        self.data_range = data_range
+        self.mean = mean
+
+class Job:
+    def __init__(self, filepath: str, simulation_type,speedup: int = None, anomaly_settings: List[AnomalySetting] = None, table_name: str = None):
+        self.filepath = filepath
+        self.anomaly_settings = anomaly_settings
+        self.simulation_type = simulation_type
+        self.speedup = speedup
+        self.table_name = table_name
 
 # Starts processing of dataset in one batch
 def run_batch(model: str, path: str, name: str, inj_params: dict=None) -> None:
+    print("Starting Batch-job!")
+    if inj_params is not None:
+        anomaly = AnomalySetting(
+        inj_params.get("anomaly_type", None),
+        inj_params.get("timestamp", None),
+        inj_params.get("magnitude", None),
+        inj_params.get("percentage", None),
+        inj_params.get("duration", None),
+        inj_params.get("columns", None)) 
+        batch_job = Job(filepath=path, anomaly_settings=anomaly, simulation_type="batch", speedup=None, table_name=name)
+    else:
+        batch_job = Job(filepath=path, simulation_type="batch", speedup=None, table_name=name)
+    sim_engine = se()
+    sim_engine.main(batch_job)
 
     #Removing the "is_injected" & "is_anomaly" columns
     feature_df = df.iloc[:, :-2]
@@ -39,6 +84,23 @@ def run_batch(model: str, path: str, name: str, inj_params: dict=None) -> None:
 
 # Starts processing of dataset in one batch
 def run_stream(model: str, path: str, name: str, speedup: int, inj_params: dict=None) -> None:
+    print("Starting Stream-job!")
+    if inj_params is not None:
+        anomaly = AnomalySetting(
+            inj_params.get("anomaly_type", None),
+            inj_params.get("timestamp", None),
+            inj_params.get("magnitude", None),
+            inj_params.get("percentage", None),
+            inj_params.get("duration", None),
+            inj_params.get("columns", None)
+        ) 
+        stream_job = Job(filepath=path, anomaly_settings=anomaly, simulation_type="stream", speedup=speedup, table_name=name)
+    else:
+        stream_job = Job(filepath=path, simulation_type="stream", speedup=speedup, table_name=name)
+
+    sim_engine = se()
+    sim_engine.main(stream_job)
+    
     pass
 
 # Returns a list of models implemented in MODEL_DIRECTORY
@@ -60,13 +122,14 @@ def get_models() -> list:
 
 # Returns a list of injection methods implemented in INJECTION_METHOD_DIRECTORY
 def get_injection_methods() -> list:
-    injection_methods = ["not implemented"]
-    '''
+    injection_methods = []
+
     for path in os.listdir(INJECTION_METHOD_DIRECTORY):
         if os.path.isfile(os.path.join(INJECTION_METHOD_DIRECTORY, path)):
             method_name = path.split(".")[0]
             injection_methods.append(method_name)
-    '''
+
+    injection_methods.remove("__init__")
     return injection_methods
 
 # Fetching datasets from the dataset directory
@@ -80,25 +143,3 @@ def get_datasets() -> list:
 
     return datasets
 
-# Get all columns of the table of a running job
-def get_columns(name: str, db_api: ) -> list:
-    return db_api.get_columns(name)
-
-# Gets content of complete file to the backend
-def import_dataset(conn: socket, path: str, timestamp_column: str) -> None:
-    file = open(path, "w")
-    data = conn.recv(1024).decode("utf-8")
-    while data:
-        file.write(data)
-        data = conn.recv(1024).decode("utf-8")
-
-    file.close()
-    
-    # Change the timestamp column name to timestamp and move it to the first column
-    df = pd.read_csv(path)
-    df.rename(columns={timestamp_column: "timestamp"}, inplace=True)
-    cols = df.columns.tolist()
-    cols.remove("timestamp")
-    cols = ["timestamp"] + cols
-    df = df[cols]
-    df.to_csv(path, index=False)

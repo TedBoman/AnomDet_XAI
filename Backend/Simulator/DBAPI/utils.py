@@ -49,7 +49,7 @@ def parse_duration(duration_str):
             else:
                 raise ValueError(f"Invalid unit: {unit}")
 
-        return timedelta(total_seconds)
+        return timedelta(seconds=total_seconds)
 
 def parse_duration_seconds(duration_str):
         """

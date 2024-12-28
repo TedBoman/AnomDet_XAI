@@ -27,8 +27,9 @@ class TalkToBackend:
         filepath = './Datasets/system-1.csv'
         TestAnomaly = AnomalySetting('lowered', 90, 2, 100, ["load-5m", "load-1m"], '2m')
         TestAnomaly2 = AnomalySetting('spike', 330, 2, 100, ["load-5m", "load-1m"])
+        TestAnomaly3 = AnomalySetting('lowered', 4860, 2, 100, ["load-5m", "load-1m"], '1m')
 
-        TestMessage = Message(filepath, [TestAnomaly, TestAnomaly2], 'stream', 12)
+        TestMessage = Message(filepath, [TestAnomaly, TestAnomaly2,TestAnomaly3], 'batch')
         #Uncomment to run the simulator on test dataset with 50 rows.
         return TestMessage
         

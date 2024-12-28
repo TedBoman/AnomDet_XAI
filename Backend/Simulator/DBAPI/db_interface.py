@@ -35,12 +35,13 @@ class DBInterface(ABC):
         """
         # Adjust types based on your actual data
         columns_with_types = columns.copy()
+        first_column = f"{columns_with_types[0]} TIMESTAMP WITHOUT TIME ZONE"
         for i in range(len(columns_with_types)):
             columns_with_types[i] = f'"{columns_with_types[i]}"'
             # Assign the data type only once
             columns_with_types[i] = f'{columns_with_types[i]} DOUBLE PRECISION' 
         
-        columns_with_types[0] = f"{columns_with_types[0]} TIMESTAMP WITHOUT TIME ZONE"
+        columns_with_types[0] = first_column
 
         # Add the "injected_anomaly" column
         columns_with_types.append('"injected_anomaly" BOOLEAN')

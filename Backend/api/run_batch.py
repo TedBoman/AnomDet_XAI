@@ -43,13 +43,14 @@ def run_batch(api: BackendAPI) -> dict:
         duration = input("Enter the duration of the anomalies: ")
         columns_string = input("Enter the columns to inject anomalies into, as a comma separated list (a,b,c,d,...): ")
         inj_params = {
-            "anomaly_type": anomaly_type,
+            "anomaly_type": injection_method,
             "timestamp": timestamp,
             "magnitude": magnitude,
             "percentage": percentage,
             "duration": duration,
             "columns": columns_string.split(',')
         }
+        print(inj_params)
         api.run_batch(model, dataset, name, inj_params)
     else:
         api.run_batch(model, dataset, name)
