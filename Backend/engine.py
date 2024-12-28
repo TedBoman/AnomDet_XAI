@@ -22,6 +22,7 @@ DATABASE_PORT = os.getenv('DATABASE_HOST')
 
 DATASET_DIRECTORY = "./Datasets/"
 
+# 
 backend_data = {
     "started-jobs": [],
     "running-jobs": []
@@ -47,19 +48,18 @@ def main():
     # Main loop serving the backend logic
     try:
         while True:
-            for job, job_type in backend_data["started-jobs"]:
+            for job in backend_data["started-jobs"]:
                 # If the job is a batch job, check if the job is finished to move it to the running-jobs list
-                if job_type == "batch":
-                    if backend_data["job"].is_alive() == False:
+                if job["type"] == "batch":
+                    if job["thread"].is_alive() == False:
                         backend_data["running-jobs"].append(job)
-                        backend_data["started-jobs"].remove((job, job_type))
-                        del backend_data["job"]
+                        backend_data["started-jobs"].remove(job)
                 # If the job is a stream job, check if there is a table with the name of the job in the database to add to run job
                 else:
-                    found = backend_data["db_api"].table_exists(job)
+                    found = backend_data["db_api"].table_exists(job["name"])
                     if found:
                         backend_data["running-jobs"].append(job)
-                        backend_data["started-jobs"].remove((job, job_type))
+                        backend_data["started-jobs"].remove(job)
                 sleep(1)
     except KeyboardInterrupt:
         print("Exiting backend...")
@@ -100,11 +100,17 @@ def __handle_api_call(conn, data: dict) -> None:
 
             inj_params = data.get("inj_params", None)
             
-            backend_data[name] = threading.Thread(target=execute_calls.run_batch, args=(model, dataset_path, name, inj_params))
-            
-            backend_data[name].daemon = True
-            backend_data[name].start()
-            backend_data["started-jobs"].append((name, "batch"))
+            new_thread = threading.Thread(target=execute_calls.run_batch, args=(model, dataset_path, name, inj_params))
+            new_thread.daemon = True
+            new_thread.start()
+
+            job = {
+                "name": name,
+                "type": "batch",
+                "thread": new_thread
+            }
+
+            backend_data["started-jobs"].append(job)
             
         case "run-stream":
             model = data["model"]
