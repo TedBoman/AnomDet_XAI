@@ -3,11 +3,14 @@
 # Third-Party
 from pathlib import Path
 import pandas as pd
+import os
 
 # Custom
 from Simulator.SimulateFromDataSet.simulator import Simulator
 from Simulator.BatchImport.batchimport import BatchImporter
 from Simulator.DBAPI import talk_to_backend as ttb2
+
+DEFAULT_PATH = './Datasets/'
 
 class SimulatorEngine:
     def process_file(self, file_path, conn_params, simulation_type, anomaly_settings, start_time ,speedup: int = 1):
@@ -37,6 +40,14 @@ class SimulatorEngine:
             "port": "5432",
             "host": "host.docker.internal"
         }
+
+        # Check if the path exists
+        if os.path.isfile(job.filepath):
+            # Filepath is valid, do nothing
+            pass
+        else:
+            # Prepend the default path to the filename
+            job.filepath = os.path.join(DEFAULT_PATH, os.path.basename(job.filepath))
 
         if job:
             # Convert anomaly settings timestamps to datetime objects

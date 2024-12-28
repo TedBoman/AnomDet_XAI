@@ -79,7 +79,6 @@ class Simulator:
                 print(f"Database error creating table: {e}")
                 raise  # Or re-raise if you want to stop execution
             except Exception as e:  # Catch other unexpected errors
-                db_instance.conn.rollback()
                 print(f"Unexpected error creating table: {e}")
                 raise
 

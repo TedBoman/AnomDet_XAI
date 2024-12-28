@@ -1,3 +1,4 @@
+import sys
 from ML_models.lstm import LSTMModel
 from ML_models.isolation_forest import IsolationForest
 import pandas as pd
@@ -43,6 +44,8 @@ class Job:
 # Starts processing of dataset in one batch
 def run_batch(model: str, path: str, name: str, inj_params: dict=None) -> None:
     print("Starting Batch-job!")
+    sys.stdout.flush()
+    
     if inj_params is not None:
         anomaly = AnomalySetting(
         inj_params.get("anomaly_type", None),
@@ -57,6 +60,7 @@ def run_batch(model: str, path: str, name: str, inj_params: dict=None) -> None:
     sim_engine = se()
     sim_engine.main(batch_job)
 
+"""
     #Removing the "is_injected" & "is_anomaly" columns
     feature_df = df.iloc[:, :-2]
 
@@ -81,6 +85,7 @@ def run_batch(model: str, path: str, name: str, inj_params: dict=None) -> None:
         
         case _:
             raise Exception("Model not found")
+            """
 
 # Starts processing of dataset in one batch
 def run_stream(model: str, path: str, name: str, speedup: int, inj_params: dict=None) -> None:
@@ -94,8 +99,10 @@ def run_stream(model: str, path: str, name: str, speedup: int, inj_params: dict=
             inj_params.get("duration", None),
             inj_params.get("columns", None)
         ) 
+        print("Should inject anomaly.")
         stream_job = Job(filepath=path, anomaly_settings=anomaly, simulation_type="stream", speedup=speedup, table_name=name)
     else:
+        print("Should not inject anomaly.")
         stream_job = Job(filepath=path, simulation_type="stream", speedup=speedup, table_name=name)
 
     sim_engine = se()

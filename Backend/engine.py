@@ -96,11 +96,12 @@ def __handle_api_call(conn, data: dict) -> None:
             dataset_path = DATASET_DIRECTORY + data["dataset"]
             name = data["name"]
 
-            if data["inj_params"]:
-                backend_data[name] = threading.Thread(target=execute_calls.run_batch, args=(model, dataset_path, name, inj_params))
-            else:
-                backend_data[name] = threading.Thread(target=execute_calls.run_batch, args=(model, dataset_path, name))
+            print(data)
 
+            inj_params = data.get("inj_params", None)
+            
+            backend_data[name] = threading.Thread(target=execute_calls.run_batch, args=(model, dataset_path, name, inj_params))
+            
             backend_data[name].daemon = True
             backend_data[name].start()
             backend_data["started-jobs"].append((name, "batch"))
