@@ -9,9 +9,9 @@ from timescaledb_api import TimescaleDBAPI
 load_dotenv()
 HOST = 'localhost'
 PORT = int(os.getenv('DATABASE_PORT'))
-USER = os.getenv('DATABASE__USER')
-PASSWORD = os.getenv('DATABASE__PASSWORD')
-DB = os.getenv('DATABASE__DB')
+USER = os.getenv('DATABASE_USER')
+PASSWORD = os.getenv('DATABASE_PASSWORD')
+NAME = os.getenv('DATABASE_NAME')
 
 # Assuming the docker container is started, connect to the database
 conn_params = {
@@ -19,7 +19,7 @@ conn_params = {
     "password": PASSWORD,
     "host": HOST,
     "port": PORT,
-    "database": DB
+    "database": NAME
 }
 
 
@@ -28,6 +28,9 @@ api = TimescaleDBAPI(conn_params)
 df = pd.read_csv("../Backend/Datasets/system-1.csv", low_memory=False)  # Read the csv file
 
 api.create_table("system1", df.columns.to_list())                       # Create a table in the database
+columns = api.get_columns("system1")                                    # Get the columns of the table
+
+print(columns)
 
 df["is_anomaly"] = False
 df["injected_anomaly"] = False
