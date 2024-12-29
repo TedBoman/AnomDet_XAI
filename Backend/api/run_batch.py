@@ -40,7 +40,7 @@ def run_batch(api: BackendAPI) -> dict:
 
         timestamp = input("Enter the timestamp to start anomaly: ")
         magnitude = input("Enter the magnitude of the anomaly: ")
-        duration = input("Enter a duration (e.g., '30s', '1H', '30min', '2D', '1h30m', '2days 5hours') or leave empty for a point anomaly:")
+        duration = input("Enter a duration (e.g., '30s', '1H', '30min', '2D', '1h30m', '2days 5hours') or leave empty for a point anomaly: ")
         percentage = input("Enter the percentage of data (during the duration, this percentage of points will be an anomaly): ")
         columns_string = input("Enter the columns to inject anomalies into, as a comma separated list (a,b,c,d,...): ")
         inj_params = {
@@ -51,7 +51,6 @@ def run_batch(api: BackendAPI) -> dict:
             "duration": duration,
             "columns": columns_string.split(',')
         }
-        print(inj_params)
         api.run_batch(model, dataset, name, inj_params)
     else:
         api.run_batch(model, dataset, name)

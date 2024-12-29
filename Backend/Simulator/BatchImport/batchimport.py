@@ -140,12 +140,6 @@ class BatchImporter:
                 anomaly_start = setting.timestamp
                 anomaly_end = anomaly_start + pd.Timedelta(seconds=ut.parse_duration(setting.duration).total_seconds())
 
-                print(f"chunk_start_time: {chunk_start_time}")
-                print(f"chunk_end_time: {chunk_end_time}")
-                print(f"anomaly_start: {anomaly_start}")
-                print(f"anomaly_end: {anomaly_end}")
-                sys.stdout.flush()
-
                 # Check if the chunk overlaps with the anomaly's time range
                 if (chunk_start_time <= anomaly_end) and (chunk_end_time >= anomaly_start):
                     # Inject anomalies
@@ -160,7 +154,7 @@ class BatchImporter:
             print(f"Error injecting anomalies into chunk: {e}")
             return chunk
 
-    def start_simulation(self, conn_params, anomaly_settings=None):
+    def start_simulation(self, conn_params, anomaly_settings=None, table_name=None):
         """
         Starts the batch data import process.
 
@@ -177,8 +171,7 @@ class BatchImporter:
         with open(self.file_path, 'r') as f:
             columns = f.readline().strip().split(',')
 
-        table_name = self.create_table(conn_params, Path(self.file_path).stem, columns)
-
+        table_name = self.create_table(conn_params, Path(self.file_path).stem if table_name is None else table_name, columns)
 
         print(self.file_path)
         print(self.chunksize)
