@@ -178,11 +178,16 @@ def __handle_api_call(conn, data: dict) -> None:
                 while data:
                     data = conn.recv(1024)
         case "get-all-jobs":
-            running = backend_data["running-jobs"]
-            started = backend_data["started-jobs"]
-            all_jobs = running + started
+            job_names = []
+
+            for job in backend_data["running-jobs"]:
+                job_names.append(job["name"])
+            
+            for job in backend_data["started-jobs"]:
+                job_names.append(job["name"])
+            
             jobs_dict = {
-                            "jobs": all_jobs
+                            "jobs": job_names
                         }
             jobs_json = json.dumps(jobs_dict)
             conn.sendall(bytes(jobs_json, encoding="utf-8"))
