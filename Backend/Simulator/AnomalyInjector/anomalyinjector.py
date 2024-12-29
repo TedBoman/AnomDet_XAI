@@ -5,7 +5,7 @@ from typing import Union, List, Optional
 import datetime as dt
 
 from Simulator.DBAPI import utils as ut
-from Simulator.DBAPI.talk_to_backend import AnomalySetting
+from Simulator.DBAPI.type_classes import AnomalySetting
 from Simulator.AnomalyInjector.InjectionMethods.lowered import LoweredAnomaly
 from Simulator.AnomalyInjector.InjectionMethods.spike import SpikeAnomaly
 from Simulator.AnomalyInjector.InjectionMethods.step import StepAnomaly

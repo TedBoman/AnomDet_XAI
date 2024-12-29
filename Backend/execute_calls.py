@@ -14,32 +14,13 @@ import pandas as pd
 from typing import Union, List, Optional, Dict
 
 # Custom
+from Simulator.DBAPI.type_classes import Job
+from Simulator.DBAPI.type_classes import AnomalySetting
 from Simulator.SimulatorEngine import SimulatorEngine as se
 
 MODEL_DIRECTORY = "./ML_models"
 INJECTION_METHOD_DIRECTORY = "./Simulator/AnomalyInjector/InjectionMethods"
 DATASET_DIRECTORY = "./Datasets"
-
-class AnomalySetting:
-    def __init__(self, anomaly_type: str, timestamp: int, magnitude: int, 
-                 percentage: int, columns: List[str] = None, duration: str = None,
-                 data_range: List[float] = None, mean: List[float] = None):
-        self.anomaly_type = anomaly_type
-        self.timestamp = timestamp
-        self.magnitude = magnitude
-        self.percentage = percentage
-        self.duration = duration
-        self.columns = columns
-        self.data_range = data_range
-        self.mean = mean
-
-class Job:
-    def __init__(self, filepath: str, simulation_type,speedup: int = None, anomaly_settings: List[AnomalySetting] = None, table_name: str = None):
-        self.filepath = filepath
-        self.anomaly_settings = anomaly_settings
-        self.simulation_type = simulation_type
-        self.speedup = speedup
-        self.table_name = table_name
 
 # Starts processing of dataset in one batch
 def run_batch(model: str, path: str, name: str, inj_params: dict=None) -> None:
@@ -49,14 +30,14 @@ def run_batch(model: str, path: str, name: str, inj_params: dict=None) -> None:
     if inj_params is not None:
         anomaly = AnomalySetting(
         inj_params.get("anomaly_type", None),
-        inj_params.get("timestamp", None),
-        inj_params.get("magnitude", None),
-        inj_params.get("percentage", None),
-        inj_params.get("duration", None),
-        inj_params.get("columns", None)) 
-        batch_job = Job(filepath=path, anomaly_settings=anomaly, simulation_type="batch", speedup=None, table_name=name)
+        int(inj_params.get("timestamp", None)),
+        int(inj_params.get("magnitude", None)),
+        int(inj_params.get("percentage", None)),
+        inj_params.get("columns", None),
+        inj_params.get("duration", None)) 
+        batch_job = Job(filepath=path, anomaly_settings=[anomaly], simulation_type="batch", speedup=None, table_name=name)
     else:
-        batch_job = Job(filepath=path, simulation_type="batch", speedup=None, table_name=name)
+        batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name)
     sim_engine = se()
     sim_engine.main(batch_job)
 
@@ -85,7 +66,7 @@ def run_batch(model: str, path: str, name: str, inj_params: dict=None) -> None:
         
         case _:
             raise Exception("Model not found")
-            """
+"""
 
 # Starts processing of dataset in one batch
 def run_stream(model: str, path: str, name: str, speedup: int, inj_params: dict=None) -> None:
@@ -107,8 +88,6 @@ def run_stream(model: str, path: str, name: str, speedup: int, inj_params: dict=
 
     sim_engine = se()
     sim_engine.main(stream_job)
-    
-    pass
 
 # Returns a list of models implemented in MODEL_DIRECTORY
 def get_models() -> list:
