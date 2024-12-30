@@ -99,8 +99,16 @@ def __handle_api_call(conn, data: dict) -> None:
             print(data)
 
             inj_params = data.get("inj_params", None)
+
+            db_conn_params = {
+                "user": DATABASE["USER"],
+                "password": DATABASE["PASSWORD"],
+                "host": DATABASE["HOST"],
+                "port": DATABASE["PORT"],
+                "database": DATABASE["DATABASE"]
+            }
             
-            new_thread = threading.Thread(target=execute_calls.run_batch, args=(model, dataset_path, name, inj_params))
+            new_thread = threading.Thread(target=execute_calls.run_batch, args=(db_conn_params, model, dataset_path, name, inj_params))
             new_thread.daemon = True
             new_thread.start()
 
@@ -116,13 +124,30 @@ def __handle_api_call(conn, data: dict) -> None:
             model = data["model"]
             dataset_path = DATASET_DIRECTORY + data["dataset"]
             name = data["name"]
-
             speedup = data["speedup"]
-            if data["inj_param"]:
-                inj_param = data["inj_param"]
+            
+            inj_params = data.get("inj_params", None)
+            
+            db_conn_params = {
+                "user": DATABASE["USER"],
+                "password": DATABASE["PASSWORD"],
+                "host": DATABASE["HOST"],
+                "port": DATABASE["PORT"],
+                "database": DATABASE["DATABASE"]
+            }
 
-            print("Stream job started")
-            conn.sendall(bytes(test_json, encoding="utf-8"))
+            new_thread = threading.Thread(target=execute_calls.run_stream, args=(db_conn_params, model, dataset_path, name, speedup, inj_params))
+            new_thread.daemon = True
+            new_thread.start()
+
+            job = {
+                "name": name,
+                "type": "stream",
+                "thread": new_thread
+            }
+
+            backend_data["started-jobs"].append(job)
+
         case "change-model":
             test_json = json.dumps({"test": "change-model-respons" })
             conn.sendall(bytes(test_json, encoding="utf-8"))

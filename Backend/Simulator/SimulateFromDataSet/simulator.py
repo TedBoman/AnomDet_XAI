@@ -7,9 +7,11 @@ import numpy as np
 import pandas as pd
 import psycopg2
 
-from Simulator.DBAPI.db_interface import DBInterface as db
+#from Simulator.DBAPI.db_interface import DBInterface as db
+from timescaledb_api import TimescaleDBAPI as db
 from Simulator.AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
 import Simulator.DBAPI.utils as ut
+from Simulator.DBAPI.debug_utils import DebugLogger as dl
 from Simulator.FileFormats.read_csv import read_csv
 
 class Simulator:
@@ -69,17 +71,15 @@ class Simulator:
                 db_instance.create_table(new_table_name, columns)
                 return new_table_name
             except psycopg2.errors.DuplicateTable:  # Catch the specific exception
-                db_instance.conn.rollback()
                 i += 1
                 new_table_name = f"{tb_name}_{i}"
             except (psycopg2.errors.OperationalError, 
                     psycopg2.errors.ProgrammingError) as e:
                 # Handle or log other database-related errors
-                db_instance.conn.rollback()
-                print(f"Database error creating table: {e}")
+                dl.debug_print(f"Database error creating table: {e}")
                 raise  # Or re-raise if you want to stop execution
             except Exception as e:  # Catch other unexpected errors
-                print(f"Unexpected error creating table: {e}")
+                dl.debug_print(f"Unexpected error creating table: {e}")
                 raise
 
     def process_row(self, conn_params, table_name, row, anomaly_settings=None):
@@ -98,14 +98,14 @@ class Simulator:
         # Create a new column to track anomalies
         df['injected_anomaly'] = False
         
-        print(anomaly_settings)
+        dl.debug_print(anomaly_settings)
 
         injector = TimeSeriesAnomalyInjector()
 
         # Inject anomalies if settings are provided
         if anomaly_settings:
             for setting in anomaly_settings:
-                print(setting)
+                dl.debug_print(setting)
                 if setting.timestamp:
                     # Check if this row falls within the anomaly time range
                     row_timestamp = row['timestamp']
@@ -113,38 +113,23 @@ class Simulator:
                     anomaly_start = setting.timestamp
                     anomaly_end = anomaly_start + pd.Timedelta(seconds=ut.parse_duration(setting.duration).total_seconds())
                     
-                    print(anomaly_start)
-                    print(anomaly_end)
-                    print(row_timestamp)
-                    print(df)
-                    sys.stdout.flush()
+                    dl.debug_print(anomaly_start)
+                    dl.debug_print(anomaly_end)
+                    dl.debug_print(row_timestamp)
+                    dl.debug_print(df)
 
                     # Check if row timestamp is within anomaly time range
                     if anomaly_start <= row_timestamp <= anomaly_end:
-                        print(f"Injecting anomaly on {row_timestamp}")
+                        dl.debug_print(f"Injecting anomaly on {row_timestamp}")
                         df = injector.inject_anomaly(df, setting)
-                        print(df)
-                        sys.stdout.flush()
-        
-        # Insert the row (modified or not) into the database
-        # Handle timestamp conversion safely
-        if isinstance(df['timestamp'].iloc[0], pd.Timestamp):
-            # Already a timestamp, no conversion needed
-            pass
-        else:
-            try:
-                # First try direct conversion from Unix timestamp
-                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
-            except (ValueError, OutOfBoundsDatetime):
-                # If that fails, try converting through datetime
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
+                        dl.debug_print(df)
+                        
 
         db_instance = self.init_db(conn_params)
-        db_instance.insert_data(table_name, df)
-        print("Inserted row.")
-        sys.stdout.flush()
+        db_instance.insert_data_no_helper(table_name, df)
+        dl.debug_print("Inserted row.")
 
-    def start_simulation(self, conn_params, anomaly_settings=None):
+    def start_simulation(self, conn_params, anomaly_settings=None, table_name=None):
         """
         Reads the data file, preprocesses anomaly settings, and inserts data
         into the database row by row, with optional anomaly injection.
@@ -153,17 +138,23 @@ class Simulator:
             conn_params: Database connection parameters
             anomaly_settings (list, optional): List of anomaly settings to apply
         """
-        print("Stream job has been started!")
+        dl.debug_print("Stream job has been started!")
+        
         # Get column names from the first row of the CSV file
         with open(self.file_path, 'r') as f:
             columns = f.readline().strip().split(',')
         
-        table_name = self.create_table(conn_params, Path(self.file_path).stem, columns)
+        table_name = self.create_table(conn_params, Path(self.file_path).stem if table_name is None else table_name, columns)
+
+        if table_name is None:
+            dl.debug_print("Table could not be created!")
+        else:
+            dl.debug_print(f"Table {table_name} created!")
 
         full_df = self.read_file()
         if full_df is None or full_df.empty:
-            print(f"Fileformat {self.file_extention} not supported!")
-            print("Canceling job")
+            dl.debug_print(f"Fileformat {self.file_extention} not supported!")
+            dl.debug_print("Canceling job")
             return
 
         # Preprocess anomaly settings to convert timestamps to absolute times
@@ -186,8 +177,8 @@ class Simulator:
                         setting.mean.append(mean)
 
         time_between_input = full_df.iloc[:, 0].diff().mean()
-        print(f"Speedup: {self.x_speedup}")
-        print(f"Time between inputs: {time_between_input} seconds")
+        dl.debug_print(f"Speedup: {self.x_speedup}")
+        dl.debug_print(f"Time between inputs: {time_between_input} seconds")
 
         # Convert the first column (assume it's timestamps)
         try:
@@ -199,7 +190,7 @@ class Simulator:
                 full_df[full_df.columns[0]] = pd.to_numeric(full_df[full_df.columns[0]])
                 full_df[full_df.columns[0]] = pd.to_datetime(full_df[full_df.columns[0]], unit='s')  # Assuming seconds if numeric
             except ValueError:
-                print("Error: Could not convert the first column to datetime. Please ensure it's in a valid format.")
+                dl.debug_print("Error: Could not convert the first column to datetime. Please ensure it's in a valid format.")
                 return
 
         # Calculate time difference in seconds
@@ -208,20 +199,19 @@ class Simulator:
         # Drop rows with invalid timestamps
         full_df = full_df.dropna(subset=[full_df.columns[0]])
 
-        print(f"Simulation speed between inputs: {time_between_input / self.x_speedup}")
-        print("Starting to insert!")
+        dl.debug_print(f"Simulation speed between inputs: {time_between_input / self.x_speedup}")
+        dl.debug_print("Starting to insert!")
 
         for index, row in full_df.iterrows():
-            print(f"Inserting row {index + 1}")
-
+            dl.debug_print(f"Inserting row {index + 1}")
             # Process the row with potential anomaly injection
             self.process_row(conn_params, table_name, row, anomaly_settings)
 
             # Sleep between rows, adjusted by speedup
             t.sleep(time_between_input / self.x_speedup)
 
-        print("Inserting done!")
-        sys.stdout.flush()
+        dl.debug_print("Inserting done!")
+        
 
     def read_file(self):
         """

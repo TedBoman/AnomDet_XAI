@@ -5,6 +5,7 @@ from typing import Union, List, Optional
 import datetime as dt
 
 from Simulator.DBAPI import utils as ut
+from Simulator.DBAPI.debug_utils import DebugLogger as dl
 from Simulator.DBAPI.type_classes import AnomalySetting
 from Simulator.AnomalyInjector.InjectionMethods.lowered import LoweredAnomaly
 from Simulator.AnomalyInjector.InjectionMethods.spike import SpikeAnomaly
@@ -13,8 +14,9 @@ from Simulator.AnomalyInjector.InjectionMethods.custom import CustomAnomaly
 from Simulator.AnomalyInjector.InjectionMethods.offline import OfflineAnomaly
 
 class TimeSeriesAnomalyInjector:
-    def __init__(self, seed: int = 42):
+    def __init__(self, seed: int = 42, debug=False):
         self.rng = np.random.default_rng(seed)
+        self.debug = debug
 
     def inject_anomaly(
         self, 
@@ -48,10 +50,9 @@ class TimeSeriesAnomalyInjector:
                     span_data = modified_data[span_mask]
 
                     # Log span details
-                    print(f"Span data size: {len(span_data)}")
-                    print(f"Span timestamps: {start_time} to {end_time}")
-                    print(f"Percentage of anomalies to inject: {percentage}")
-                    sys.stdout.flush()
+                    dl.debug_print(f"Span data size: {len(span_data)}")
+                    dl.debug_print(f"Span timestamps: {start_time} to {end_time}")
+                    dl.debug_print(f"Percentage of anomalies to inject: {percentage}")
 
                     for column in (columns or span_data.select_dtypes(include=[np.number]).columns):
                         try:
@@ -66,14 +67,12 @@ class TimeSeriesAnomalyInjector:
                                 )
 
                                 # Log data range and mean
-                                print(f"Data range: {data_range}, Mean: {mean}")
-                                sys.stdout.flush()
+                                dl.debug_print(f"Data range: {data_range}, Mean: {mean}")
 
                                 num_anomalies = min(len(span_data), max(1, int(len(span_data) * percentage)))
                                 anomaly_indices = self.rng.choice(span_data.index, size=num_anomalies, replace=False)
-                                print(f"Anomaly indices selected: {anomaly_indices}")
-                                print(f"Data before injection:\n{modified_data.loc[anomaly_indices, column]}")
-                                sys.stdout.flush()
+                                dl.debug_print(f"Anomaly indices selected: {anomaly_indices}")
+                                dl.debug_print(f"Data before injection:\n{modified_data.loc[anomaly_indices, column]}")
 
                                 try:
                                     # Apply anomaly injection
@@ -86,23 +85,22 @@ class TimeSeriesAnomalyInjector:
                                     )
                                     # Mark anomaly flags
                                     modified_data.loc[anomaly_indices, 'injected_anomaly'] = True
-                                    print(f"Data after injection:\n{modified_data.loc[anomaly_indices, column]}")
-                                    print(f"Anomaly flags after injection:\n{modified_data.loc[anomaly_indices, 'injected_anomaly']}")
-                                    sys.stdout.flush()
+                                    dl.debug_print(f"Data after injection:\n{modified_data.loc[anomaly_indices, column]}")
+                                    dl.debug_print(f"Anomaly flags after injection:\n{modified_data.loc[anomaly_indices, 'injected_anomaly']}")
+                                    
                                 except Exception as e:
-                                    print(f"Error during anomaly application for column {column}: {e}")
-                                    sys.stdout.flush()
+                                    dl.debug_print(f"Error during anomaly application for column {column}: {e}")
+                                    
                         except Exception as e:
-                            print(f"Error processing column {column}: {e}")
-                            sys.stdout.flush()
+                            dl.debug_print(f"Error processing column {column}: {e}")
+                            
                 except Exception as e:
-                    print(f"Error processing anomaly setting: {e}")
-                    sys.stdout.flush()
+                    dl.debug_print(f"Error processing anomaly setting: {e}")
 
             return modified_data
+        
         except Exception as e:
-            print(f"Error in inject_anomaly: {e}")
-            sys.stdout.flush()
+            dl.debug_print(f"Error in inject_anomaly: {e}")
             return data
 
     def _apply_anomaly(self, data, data_range, rng, mean, settings: AnomalySetting):
@@ -111,46 +109,39 @@ class TimeSeriesAnomalyInjector:
             magnitude = settings.magnitude
 
             # Log data before applying anomaly
-            print(f"Old data before anomaly application: {data}")
-            sys.stdout.flush()
+            dl.debug_print(f"Old data before anomaly application: {data}")   
 
             if anomaly_type == 'lowered':
                 injector = LoweredAnomaly()
                 result = injector.inject_anomaly(data, rng, data_range, mean)
-                print(f"New data after lowered anomaly: {result}")
-                sys.stdout.flush()
+                dl.debug_print(f"New data after lowered anomaly: {result}")
                 return result
 
             elif anomaly_type == 'spike':
                 injector = SpikeAnomaly()
                 result = injector.inject_anomaly(data, rng, magnitude)
-                print(f"New data after spike anomaly: {result}")
-                sys.stdout.flush()
+                dl.debug_print(f"New data after spike anomaly: {result}")
                 return result
 
             elif anomaly_type == 'step':
                 injector = StepAnomaly()
                 result = injector.inject_anomaly(data, mean, magnitude)
-                print(f"New data after step anomaly: {result}")
-                sys.stdout.flush()
+                dl.debug_print(f"New data after step anomaly: {result}")
                 return result
 
             elif anomaly_type == 'offline':
                 injector = OfflineAnomaly()
                 result = injector.inject_anomaly()
-                print(f"New data after offline anomaly: {result}")
-                sys.stdout.flush()
+                dl.debug_print(f"New data after offline anomaly: {result}")
                 return result
 
             elif anomaly_type == 'custom':
                 injector = CustomAnomaly()
                 result = injector.inject_anomaly(data, magnitude)
-                print(f"New data after custom anomaly: {result}")
-                sys.stdout.flush()
+                dl.debug_print(f"New data after custom anomaly: {result}")
                 return result
 
             return data
         except Exception as e:
-            print(f"Error in _apply_anomaly: {e}")
-            sys.stdout.flush()
+            dl.debug_print(f"Error in _apply_anomaly: {e}")
             return data
