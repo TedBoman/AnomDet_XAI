@@ -76,10 +76,10 @@ class Simulator:
             except (psycopg2.errors.OperationalError, 
                     psycopg2.errors.ProgrammingError) as e:
                 # Handle or log other database-related errors
-                dl.debug_print(f"Database error creating table: {e}")
+                dl.print_exception(f"Database error creating table: {e}")
                 raise  # Or re-raise if you want to stop execution
             except Exception as e:  # Catch other unexpected errors
-                dl.debug_print(f"Unexpected error creating table: {e}")
+                dl.print_exception(f"Unexpected error creating table: {e}")
                 raise
 
     def process_row(self, conn_params, table_name, row, anomaly_settings=None):
@@ -123,7 +123,6 @@ class Simulator:
                         dl.debug_print(f"Injecting anomaly on {row_timestamp}")
                         df = injector.inject_anomaly(df, setting)
                         dl.debug_print(df)
-                        
 
         db_instance = self.init_db(conn_params)
         db_instance.insert_data_no_helper(table_name, df)
@@ -190,7 +189,7 @@ class Simulator:
                 full_df[full_df.columns[0]] = pd.to_numeric(full_df[full_df.columns[0]])
                 full_df[full_df.columns[0]] = pd.to_datetime(full_df[full_df.columns[0]], unit='s')  # Assuming seconds if numeric
             except ValueError:
-                dl.debug_print("Error: Could not convert the first column to datetime. Please ensure it's in a valid format.")
+                dl.print_exception("Error: Could not convert the first column to datetime. Please ensure it's in a valid format.")
                 return
 
         # Calculate time difference in seconds
@@ -212,7 +211,6 @@ class Simulator:
 
         dl.debug_print("Inserting done!")
         
-
     def read_file(self):
         """
         Reads the data file based on its extension.

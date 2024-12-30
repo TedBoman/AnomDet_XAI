@@ -155,7 +155,6 @@ class TimescaleDBAPI(DBInterface):
 
                 execute_values(cur, query, values)
                 conn.commit()
-                print(f"Data insertion successful for table: {table_name}")
             except Exception as e:
                 conn.rollback()
     

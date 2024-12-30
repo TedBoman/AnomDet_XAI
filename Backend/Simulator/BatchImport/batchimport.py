@@ -85,10 +85,10 @@ class BatchImporter:
             except (psycopg2.errors.OperationalError, 
                     psycopg2.errors.ProgrammingError) as e:
                 # Handle or log other database-related errors
-                dl.debug_print(f"Database error creating table: {e}")
+                dl.print_exception(f"Database error creating table: {e}")
                 raise  # Or re-raise if you want to stop execution
             except Exception as e:  # Catch other unexpected errors
-                dl.debug_print(f"Unexpected error creating table: {e}")
+                dl.print_exception(f"Unexpected error creating table: {e}")
                 raise
 
     def process_chunk(self, conn_params, table_name, chunk):
@@ -150,7 +150,7 @@ class BatchImporter:
             return chunk
 
         except Exception as e:
-            dl.debug_print(f"Error injecting anomalies into chunk: {e}")
+            dl.print_exception(f"Error injecting anomalies into chunk: {e}")
             return chunk
 
     def start_simulation(self, conn_params, anomaly_settings=None, table_name=None):
@@ -189,8 +189,8 @@ class BatchImporter:
 
         full_df = self.read_file()
         if full_df is None or full_df.empty:
-            dl.debug_print(f"Fileformat {self.file_extention} not supported!")
-            dl.debug_print("Canceling job")
+            dl.print_exception(f"Fileformat {self.file_extention} not supported!")
+            dl.print_exception("Canceling job")
             return
             
         # Drop rows with invalid timestamps

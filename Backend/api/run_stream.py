@@ -28,11 +28,18 @@ def run_stream(api: BackendAPI) -> dict:
     # Gather speedup factor
     speedup = int(input("Enter the speedup factor for the stream, as an integer value: "))
 
+    # Ask user if they want debug prints
+    debug = input("Enable debug prints (y/N): ")
+    if debug == "y" or debug == "Y":
+        debug = True
+    else:
+        debug = False
+
     # Ask user if they want to inject an anomalies
-    insert_anomaly = input("Do you want to insert anomalies? (y/n): ")
+    insert_anomaly = input("Do you want to insert anomalies? (y/N): ")
 
     inj_params = None
-    if insert_anomaly == "y":
+    if insert_anomaly == "y" or insert_anomaly == "Y":
         # Gather injection methods for anomalies
         response = api.get_injection_methods()
         injection_methods = json.loads(response)["injection_methods"]
@@ -54,6 +61,6 @@ def run_stream(api: BackendAPI) -> dict:
             "duration": duration,
             "columns": columns_string.split(',')
         }
-        api.run_stream(model, dataset, name, speedup, inj_params)
+        api.run_stream(model, dataset, name, speedup, debug, inj_params)
     else:
-        api.run_stream(model, dataset, name, speedup)
+        api.run_stream(model, dataset, name, speedup, debug)

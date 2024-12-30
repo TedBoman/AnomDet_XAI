@@ -95,6 +95,7 @@ def __handle_api_call(conn, data: dict) -> None:
             model = data["model"]
             dataset_path = DATASET_DIRECTORY + data["dataset"]
             name = data["name"]
+            debug = data["debug"]
 
             print(data)
 
@@ -108,7 +109,7 @@ def __handle_api_call(conn, data: dict) -> None:
                 "database": DATABASE["DATABASE"]
             }
             
-            new_thread = threading.Thread(target=execute_calls.run_batch, args=(db_conn_params, model, dataset_path, name, inj_params))
+            new_thread = threading.Thread(target=execute_calls.run_batch, args=(db_conn_params, model, dataset_path, name, inj_params, debug))
             new_thread.daemon = True
             new_thread.start()
 
@@ -125,6 +126,7 @@ def __handle_api_call(conn, data: dict) -> None:
             dataset_path = DATASET_DIRECTORY + data["dataset"]
             name = data["name"]
             speedup = data["speedup"]
+            debug = data["debug"]
             
             inj_params = data.get("inj_params", None)
             
@@ -136,7 +138,7 @@ def __handle_api_call(conn, data: dict) -> None:
                 "database": DATABASE["DATABASE"]
             }
 
-            new_thread = threading.Thread(target=execute_calls.run_stream, args=(db_conn_params, model, dataset_path, name, speedup, inj_params))
+            new_thread = threading.Thread(target=execute_calls.run_stream, args=(db_conn_params, model, dataset_path, name, speedup, inj_params, debug))
             new_thread.daemon = True
             new_thread.start()
 

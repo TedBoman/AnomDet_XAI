@@ -23,7 +23,7 @@ INJECTION_METHOD_DIRECTORY = "./Simulator/AnomalyInjector/InjectionMethods"
 DATASET_DIRECTORY = "./Datasets"
 
 # Starts processing of dataset in one batch
-def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict=None) -> None:
+def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict=None, debug=False) -> None:
     print("Starting Batch-job!")
     sys.stdout.flush()
     
@@ -35,9 +35,9 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
         int(inj_params.get("percentage", None)),
         inj_params.get("columns", None),
         inj_params.get("duration", None)) 
-        batch_job = Job(filepath=path, anomaly_settings=[anomaly], simulation_type="batch", speedup=None, table_name=name)
+        batch_job = Job(filepath=path, anomaly_settings=[anomaly], simulation_type="batch", speedup=None, table_name=name, debug=debug)
     else:
-        batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name)
+        batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name, debug=debug)
     sim_engine = se()
     sim_engine.main(db_conn_params, batch_job)
 
@@ -69,7 +69,7 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
 """
 
 # Starts processing of dataset as a stream
-def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, inj_params: dict=None) -> None:
+def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, inj_params: dict=None, debug=False) -> None:
     print("Starting Stream-job!")
     sys.stdout.flush()
     if inj_params is not None:
@@ -81,10 +81,10 @@ def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, i
         inj_params.get("columns", None),
         inj_params.get("duration", None)) 
         print("Should inject anomaly.")
-        stream_job = Job(filepath=path, anomaly_settings=[anomaly], simulation_type="stream", speedup=speedup, table_name=name)
+        stream_job = Job(filepath=path, anomaly_settings=[anomaly], simulation_type="stream", speedup=speedup, table_name=name, debug=debug)
     else:
         print("Should not inject anomaly.")
-        stream_job = Job(filepath=path, simulation_type="stream", speedup=speedup, table_name=name)
+        stream_job = Job(filepath=path, simulation_type="stream", speedup=speedup, table_name=name, debug=debug)
 
     sim_engine = se()
     sim_engine.main(db_conn_params, stream_job)

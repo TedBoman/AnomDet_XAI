@@ -89,18 +89,18 @@ class TimeSeriesAnomalyInjector:
                                     dl.debug_print(f"Anomaly flags after injection:\n{modified_data.loc[anomaly_indices, 'injected_anomaly']}")
                                     
                                 except Exception as e:
-                                    dl.debug_print(f"Error during anomaly application for column {column}: {e}")
+                                    dl.print_exception(f"Error during anomaly application for column {column}: {e}")
                                     
                         except Exception as e:
-                            dl.debug_print(f"Error processing column {column}: {e}")
+                            dl.print_exception(f"Error processing column {column}: {e}")
                             
                 except Exception as e:
-                    dl.debug_print(f"Error processing anomaly setting: {e}")
+                    dl.print_exception(f"Error processing anomaly setting: {e}")
 
             return modified_data
         
         except Exception as e:
-            dl.debug_print(f"Error in inject_anomaly: {e}")
+            dl.print_exception(f"Error in inject_anomaly: {e}")
             return data
 
     def _apply_anomaly(self, data, data_range, rng, mean, settings: AnomalySetting):
@@ -143,5 +143,5 @@ class TimeSeriesAnomalyInjector:
 
             return data
         except Exception as e:
-            dl.debug_print(f"Error in _apply_anomaly: {e}")
+            dl.print_exception(f"Error in _apply_anomaly: {e}")
             return data

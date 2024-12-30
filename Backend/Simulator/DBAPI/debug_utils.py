@@ -1,3 +1,4 @@
+import sys
 class DebugLogger:
     _debug = False  # Class variable shared across all instances
 
@@ -9,5 +10,9 @@ class DebugLogger:
     def debug_print(cls, *args, **kwargs):
         if cls._debug:
             print(*args, **kwargs)
-            import sys
             sys.stdout.flush()
+    
+    @classmethod
+    def print_exception(cls, *args, **kwargs):
+        print(*args, **kwargs)
+        sys.stdout.flush()

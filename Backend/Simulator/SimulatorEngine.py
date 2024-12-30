@@ -2,6 +2,7 @@
 
 # Third-Party
 from pathlib import Path
+import sys
 import pandas as pd
 import os
 
@@ -19,7 +20,8 @@ class SimulatorEngine:
         dl.debug_print("Starting to process file!")
         match simulation_type:
             case "stream":
-                dl.debug_print("Starting stream job...")
+                print("Starting stream job...")
+                sys.stdout.flush()
                 try:
                     file_extension = Path(file_path).suffix
                     sim = Simulator(file_path, file_extension, start_time, x_speedup=speedup)
@@ -27,18 +29,22 @@ class SimulatorEngine:
                         case ".csv":
                             sim.start_simulation(conn_params, anomaly_settings, table_name)
                 except Exception as e:
-                    dl.debug_print(f"Error: {e}")
+                    dl.print_exception(f"Error: {e}")
             case "batch":
-                dl.debug_print("Starting batch job...")
-                file_extension = Path(file_path).suffix
-                sim = BatchImporter(file_path, file_extension, start_time, 5)
-                match file_extension:
-                    case ".csv":
-                        sim.start_simulation(conn_params, anomaly_settings, table_name)
+                print("Starting batch job...")
+                sys.stdout.flush()
+                try:
+                    file_extension = Path(file_path).suffix
+                    sim = BatchImporter(file_path, file_extension, start_time, 5)
+                    match file_extension:
+                        case ".csv":
+                            sim.start_simulation(conn_params, anomaly_settings, table_name)
+                except Exception as e:
+                    dl.print_exception(f"Error: {e}")
 
-    def main(self, db_conn_params, job, debug=True):
+    def main(self, db_conn_params, job):
         # Set debug mode once for all files
-        dl.set_debug(debug)  # or False to disable debug prints
+        dl.set_debug(job.debug)  # or False to disable debug prints
 
         # Check if the path exists
         if os.path.isfile(job.filepath):
