@@ -13,6 +13,7 @@ from Simulator.AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
 import Simulator.DBAPI.utils as ut
 from Simulator.DBAPI.debug_utils import DebugLogger as dl
 from Simulator.FileFormats.read_csv import read_csv
+from Simulator.FileFormats.read_json import read_json
 
 class Simulator:
     """
@@ -139,9 +140,13 @@ class Simulator:
         """
         dl.debug_print("Stream job has been started!")
         
-        # Get column names from the first row of the CSV file
-        with open(self.file_path, 'r') as f:
-            columns = f.readline().strip().split(',')
+        full_df = self.read_file()
+        if full_df is None or full_df.empty:
+            dl.debug_print(f"Fileformat {self.file_extention} not supported!")
+            dl.debug_print("Canceling job")
+            return
+        
+        columns = list(full_df.columns.values)
         
         table_name = self.create_table(conn_params, Path(self.file_path).stem if table_name is None else table_name, columns)
 
@@ -149,12 +154,6 @@ class Simulator:
             dl.debug_print("Table could not be created!")
         else:
             dl.debug_print(f"Table {table_name} created!")
-
-        full_df = self.read_file()
-        if full_df is None or full_df.empty:
-            dl.debug_print(f"Fileformat {self.file_extention} not supported!")
-            dl.debug_print("Canceling job")
-            return
 
         # Preprocess anomaly settings to convert timestamps to absolute times
         if anomaly_settings:
@@ -219,13 +218,20 @@ class Simulator:
             pd.DataFrame: DataFrame containing the data from the file, or None 
                          if the file format is not supported.
         """
-        match self.file_extention:
-            case '.csv':
-                # File is a CSV file. Return a dataframe containing it.
-                csv = read_csv(self.file_path)
-                full_df = csv.filetype_csv()
-                return full_df
-            # Add more fileformats here
-            case _:
-                # Fileformat not supported
-                return None
+        try:
+            match self.file_extention:
+                case '.csv':
+                    # File is a CSV file. Return a dataframe containing it.
+                    csv = read_csv(self.file_path)
+                    full_df = csv.filetype_csv()
+                    return full_df
+                case '.json':
+                    json = read_json(self.file_path)
+                    full_df = json.filetype_json()
+                    return full_df
+                # Add more fileformats here
+                case _:
+                    # Fileformat not supported
+                    return None
+        except Exception as e:
+            print(f"Error: {e}")

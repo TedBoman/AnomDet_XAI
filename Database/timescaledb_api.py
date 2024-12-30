@@ -60,6 +60,9 @@ class TimescaleDBAPI(DBInterface):
             columns[i] = f'\"{columns[i]}\" VARCHAR(50)'
         columns = columns + ["is_anomaly BOOLEAN"] + ["injected_anomaly BOOLEAN"]
 
+        for column in columns:
+            print(column)
+
         try: 
             conn = psycopg2.connect(self.connection_string)                         # Connect to the database
             cursor = conn.cursor()

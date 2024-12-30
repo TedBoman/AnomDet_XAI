@@ -14,6 +14,7 @@ from Simulator.AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
 import Simulator.DBAPI.utils as ut
 from Simulator.DBAPI.debug_utils import DebugLogger as dl
 from Simulator.FileFormats.read_csv import read_csv
+from Simulator.FileFormats.read_json import read_json
 
 class BatchImporter:
     """
@@ -167,11 +168,6 @@ class BatchImporter:
         num_processes = mp.cpu_count()
         pool = mp.Pool(processes=num_processes)
 
-        with open(self.file_path, 'r') as f:
-            columns = f.readline().strip().split(',')
-
-        table_name = self.create_table(conn_params, Path(self.file_path).stem if table_name is None else table_name, columns)
-
         dl.debug_print(self.file_path)
         dl.debug_print(self.chunksize)
         dl.debug_print(self.start_time)
@@ -192,6 +188,10 @@ class BatchImporter:
             dl.print_exception(f"Fileformat {self.file_extention} not supported!")
             dl.print_exception("Canceling job")
             return
+        
+        columns = list(full_df.columns.values)
+        
+        table_name = self.create_table(conn_params, Path(self.file_path).stem if table_name is None else table_name, columns)
             
         # Drop rows with invalid timestamps
         full_df = full_df.dropna(subset=[full_df.columns[0]])
@@ -241,14 +241,20 @@ class BatchImporter:
             pd.DataFrame: DataFrame containing the data from the file, or None 
                          if the file format is not supported.
         """
-        match self.file_extention:
-            case '.csv':
-                # File is a CSV file. Return a dataframe containing it.
-                csv = read_csv(self.file_path)
-                full_df = csv.filetype_csv()
-                return full_df
-            # Add more fileformats here
-            case _:
-                # Fileformat not supported
-                return None
-            
+        try:
+            match self.file_extention:
+                case '.csv':
+                    # File is a CSV file. Return a dataframe containing it.
+                    csv = read_csv(self.file_path)
+                    full_df = csv.filetype_csv()
+                    return full_df
+                case '.json':
+                    json = read_json(self.file_path)
+                    full_df = json.filetype_json()
+                    return full_df
+                # Add more fileformats here
+                case _:
+                    # Fileformat not supported
+                    return None
+        except Exception as e:
+            print(f"Error: {e}")

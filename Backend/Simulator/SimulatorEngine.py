@@ -25,9 +25,7 @@ class SimulatorEngine:
                 try:
                     file_extension = Path(file_path).suffix
                     sim = Simulator(file_path, file_extension, start_time, x_speedup=speedup)
-                    match file_extension:
-                        case ".csv":
-                            sim.start_simulation(conn_params, anomaly_settings, table_name)
+                    sim.start_simulation(conn_params, anomaly_settings, table_name)
                 except Exception as e:
                     dl.print_exception(f"Error: {e}")
             case "batch":
@@ -36,9 +34,7 @@ class SimulatorEngine:
                 try:
                     file_extension = Path(file_path).suffix
                     sim = BatchImporter(file_path, file_extension, start_time, 5)
-                    match file_extension:
-                        case ".csv":
-                            sim.start_simulation(conn_params, anomaly_settings, table_name)
+                    sim.start_simulation(conn_params, anomaly_settings, table_name)
                 except Exception as e:
                     dl.print_exception(f"Error: {e}")
 
@@ -65,4 +61,3 @@ class SimulatorEngine:
             else:
 
                 self.process_file(job.filepath, db_conn_params, job.simulation_type, job.anomaly_settings, pd.to_timedelta(0), job.speedup, job.table_name if job.table_name else None)
-

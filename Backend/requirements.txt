@@ -6,3 +6,5 @@ python-dotenv==1.0.0
 keras
 tensorflow
 scikit-learn
+openpyxl
+xlrd
