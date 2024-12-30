@@ -8,10 +8,13 @@ import datetime
 import numpy as np
 import pandas as pd
 
-from Simulator.DBAPI.db_interface import DBInterface as db
+#from Simulator.DBAPI.db_interface import DBInterface as db
+from timescaledb_api import TimescaleDBAPI as db
 from Simulator.AnomalyInjector.anomalyinjector import TimeSeriesAnomalyInjector
 import Simulator.DBAPI.utils as ut
+from Simulator.DBAPI.debug_utils import DebugLogger as dl
 from Simulator.FileFormats.read_csv import read_csv
+from Simulator.FileFormats.read_json import read_json
 
 class BatchImporter:
     """
@@ -50,7 +53,7 @@ class BatchImporter:
             else:
                 time = 3
                 while time > 0:
-                    print("Retrying in: {time}s")
+                    dl.debug_print("Retrying in: {time}s")
                     t.sleep(1)
         return None
 
@@ -78,18 +81,15 @@ class BatchImporter:
                 db_instance.create_table(new_table_name, columns)
                 return new_table_name
             except psycopg2.errors.DuplicateTable:  # Catch the specific exception
-                db_instance.conn.rollback()
                 i += 1
                 new_table_name = f"{tb_name}_{i}"
             except (psycopg2.errors.OperationalError, 
                     psycopg2.errors.ProgrammingError) as e:
                 # Handle or log other database-related errors
-                db_instance.conn.rollback()
-                print(f"Database error creating table: {e}")
+                dl.print_exception(f"Database error creating table: {e}")
                 raise  # Or re-raise if you want to stop execution
             except Exception as e:  # Catch other unexpected errors
-                db_instance.conn.rollback()
-                print(f"Unexpected error creating table: {e}")
+                dl.print_exception(f"Unexpected error creating table: {e}")
                 raise
 
     def process_chunk(self, conn_params, table_name, chunk):
@@ -115,7 +115,7 @@ class BatchImporter:
                 # If that fails, try converting through datetime
                 chunk['timestamp'] = pd.to_datetime(chunk['timestamp'])
         db_instance = self.init_db(conn_params)
-        db_instance.insert_data(table_name, chunk)
+        db_instance.insert_data_no_helper(table_name, chunk)
 
     def inject_anomalies_into_chunk(self, chunk, anomaly_settings):
         """
@@ -143,15 +143,15 @@ class BatchImporter:
                 # Check if the chunk overlaps with the anomaly's time range
                 if (chunk_start_time <= anomaly_end) and (chunk_end_time >= anomaly_start):
                     # Inject anomalies
-                    print("Anomaly within chunk!")
-                    sys.stdout.flush()
+                    dl.debug_print("Anomaly within chunk!")
+                    
                     chunk = injector.inject_anomaly(chunk, setting)
-                    print(chunk)
+                    dl.debug_print(chunk)
                 
             return chunk
 
         except Exception as e:
-            print(f"Error injecting anomalies into chunk: {e}")
+            dl.print_exception(f"Error injecting anomalies into chunk: {e}")
             return chunk
 
     def start_simulation(self, conn_params, anomaly_settings=None, table_name=None):
@@ -168,16 +168,10 @@ class BatchImporter:
         num_processes = mp.cpu_count()
         pool = mp.Pool(processes=num_processes)
 
-        with open(self.file_path, 'r') as f:
-            columns = f.readline().strip().split(',')
-
-        table_name = self.create_table(conn_params, Path(self.file_path).stem if table_name is None else table_name, columns)
-
-        print(self.file_path)
-        print(self.chunksize)
-        print(self.start_time)
-        print("Starting to insert!")
-        sys.stdout.flush()
+        dl.debug_print(self.file_path)
+        dl.debug_print(self.chunksize)
+        dl.debug_print(self.start_time)
+        dl.debug_print("Starting to insert!")
 
         # Preprocess anomaly settings to convert timestamps to absolute times
         if anomaly_settings:
@@ -191,15 +185,18 @@ class BatchImporter:
 
         full_df = self.read_file()
         if full_df is None or full_df.empty:
-            print(f"Fileformat {self.file_extention} not supported!")
-            print("Canceling job")
-            sys.stdout.flush()
+            dl.print_exception(f"Fileformat {self.file_extention} not supported!")
+            dl.print_exception("Canceling job")
             return
+        
+        columns = list(full_df.columns.values)
+        
+        table_name = self.create_table(conn_params, Path(self.file_path).stem if table_name is None else table_name, columns)
             
         # Drop rows with invalid timestamps
         full_df = full_df.dropna(subset=[full_df.columns[0]])
 
-        print(full_df.head())  # Inspect the parsed DataFrame
+        dl.debug_print(full_df.head())  # Inspect the parsed DataFrame
 
         # Set the chunksize to the number of rows in the file / cpu cores available
         self.chunksize = len(full_df.index) / num_processes
@@ -233,8 +230,8 @@ class BatchImporter:
         for result in results:
             result.get()  # This will raise any exceptions that occurred in the process
 
-        print("Inserting done!")
-        sys.stdout.flush()
+        dl.debug_print("Inserting done!")
+        
 
     def read_file(self):
         """
@@ -244,13 +241,20 @@ class BatchImporter:
             pd.DataFrame: DataFrame containing the data from the file, or None 
                          if the file format is not supported.
         """
-        match self.file_extention:
-            case '.csv':
-                # File is a CSV file. Return a dataframe containing it.
-                csv = read_csv(self.file_path)
-                full_df = csv.filetype_csv()
-                return full_df
-            # Add more fileformats here
-            case _:
-                # Fileformat not supported
-                return None
+        try:
+            match self.file_extention:
+                case '.csv':
+                    # File is a CSV file. Return a dataframe containing it.
+                    csv = read_csv(self.file_path)
+                    full_df = csv.filetype_csv()
+                    return full_df
+                case '.json':
+                    json = read_json(self.file_path)
+                    full_df = json.filetype_json()
+                    return full_df
+                # Add more fileformats here
+                case _:
+                    # Fileformat not supported
+                    return None
+        except Exception as e:
+            print(f"Error: {e}")
