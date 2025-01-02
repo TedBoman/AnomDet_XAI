@@ -18,10 +18,6 @@ class TimescaleDBAPI(DBInterface):
         database = conn_params["database"]
     
         self.connection_string = f'postgres://{user}:{password}@{host}:{port}/{database}'
-
-    # Helper function to convert a timestamp from epoch to a datetime object
-    def __add_to_timestamp(self, x: str):
-        return datetime.fromtimestamp(x)
     
     # Creates a hypertable called table_name with column-names columns copied from dataset
     # Also adds columns is_anomaly and injected_anomaly
