@@ -1,8 +1,10 @@
+import numpy as np
 from db_interface import DBInterface
 import pandas as pd
 from datetime import datetime
 import psycopg2
 import psycopg2.extras as extras
+from psycopg2.extras import execute_values
 import multiprocessing as mp
 from time import sleep
 
@@ -58,18 +60,26 @@ class TimescaleDBAPI(DBInterface):
             columns[i] = f'\"{columns[i]}\" VARCHAR(50)'
         columns = columns + ["is_anomaly BOOLEAN"] + ["injected_anomaly BOOLEAN"]
 
+        for column in columns:
+            print(column)
+
         try: 
             conn = psycopg2.connect(self.connection_string)                         # Connect to the database
             cursor = conn.cursor()
             
-            query_create_table = f'CREATE TABLE {table_name} ({",".join(columns)});'# Create query for creating a relational tabel
-            
-            print("Creating table")
-            cursor.execute(query_create_table)                                      # Exectute the query, creating a table in the database
+            query_create_table = f'CREATE TABLE "{table_name}" ({",".join(columns)});'
+            cursor.execute(query_create_table)
+        
+            # Make the table a hypertable partitioned by timestamp
+            query_create_hypertable = f'SELECT create_hypertable(\'{table_name}\', \'timestamp\');'
+            cursor.execute(query_create_hypertable)
+
             conn.commit()
+                
         except Exception as error:
             print("Error: %s" % error)
             conn.close() 
+            return None
         finally:
             conn.close()
 
@@ -122,6 +132,34 @@ class TimescaleDBAPI(DBInterface):
 
         except Exception as error:
             print("Error: %s" % error)
+
+    def insert_data_no_helper(self, table_name: str, data: pd.DataFrame):
+        """
+        Inserts data into the specified table and sets the "injected_anomaly" column.
+
+        Args:
+            table_name: The name of the table.
+            data: The DataFrame containing the data to insert.
+            isAnomaly: A boolean indicating whether the data has been injected with an anomaly.
+        """
+        conn = psycopg2.connect(self.connection_string) # Connect to the database
+        cursor = conn.cursor()
+        with conn.cursor() as cur:
+            # Add "injected_anomaly" to the columns
+            columns = ', '.join([f'"{col}"' for col in data.columns])  
+            query = f"INSERT INTO \"{table_name}\" ({columns}) VALUES %s"
+
+            try:
+                # Convert DataFrame to list of tuples, with type conversion and anomaly flag
+                values = [tuple(
+                    float(x) if isinstance(x, (np.float64, np.float32)) else x
+                    for x in row
+                ) for row in data.values]
+
+                execute_values(cur, query, values)
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
     
     # Reads each row of data in the table table_name that has a timestamp greater than or equal to time
     def read_data(self, table_name: str, time: datetime):
@@ -156,6 +194,7 @@ class TimescaleDBAPI(DBInterface):
 
     # Checks if the table_name table exists in the database
     def table_exists(self, table_name: str) -> bool:
+        result = []
         try:
             conn = psycopg2.connect(self.connection_string)
             cursor = conn.cursor()
@@ -166,9 +205,9 @@ class TimescaleDBAPI(DBInterface):
             result = cursor.fetchall()
         except Exception as error:
             print("Error: %s" % error)
-            conn.close()
+            #conn.close()
         finally:
-            conn.close()
+            #conn.close()
             if len(result) > 0:
                 return True
             else:

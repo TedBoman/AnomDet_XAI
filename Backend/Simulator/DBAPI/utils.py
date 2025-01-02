@@ -1,6 +1,7 @@
 from datetime import timedelta
 import datetime
 import re
+import sys
 
 def parse_duration(duration_str):
         """
@@ -49,7 +50,7 @@ def parse_duration(duration_str):
             else:
                 raise ValueError(f"Invalid unit: {unit}")
 
-        return timedelta(total_seconds)
+        return timedelta(seconds=total_seconds)
 
 def parse_duration_seconds(duration_str):
         """

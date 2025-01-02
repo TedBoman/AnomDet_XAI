@@ -28,10 +28,18 @@ def run_stream(api: BackendAPI) -> dict:
     # Gather speedup factor
     speedup = int(input("Enter the speedup factor for the stream, as an integer value: "))
 
-    # Ask user if they want to inject an anomalies
-    insert_anomaly = input("Do you want to insert anomalies? (y/n): ")
+    # Ask user if they want debug prints
+    debug = input("Enable debug prints (y/N): ")
+    if debug == "y" or debug == "Y":
+        debug = True
+    else:
+        debug = False
 
-    if insert_anomaly == "y":
+    # Ask user if they want to inject an anomalies
+    insert_anomaly = input("Do you want to insert anomalies? (y/N): ")
+
+    inj_params = None
+    if insert_anomaly == "y" or insert_anomaly == "Y":
         # Gather injection methods for anomalies
         response = api.get_injection_methods()
         injection_methods = json.loads(response)["injection_methods"]
@@ -42,17 +50,17 @@ def run_stream(api: BackendAPI) -> dict:
 
         timestamp = input("Enter the timestamp to start anomaly: ")
         magnitude = input("Enter the magnitude of the anomaly: ")
-        percentage = input("Enter the percentage of data: ")
-        duration = input("Enter the duration of the anomalies: ")
+        duration = input("Enter a duration (e.g., '30s', '1H', '30min', '2D', '1h30m', '2days 5hours') or leave empty for a point anomaly: ")
+        percentage = input("Enter the percentage of data (during the duration, this percentage of points will be an anomaly): ")
         columns_string = input("Enter the columns to inject anomalies into, as a comma separated list (a,b,c,d,...): ")
         inj_params = {
-            "anomaly_type": anomaly_type,
+            "anomaly_type": injection_method,
             "timestamp": timestamp,
             "magnitude": magnitude,
             "percentage": percentage,
             "duration": duration,
             "columns": columns_string.split(',')
         }
-        api.run_stream(model, dataset, name, speedup, inj_params)
+        api.run_stream(model, dataset, name, speedup, debug, inj_params)
     else:
-        api.run_stream(model, dataset, name, speedup)
+        api.run_stream(model, dataset, name, speedup, debug)

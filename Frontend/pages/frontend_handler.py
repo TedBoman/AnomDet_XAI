@@ -1,6 +1,14 @@
-from api import BackendAPI
-from dotenv import load_dotenv
+import sys
 import os
+from dotenv import load_dotenv
+# Backend içindeki api klasörüne giden yolu ekleyin
+backend_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..', '..', 'Backend', 'api')
+)
+sys.path.append(backend_path)
+
+# Artık Backend/api içindeki api.py dosyasından BackendAPI'yi import edebiliriz
+from api import BackendAPI
 
 class FrontendHandler:
     def __init(self, host, port):
