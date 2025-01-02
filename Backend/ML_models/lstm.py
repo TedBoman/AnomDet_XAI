@@ -38,6 +38,7 @@ class LSTMModel(model_interface.ModelInterface):
             self.model.add(layers.Dropout(rate=0.2))
             self.model.add(layers.TimeDistributed(keras.layers.Dense(1)))
 
+
             self.model.compile(loss='mae', optimizer='adam')
 
             self.model.fit(
@@ -67,6 +68,7 @@ class LSTMModel(model_interface.ModelInterface):
 
             X_pred = self.model.predict(X_test)
             mae_loss = np.mean(np.abs(X_pred - X_test), axis=1)
+            print(mae_loss)
             threshold = np.mean(mae_loss) + 3 * np.std(mae_loss)
             boolean_anomalies = mae_loss > threshold
             boolean_anomalies = boolean_anomalies[:,0]
