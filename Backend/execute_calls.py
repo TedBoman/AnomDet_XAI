@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import os
 from socket import socket
+from ML_models import get_model
 
 # Third-Party
 import threading
@@ -27,6 +28,11 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     print("Starting Batch-job!")
     sys.stdout.flush()
     
+
+    model_instance = get_model(model)
+
+
+
     if inj_params is not None:
         anomaly = AnomalySetting(
         inj_params.get("anomaly_type", None),
