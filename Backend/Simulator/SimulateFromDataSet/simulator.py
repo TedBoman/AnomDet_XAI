@@ -126,7 +126,7 @@ class Simulator:
                         dl.debug_print(df)
 
         db_instance = self.init_db(conn_params)
-        db_instance.insert_data_no_helper(table_name, df)
+        db_instance.insert_data(table_name, df)
         dl.debug_print("Inserted row.")
 
     def start_simulation(self, conn_params, anomaly_settings=None, table_name=None):
