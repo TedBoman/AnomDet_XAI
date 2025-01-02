@@ -162,7 +162,7 @@ class TimescaleDBAPI(DBInterface):
                 conn.rollback()
     
     # Reads each row of data in the table table_name that has a timestamp greater than or equal to time
-    def read_data(self, table_name: str, time: datetime):
+    def read_data(self, table_name: str, time: datetime) -> pd.DataFrame:
         # Assuming the docker container is started, connect to the database
         try:
             conn = psycopg2.connect(self.connection_string)
@@ -170,13 +170,18 @@ class TimescaleDBAPI(DBInterface):
 
             query = f'SELECT * FROM {table_name} LIMIT 15;'
             cursor.execute(query)
-            for row in cursor.fetchall():
-                print(row)
+
+            data = cursor.fetchall()
+            
+            df = pd.DataFrame(data)
+            df.columns = [desc[0] for desc in cursor.description]
+
         except Exception as error:
             print("Error: %s" % error)
             conn.close()
         finally:
             conn.close()
+            return df
 
     # Deletes the table_name table along with all its data
     def drop_table(self, table_name: str) -> None:
