@@ -5,6 +5,9 @@ import pandas as pd
 import numpy as np
 import os
 from socket import socket
+from ML_models import get_model
+from timescaledb_api import TimescaleDBAPI
+from datetime import datetime, timezone
 
 # Third-Party
 import threading
@@ -27,7 +30,13 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     print("Starting Batch-job!")
     sys.stdout.flush()
     
+    model_instance = get_model(model)
+    df = pd.read_csv(path)
+    model_instance.run(df)
+
+
     if inj_params is not None:
+        inj: bool = True 
         anomaly = AnomalySetting(
         inj_params.get("anomaly_type", None),
         int(inj_params.get("timestamp", None)),
@@ -36,10 +45,31 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
         inj_params.get("columns", None),
         inj_params.get("duration", None)) 
         batch_job = Job(filepath=path, anomaly_settings=[anomaly], simulation_type="batch", speedup=None, table_name=name, debug=debug)
+        
     else:
         batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name, debug=debug)
     sim_engine = se()
     sim_engine.main(db_conn_params, batch_job)
+
+    if inj:
+        
+        api = TimescaleDBAPI(db_conn_params)
+        df = api.read_data(name, datetime.fromtimestamp(0, timezone.utc))
+
+    res = model_instance.detect(df)
+    
+    if df["is_anomaly"] is not None:
+        print("Den har blivit updatterad")
+    
+    #df["is_anomaly"] = res
+    
+   
+    
+
+        
+
+
+
 
 """
     #Removing the "is_injected" & "is_anomaly" columns

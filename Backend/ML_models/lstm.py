@@ -17,7 +17,7 @@ class LSTMModel(model_interface.ModelInterface):
         self.model = Sequential()
 
     #Preprocesses, trains and fits the model
-    def run(self, df, time_steps=2880):
+    def run(self, df, time_steps=1):
         train_size = int(len(df) * 0.5)
         self.time_steps = time_steps
 
@@ -29,7 +29,7 @@ class LSTMModel(model_interface.ModelInterface):
 
             train.iloc[:, 1:] = scaler.transform(train.iloc[:, 1:])
 
-            X_train, y_train = self.__create_dataset(train.iloc[:, 1:], train.iloc[:, 0], 30)
+            X_train, y_train = self.__create_dataset(train.iloc[:, 1:], train.iloc[:, 0])
 
             self.model.add(layers.LSTM(units=64, input_shape=(X_train.shape[1], X_train.shape[2])))
             self.model.add(layers.Dropout(rate=0.2))
@@ -52,7 +52,7 @@ class LSTMModel(model_interface.ModelInterface):
             print(f'ERROR: {e}')
 
     #Creates the X_train and y_train datasets
-    def __create_dataset(self, X, y, time_steps):
+    def __create_dataset(self, X, y, time_steps=1):
         Xs, ys = [], []
         for i in range(len(X) - time_steps):
             v = X.iloc[i: (i + time_steps)].values
@@ -64,7 +64,7 @@ class LSTMModel(model_interface.ModelInterface):
     #Detects anomalies and returns a list of boolean values that can be mapped to the original dataset
     def detect(self, detection_df):
         try:
-            X_test, _ = self.__create_dataset(detection_df.iloc[:, 1:], detection_df.iloc[:, 0], 30)
+            X_test, _ = self.__create_dataset(detection_df.iloc[:, 1:], detection_df.iloc[:, 0])
 
             X_pred = self.model.predict(X_test)
             mae_loss = np.mean(np.abs(X_pred - X_test), axis=1)
