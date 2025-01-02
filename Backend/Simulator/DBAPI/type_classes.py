@@ -14,9 +14,10 @@ class AnomalySetting:
         self.mean = mean
 
 class Job:
-    def __init__(self, filepath: str, simulation_type,speedup: int = None, anomaly_settings: List[AnomalySetting] = None, table_name: str = None):
+    def __init__(self, filepath: str, simulation_type,speedup: int = None, anomaly_settings: List[AnomalySetting] = None, table_name: str = None, debug=False):
         self.filepath = filepath
         self.anomaly_settings = anomaly_settings
         self.simulation_type = simulation_type
         self.speedup = speedup
         self.table_name = table_name
+        self.debug = debug

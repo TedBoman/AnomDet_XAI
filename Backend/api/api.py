@@ -10,12 +10,13 @@ class BackendAPI:
         self.port = port
 
     # Sends a request to the backend to start a batch job
-    def run_batch(self, model: str, dataset: str, name: str, inj_params: dict=None) -> None:
+    def run_batch(self, model: str, dataset: str, name: str, debug=False, inj_params: dict=None) -> None:
         data = {
             "METHOD": "run-batch",
             "model": model,
             "dataset": dataset,
-            "name": name
+            "name": name,
+            "debug": debug
         }
         if inj_params:
             data["inj_params"] = inj_params
@@ -23,13 +24,14 @@ class BackendAPI:
         self.__send_data(data, response=False)
 
     # Sends a request to the backend to start a stream job
-    def run_stream(self, model: str,dataset: str, name: str, speedup: int, inj_params: dict=None) -> None:
+    def run_stream(self, model: str,dataset: str, name: str, speedup: int, debug=False, inj_params: dict=None) -> None:
         data = {
             "METHOD": "run-stream",
             "model": model,
             "dataset": dataset,
             "name": name,
-            "speedup": speedup
+            "speedup": speedup,
+            "debug" : debug
         }
         if inj_params:
             data["inj_params"] = inj_params

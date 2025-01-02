@@ -25,6 +25,13 @@ def run_batch(api: BackendAPI) -> dict:
     if name in jobs:
         name = input("Name already in use, please enter a new name: ")
         
+    # Ask user if they want debug prints
+    debug = input("Enable debug prints (y/N): ")
+    if debug == "y" or debug == "Y":
+        debug = True
+    else:
+        debug = False
+
     # Ask user if they want to inject an anomalies
     insert_anomaly = input("Do you want to insert anomalies? (y/n): ")
 
@@ -51,6 +58,6 @@ def run_batch(api: BackendAPI) -> dict:
             "duration": duration,
             "columns": columns_string.split(',')
         }
-        api.run_batch(model, dataset, name, inj_params)
+        api.run_stream(model, dataset, name, debug, inj_params)
     else:
-        api.run_batch(model, dataset, name)
+        api.run_stream(model, dataset, name, debug)
