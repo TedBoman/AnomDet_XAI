@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import os
 from socket import socket
-from ML_models import get_model
+from ML_models.get_model import get_model
 from timescaledb_api import TimescaleDBAPI
 from datetime import datetime, timezone
 
@@ -34,9 +34,11 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     df = pd.read_csv(path)
     model_instance.run(df)
 
+    inj: bool = False
+
 
     if inj_params is not None:
-        inj: bool = True 
+        inj = True 
         anomaly = AnomalySetting(
         inj_params.get("anomaly_type", None),
         int(inj_params.get("timestamp", None)),
@@ -52,16 +54,17 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     sim_engine.main(db_conn_params, batch_job)
 
     if inj:
-        
         api = TimescaleDBAPI(db_conn_params)
-        df = api.read_data(name, datetime.fromtimestamp(0, timezone.utc))
+        test_df = api.read_data(name, datetime.fromtimestamp(0, timezone.utc))
+    else:
+        test_df = df.iloc[:, :-2]
 
-    res = model_instance.detect(df)
+    res = model_instance.detect(test_df)
     
+    df["is_anomaly"] = res
+
     if df["is_anomaly"] is not None:
         print("Den har blivit updatterad")
-    
-    #df["is_anomaly"] = res
     
    
     

@@ -1,6 +1,6 @@
-import isolation_forest
-import lstm 
-import svm
+from ML_models import isolation_forest
+from ML_models import lstm 
+from ML_models import svm
 
 def get_model(model):
     match model:
