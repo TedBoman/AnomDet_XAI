@@ -39,7 +39,7 @@ start_time = time.time()
 api.insert_data("test", df)                                          # Insert the data into the database
 print(f"Time to insert data: {time.time() - start_time}")
 
-df = api.read_data("test", datetime.fromtimestamp(0))                # Read the data from the database
+df = api.read_data("test", datetime.fromtimestamp(150))                # Read the data from the database
 print(df)
 
 api.drop_table("test")                                               # Drop the table from the database

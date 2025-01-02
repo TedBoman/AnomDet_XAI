@@ -168,20 +168,19 @@ class TimescaleDBAPI(DBInterface):
             conn = psycopg2.connect(self.connection_string)
             cursor = conn.cursor()
 
-            query = f'SELECT * FROM {table_name} LIMIT 15;'
+            query = f'SELECT * FROM {table_name} WHERE timestamp >= \'{time}\';'
             cursor.execute(query)
 
             data = cursor.fetchall()
             
             df = pd.DataFrame(data)
             df.columns = [desc[0] for desc in cursor.description]
-
+            conn.close()
+            return df
         except Exception as error:
             print("Error: %s" % error)
             conn.close()
-        finally:
-            conn.close()
-            return df
+            
 
     # Deletes the table_name table along with all its data
     def drop_table(self, table_name: str) -> None:

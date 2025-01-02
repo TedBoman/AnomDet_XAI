@@ -23,7 +23,7 @@ changes the model used for anomaly detection for the currently run batch named <
 changes the injection method used for anomaly detection for the currently run batch named <name> to <injection-method>
 
 "python api.py get-data <timestamp> <name>"
-get all processed data from <name>, meaning just the data that has gone through our detection model. <timestamp> allows for filtering of data
+get all processed data from <name>, meaning just the data that has gone through our detection model. <timestamp> allows for filtering of data. <timestamp> is in seconds from epoch.
     
 "python api.py inject-anomaly <timestamps> <name>"    
 injects anomalies in the data set <name> if manual injection is enabled, <timestamps> is a comma separated list of timestamps in seconds from now to inject anomalies at. (python api.py inject-anomaly 10,20,30 system1 injects an anomaly at 10, 20 and 30 seconds from now)
@@ -93,7 +93,7 @@ def main(argv: list[str]) -> None:
         case "get-data":
             if (arg_len != 4):
                 handle_error(1, "Invalid number of arguments")
-            result = api.get_data(argv[2], argv[3])
+            result = api.get_data(datetime.fromtimestamp(argv[2]), argv[3])
         
         # Inject anomalies into a running job if the command is "inject-anomaly"
         case "inject-anomaly":
