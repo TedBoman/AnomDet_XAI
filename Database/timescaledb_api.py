@@ -158,3 +158,23 @@ class TimescaleDBAPI(DBInterface):
             columns.remove("injected_anomaly")
 
             return columns
+
+    # Updates rows of the table that have an anomaly detected
+    def update_anomalies(self, table_name: str, anomalies: pd.DataFrame) -> None:
+        arr = anomalies.to_numpy()
+    
+        try: 
+            conn = psycopg2.connect(self.connection_string)
+            cursor = conn.cursor()
+
+            query = f"UPDATE {table_name} SET is_anomaly = TRUE WHERE timestamp = %s;"
+
+            execute_values(cur, query, arr)
+            conn.commit()
+
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+
+        finally:
+            conn.close()

@@ -42,3 +42,7 @@ class DBInterface(ABC):
     @abstractmethod
     def get_columns(self, table_name: str) -> list[str]:
         pass
+    # Updates rows of the table that have an anomaly detected
+    @abstractmethod
+    def update_anomalies(self, table_name: str, anomalies: pd.DataFrame) -> None:
+        pass
