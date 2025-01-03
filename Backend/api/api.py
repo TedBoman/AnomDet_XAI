@@ -2,6 +2,7 @@ import os
 import socket
 import json
 from time import sleep
+from datetime import datetime
 
 class BackendAPI:
     # Constructor setting host adress and port for the the backend container
@@ -57,7 +58,7 @@ class BackendAPI:
         self.__send_data(data, response=False)
 
     # Requests each row of data of a running job from timestamp and forward
-    def get_data(self, timestamp: str, name: str) -> str:
+    def get_data(self, timestamp: datetime, name: str) -> str:
         data = {
             "METHOD": "get-data",
             "timestamp": timestamp,

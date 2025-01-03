@@ -18,36 +18,6 @@ class TimescaleDBAPI(DBInterface):
         database = conn_params["database"]
     
         self.connection_string = f'postgres://{user}:{password}@{host}:{port}/{database}'
-        self.chunk_size = 128   # The size of the chunks to split the data into when inserting into the database
-
-    # Helper function to convert a timestamp from epoch to a datetime object
-    def __add_to_timestamp(self, x: str):
-        return datetime.fromtimestamp(x)
-
-    # Helper function to insert data into the database
-    def __inserter(self, query, chunk):
-        try:
-            retry = 0
-
-            while retry < 5:
-                conn = psycopg2.connect(self.connection_string)     # Connect to the database
-                if conn:
-                    break
-                else:
-                    time = 3
-                    while time > 0:
-                        print("Retrying in: {time}s")
-                        sleep(1)
-                        time -= 1
-                retry += 1
-            extras.execute_values(conn.cursor(), query, chunk)
-            conn.commit()
-        except Exception as error:
-            print("Error: %s" % error)
-            conn.rollback()
-            conn.close()
-        finally:
-            conn.close()
     
     # Creates a hypertable called table_name with column-names columns copied from dataset
     # Also adds columns is_anomaly and injected_anomaly
@@ -83,57 +53,7 @@ class TimescaleDBAPI(DBInterface):
         finally:
             conn.close()
 
-    # Inserts data into the table_name table. The data is a pandas DataFrame with matching types and column names to the table
-    def insert_data(self, table_name: str, data: pd.DataFrame) -> None:
-        columns = data.columns.to_list()
-        cols = ', '.join([f'"{col}"' for col in columns])               # Create a string of the column names
-        query_insert_data = f"INSERT INTO \"{table_name}\" ({cols}) VALUES %s"
-        
-        data = data.astype(str)                                         # Convert all data to strings
-
-        first_column = data.columns[0]
-
-        # Convert the first column to a timestamp
-        data[first_column] = data[first_column].astype('int32')         
-        data[first_column] = data[first_column].apply(self.__add_to_timestamp)
-
-        tuples = [tuple(x) for x in data.to_numpy()]                    # Convert the dataframe to a list of tuples
-
-        try:
-
-            #length = len(tuples)
-            length = self.chunk_size
-
-            if length > self.chunk_size:                        # If the data is too large to insert at once, do multiple inserts
-                num_processes = mp.cpu_count()
-                pool = mp.Pool(processes=num_processes)
-                
-                results = []                                    # Create a list to store results from async processes
-                
-                print("Starting to insert!")
-                inserter = self.__inserter
-                print(inserter)
-                print(self.create_table)
-                # Insert the data in chunks                  
-                for chunk in [tuples[i:i + self.chunk_size] for i in range(0, length, self.chunk_size)]:
-                    result = pool.apply_async(inserter, args=(query_insert_data, chunk))
-                    results.append(result)
-
-                # Wait for all processes to finish
-                pool.close()
-                pool.join()
-
-
-                # Check if any of the processes failed
-                for result in results:
-                    result.get()
-            else:
-                self.__inserter(query_insert_data, tuples)
-
-        except Exception as error:
-            print("Error: %s" % error)
-
-    def insert_data_no_helper(self, table_name: str, data: pd.DataFrame):
+    def insert_data(self, table_name: str, data: pd.DataFrame):
         """
         Inserts data into the specified table and sets the "injected_anomaly" column.
 
@@ -162,21 +82,35 @@ class TimescaleDBAPI(DBInterface):
                 conn.rollback()
     
     # Reads each row of data in the table table_name that has a timestamp greater than or equal to time
-    def read_data(self, table_name: str, time: datetime):
+    def read_data(self, table_name: str, time: datetime) -> pd.DataFrame:
         # Assuming the docker container is started, connect to the database
         try:
             conn = psycopg2.connect(self.connection_string)
             cursor = conn.cursor()
 
-            query = f'SELECT * FROM {table_name} LIMIT 15;'
+            query = f'SELECT * FROM {table_name} WHERE timestamp >= \'{time}\';'
             cursor.execute(query)
-            for row in cursor.fetchall():
-                print(row)
+
+            data = cursor.fetchall()
+            conn.close()
+            
+            df = pd.DataFrame(data)
+            df.columns = [desc[0] for desc in cursor.description]
+
+            cols = df.columns.tolist()
+
+            cols.remove("is_anomaly")
+            cols.remove("injected_anomaly")
+            cols.remove("timestamp")
+            
+            for col in cols:
+                df[col] = df[col].astype(float)
+
+            return df
         except Exception as error:
             print("Error: %s" % error)
             conn.close()
-        finally:
-            conn.close()
+            
 
     # Deletes the table_name table along with all its data
     def drop_table(self, table_name: str) -> None:
@@ -234,3 +168,23 @@ class TimescaleDBAPI(DBInterface):
             columns.remove("injected_anomaly")
 
             return columns
+
+    # Updates rows of the table that have an anomaly detected
+    def update_anomalies(self, table_name: str, anomalies: pd.DataFrame) -> None:
+        arr = anomalies.to_numpy()
+    
+        try: 
+            conn = psycopg2.connect(self.connection_string)
+            cursor = conn.cursor()
+
+            query = f"UPDATE {table_name} SET is_anomaly = TRUE WHERE timestamp = %s;"
+
+            execute_values(cur, query, arr)
+            conn.commit()
+
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+
+        finally:
+            conn.close()

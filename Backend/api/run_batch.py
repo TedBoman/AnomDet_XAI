@@ -58,6 +58,6 @@ def run_batch(api: BackendAPI) -> dict:
             "duration": duration,
             "columns": columns_string.split(',')
         }
-        api.run_stream(model, dataset, name, debug, inj_params)
+        api.run_batch(model, dataset, name, debug, inj_params)
     else:
-        api.run_stream(model, dataset, name, debug)
+        api.run_batch(model, dataset, name, debug)

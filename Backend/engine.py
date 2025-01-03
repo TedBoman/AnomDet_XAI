@@ -18,7 +18,6 @@ DATABASE = {
     "PASSWORD": os.getenv('DATABASE_PASSWORD'),
     "DATABASE": os.getenv('DATABASE_NAME')
 }
-DATABASE_PORT = os.getenv('DATABASE_HOST')
 
 DATASET_DIRECTORY = "./Datasets/"
 
@@ -157,7 +156,11 @@ def __handle_api_call(conn, data: dict) -> None:
             test_json = json.dumps({"test": "change-method-response" })
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case "get-data":
-            test_json = json.dumps({"test": "get-data-response" })
+            df = backend_data["db_api"].read_data(data["timestamp"], data["job_name"])
+            df_dict = {
+                "data": df
+            }
+            df_json = json.dumps(df_dict)
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case "inject-anomaly":
             test_json = json.dumps({"test": "inject-anomaly-response" })

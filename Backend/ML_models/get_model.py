@@ -1,6 +1,6 @@
-import isolation_forest
-import lstm 
-import svm
+from ML_models import isolation_forest
+from ML_models import lstm 
+from ML_models import svm
 
 def get_model(model):
     match model:
@@ -9,11 +9,11 @@ def get_model(model):
             return lstm_instance
             
         case "isolation_forest":
-            if_instance = isolation_forest.IsolationForest()
+            if_instance = isolation_forest.IsolationForestModel()
             return if_instance
             
         case "svm":
-            svm_instance = svm.SVM()
+            svm_instance = svm.SVMModel()
             return svm_instance
             
     
