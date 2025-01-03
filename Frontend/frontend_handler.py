@@ -9,14 +9,14 @@ class FrontendHandler:
     def __init__(self, host, port):
         self.api = BackendAPI(host, port)
 
-    def __check_name(self, job_name) -> str:
+    def check_name(self, job_name) -> str:
         response = self.handle_get_all_jobs()
-        if job_name in response["jobs"]:
+        if job_name in response:
             return "name-error"
         return "success"
     
     def handle_run_batch(self, selected_dataset, selected_model, job_name, inj_params: dict=None) -> str:
-        response = self.__check_name(job_name)
+        response = self.check_name(job_name)
 
         if response == "success":
            self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=inj_params)
@@ -24,7 +24,7 @@ class FrontendHandler:
         return response
 
     def handle_run_stream(self, selected_dataset, selected_model, job_name, inj_params: dict=None) -> str:
-        response = self.__check_name(job_name)
+        response = self.check_name(job_name)
 
         if response == "success":
            self.api.run_stream(selected_model, selected_dataset, job_name, inj_params=inj_params)
@@ -46,7 +46,7 @@ class FrontendHandler:
         return self.api.get_running()
 
     def handle_cancel_job(self, job_name):
-        response = self.__check_name(job_name)
+        response = self.check_name(job_name)
 
         if response == "success":
            self.api.cancel_job(job_name)
@@ -73,7 +73,7 @@ class FrontendHandler:
         return jobs["jobs"]
 
     def handle_get_columns(self, job_name):
-        response = self.__check_name(job_name)
+        response = self.check_name(job_name)
 
         if response == "success":
             columns = json.loads(self.api.get_columns(job_name))
