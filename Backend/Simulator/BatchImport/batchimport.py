@@ -115,7 +115,7 @@ class BatchImporter:
                 # If that fails, try converting through datetime
                 chunk['timestamp'] = pd.to_datetime(chunk['timestamp'])
         db_instance = self.init_db(conn_params)
-        db_instance.insert_data_no_helper(table_name, chunk)
+        db_instance.insert_data(table_name, chunk)
 
     def inject_anomalies_into_chunk(self, chunk, anomaly_settings):
         """
