@@ -92,10 +92,20 @@ class TimescaleDBAPI(DBInterface):
             cursor.execute(query)
 
             data = cursor.fetchall()
+            conn.close()
             
             df = pd.DataFrame(data)
             df.columns = [desc[0] for desc in cursor.description]
-            conn.close()
+
+            cols = df.columns.tolist()
+
+            cols.remove("is_anomaly")
+            cols.remove("injected_anomaly")
+            cols.remove("timestamp")
+            
+            for col in cols:
+                df[col] = df[col].astype(float)
+
             return df
         except Exception as error:
             print("Error: %s" % error)
