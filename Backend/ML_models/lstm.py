@@ -18,11 +18,10 @@ class LSTMModel(model_interface.ModelInterface):
 
     #Preprocesses, trains and fits the model
     def run(self, df, time_steps=1):
-        train_size = int(len(df) * 0.5)
         self.time_steps = time_steps
 
         try:
-            train = df.iloc[0:train_size]
+            train = df
 
             scaler = StandardScaler()
             scaler = scaler.fit(train.iloc[:, 1:])
