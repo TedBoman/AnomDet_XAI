@@ -29,7 +29,7 @@ def display_page(pathname):
    # elif pathname == "/anomaly-detection":
     #    return anomaly_detection_layout
     elif pathname == "/":  # Ensure the root URL shows the Starter Page
-        return starter_page_layout
+        return starter_page_layout()
     else:
         return html.Div("404 - Page Not Found", style={"textAlign": "center", "color": "#ffffff"})
 
