@@ -34,11 +34,7 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     df = pd.read_csv(path)
     model_instance.run(df)
 
-    inj: bool = False
-
-
     if inj_params is not None:
-        inj = True 
         anomaly = AnomalySetting(
         inj_params.get("anomaly_type", None),
         int(inj_params.get("timestamp", None)),
@@ -53,25 +49,19 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     sim_engine = se()
     sim_engine.main(db_conn_params, batch_job)
 
-    if inj:
-        api = TimescaleDBAPI(db_conn_params)
-        test_df = api.read_data(name, datetime.fromtimestamp(0, timezone.utc))
-    else:
-        test_df = df.iloc[:, :-2]
+    api = TimescaleDBAPI(db_conn_params)
+    df = api.read_data(name, datetime.fromtimestamp(0, timezone.utc))
+    test_df = df.iloc[:, :-2]
 
     res = model_instance.detect(test_df)
     
     df["is_anomaly"] = res
-
-    if df["is_anomaly"] is not None:
-        print("Den har blivit updatterad")
     
-   
-    
+    anomaly_df = df[df["is_anomaly"] == True]
 
-        
+    arr = anomaly_df["timestamp"]
 
-
+    api.update_anomalies(name, arr)
 
 
 """
@@ -136,6 +126,7 @@ def get_models() -> list:
     models.remove("model_interface")
     models.remove("__init__")
     models.remove("setup")
+    models.remove("get_model")
     
     return models
 
