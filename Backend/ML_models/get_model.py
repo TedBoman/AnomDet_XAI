@@ -9,11 +9,11 @@ def get_model(model):
             return lstm_instance
             
         case "isolation_forest":
-            if_instance = isolation_forest.IsolationForest()
+            if_instance = isolation_forest.IsolationForestModel()
             return if_instance
             
         case "svm":
-            svm_instance = svm.SVM()
+            svm_instance = svm.SVMModel()
             return svm_instance
             
     

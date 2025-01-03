@@ -4,7 +4,7 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 
 
-class IsolationForest(model_interface.ModelInterface):
+class IsolationForestModel(model_interface.ModelInterface):
 
     #Initializes the model
     def __init__(self):

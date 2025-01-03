@@ -9,7 +9,7 @@ from keras.models import Model, Sequential
 from keras.layers import Dense, Input
 
 
-class SVM(model_interface.ModelInterface):
+class SVMModel(model_interface.ModelInterface):
     
     #Initializes the model
     def __init__(self):
