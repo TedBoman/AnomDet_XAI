@@ -1,4 +1,5 @@
 from dash import Dash, dcc, html, Input, Output, State, ALL, callback, callback_context
+from get_handler import get_handler
 
 def get_index_callbacks(app):
     @app.callback(
@@ -9,6 +10,15 @@ def get_index_callbacks(app):
         if "use_injection" in selected:
             return {"display": "block"}
         return {"display": "none"}
+    @app.callback(
+        Output("column-dropdown", "options"),
+        Input("dataset-dropdown", "value")
+    )
+    def update_column_dropdown(selected_dataset):
+        print(selected_dataset)
+        handler = get_handler()
+        columns = handler.handle_get_columns(selected_dataset)
+        return [{"label": col, "value": col} for col in columns]
 
     """
     @app.callback(
@@ -71,8 +81,6 @@ def get_index_callbacks(app):
             ]) for dataset in active_datasets
         ]
 
-    """
-    """
     @app.callback(
         [Output("popup", "style"), Output("popup-interval", "disabled")],
         [Input("start-job-btn", "n_clicks"), Input("popup-interval", "n_intervals")],
@@ -93,19 +101,84 @@ def get_index_callbacks(app):
 
         return style, True
     """
-
+    inputs = [Input("start-job-btn", "n_clicks"), Input("popup-interval", "n_intervals")]
+    states = [
+                State("dataset-dropdown", "value"),
+                State("detection-model-dropdown", "value"),
+                State("mode-selection", "value"),
+                State("name-input", "value"),
+                State("injection-method-dropdown", "value"),
+                State("date-picker-range", "start_date"),
+                State("date-picker-range", "end_date"),
+                State("popup", "style")
+            ]
     @app.callback(
-            Output("starter-feedback", "children"),
-            State("dataset-dropdown", "value"),
-            State("detection-model-dropdown", "value"),
-            State("mode-selection", "value"),
-            State("injection-method-dropdown", "value"),
-            State("date-picker-range", "start_date"),
-            State("date-picker-range", "end_date"),
-            Input("start-job-btn", "n_clicks")
+            [Output("popup", "style"), Output("popup-interval", "disabled")],
+            [Input("start-job-btn", "n_clicks"), Input("popup-interval", "n_intervals")],
+            [
+                State("dataset-dropdown", "value"),
+                State("detection-model-dropdown", "value"),
+                State("mode-selection", "value"),
+                State("name-input", "value"),
+                State("injection-method-dropdown", "value"),
+                State("timestamp-input", "value"),
+                State("magnitude-input", "value"),
+                State("percentage-input", "value"),
+                State("duration-input", "value"),
+                State("column-dropdown", "value"),
+                State("popup", "style")
+            ]
             )
-    def start_job(**kwargs):   
-        print("test")
+    def start_job_handler(
+                            n_clicks,
+                            n_intervals,
+                            selected_dataset,
+                            selected_detection_model,
+                            selected_mode,
+                            job_name,
+                            selected_injection_method,
+                            timestamp,
+                            magnitude,
+                            percentage,
+                            duration,
+                            columns,
+                            style
+                        ):   
+        handler = get_handler()
+
+        ctx = callback_context
+        if not ctx.triggered:
+            return style, True
+
+        trigger = ctx.triggered[0]["prop_id"]
+        if trigger == "start-job-btn.n_clicks" and n_clicks:
+            response = handler.check_name(selected_dataset)
+            if response == "success":
+                if selected_injection_method is not None:
+                    inj_params = {
+                                    "anomaly_type": selected_injection_method,
+                                    "timestamp": start_date,
+                                    "magnitude": magnitude,
+                                    "percentage": percentage,
+                                    "duration": duration,
+                                    "columns": columns
+                                }
+                else: 
+                    inj_params = None
+                if selected_mode == "batch":
+                    response = handler.handle_run_batch(selected_dataset, selected_detection_model, job_name, inj_params)
+                else:
+                    response = handler.handle_run_stream(selected_dataset, selected_detection_model, job_name, inj_params)
+                style.update({"backgroundColor": "#4CAF50"})
+            else:
+                style.update({"backgroundColor": "#e74c3c"})
+            style.update({"display": "block"})
+            return style, False 
+        elif trigger == "popup-interval.n_intervals":
+            style.update({"display": "none"})
+            return style, True 
+
+        return style, True
 
 def get_display_callbacks(app):
     """

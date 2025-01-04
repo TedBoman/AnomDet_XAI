@@ -2,10 +2,10 @@ import dash
 from dash import dcc, html, Input, Output
 from pages.display_data import layout as data_layout
 from pages.index import layout as index_layout
-from frontend_handler import FrontendHandler
 from callbacks import get_index_callbacks, get_display_callbacks
 import os
 from dotenv import load_dotenv
+from get_handler import get_handler
 
 load_dotenv()
 HOST = 'Backend'
@@ -23,9 +23,8 @@ app.layout = html.Div([
     html.Div(id="page-content")            # Dynamic content is updated here
 ])
 
-# Create instance of FrontendHandler
 
-handler = FrontendHandler(HOST, PORT)
+handler = get_handler()
 
 # Callback: Display the correct page content based on the URL
 @app.callback(
@@ -44,6 +43,7 @@ def display_page(pathname):
 # Get callbacks from other pages
 get_index_callbacks(app)
 get_display_callbacks(app)
+
 
 if __name__ == "__main__":
     print("Starting the Dash server...")
