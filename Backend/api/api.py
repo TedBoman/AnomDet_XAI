@@ -142,6 +142,13 @@ class BackendAPI:
         }
         return self.__send_data(data)
 
+    def get_dataset_columns(self, dataset: str) -> str:
+        data = {
+            "METHOD": "get-dataset-columns",
+            "dataset": dataset
+        }
+        return self.__send_data(data)
+
     # Initates connection to backend and sends json data through the socket
     def __send_data(self, data: str, response: bool=True) -> str:
         try:
