@@ -25,6 +25,13 @@ MODEL_DIRECTORY = "./ML_models"
 INJECTION_METHOD_DIRECTORY = "./Simulator/AnomalyInjector/InjectionMethods"
 DATASET_DIRECTORY = "./Datasets"
 
+
+def map_to_timestamp(time):
+    return time.timestamp()
+
+def map_to_time(time):
+    return datetime.fromtimestamp(time, timezone.utc)
+
 # Starts processing of dataset in one batch
 def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict=None, debug=False) -> None:
     print("Starting Batch-job!")
@@ -51,16 +58,16 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
 
     api = TimescaleDBAPI(db_conn_params)
     df = api.read_data(name, datetime.fromtimestamp(0, timezone.utc))
-    test_df = df.iloc[:, :-2]
 
-    res = model_instance.detect(test_df)
-    
+    df["timestamp"] = df["timestamp"].apply(map_to_timestamp)
+    df["timestamp"] = df["timestamp"].astype(float)
+
+    res = model_instance.detect(df.iloc[:, :-2])
+    df["timestamp"] = df["timestamp"].apply(map_to_time)
     df["is_anomaly"] = res
     
     anomaly_df = df[df["is_anomaly"] == True]
-
     arr = anomaly_df["timestamp"]
-
     api.update_anomalies(name, arr)
 
 
