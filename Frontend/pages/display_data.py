@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.graph_objs as go
 import random
 
+"""
 # Create the Dash app
 app = Dash(__name__)
 
@@ -20,12 +21,11 @@ datasets = {
 current_dataset = list(datasets.keys())[0]
 anomaly_log = []  # Global anomaly log
 
-def layout(handler):
+"""
+
+def layout(handler, job_name, batch=True):
     # Layout
     layout = html.Div([
-        # Store component to hold the current dataset and columns selection
-        dcc.Store(id="store-data", storage_type="session"),  # Store component for global data
-
         # Back to Home
         html.Div([html.A("← Back to Home", href="/", style={
             "fontSize": "24px", "color": "#ffffff", "fontWeight": "bold",
@@ -54,8 +54,10 @@ def layout(handler):
         html.Div(id="selected-graphs", style={"width": "75%", "float": "right", "padding": "20px"}),
 
         # Interval for streaming
-        dcc.Interval(id="stream-interval", interval=1000, n_intervals=0)
+        dcc.Interval(id="stream-interval", interval=1000, n_intervals=0, disabled=batch) 
     ], style={"backgroundColor": "#282c34", "padding": "50px", "minHeight": "100vh", "position": "relative"})
+
+    return layout
 
 # Run the app
 if __name__ == '__main__':

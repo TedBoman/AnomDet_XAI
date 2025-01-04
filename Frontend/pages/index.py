@@ -55,81 +55,76 @@ def layout(handler):
 
 
                 html.Div(children=[
-                        html.Label("Select an Injection Method:", style={"fontSize": "22px", "color": "#ffffff"}),
-                        dcc.Dropdown(
-                            id="injection-method-dropdown",
-                            options=[{"label": method, "value": method} for method in injection_methods],
-                            placeholder="Select a method",
-                            style={"width": "350px", "margin": "auto"}
-                        ),
-                        html.Div([
-                            html.Label("Select Date Range:", style={"fontSize": "18px", "color": "#ffffff"}),
-                            dcc.DatePickerRange(
-                                id="date-picker-range",
-                                start_date_placeholder_text="Start Date",
-                                end_date_placeholder_text="End Date",
-                                display_format="YYYY-MM-DD",
-                                style={"marginTop": "10px"}
-                            )
-                        ], style={"marginTop": "20px", "textAlign": "center"}),
-                        html.Div([
-                        html.Label("Select Time for Timestamp (Hour):", style={"fontSize": "18px", "color": "#ffffff"}),
+                    html.Label("Select an Injection Method:", style={"fontSize": "22px", "color": "#ffffff"}),
+                    dcc.Dropdown(
+                        id="injection-method-dropdown",
+                        options=[{"label": method, "value": method} for method in injection_methods],
+                        value="None",
+                        placeholder="Select a method",
+                        style={"width": "350px", "margin": "auto"}
+                    ),
+                    html.Div([
+                    html.Label("Select Time for Timestamp (seconds since epoch):", style={"fontSize": "18px", "color": "#ffffff"}),
+                    dcc.Input(
+                        id="timestamp-input",
+                        type="number",
+                        placeholder="seconds since epoch",
+                        style={"width": "200px", "marginTop": "10px"}
+                    ) 
+                    ], style={"marginTop": "20px", "textAlign": "center"}),
+                    html.Div([
+                        html.Label("Enter Magnitude (Default: 1):", style={"fontSize": "18px", "color": "#ffffff"}),
                         dcc.Input(
-                            id="timestamp-hour",
+                            id="magnitude-input",
+                            type="number",
+                            placeholder="Magnitude",
+                            value=1,
+                            style={"width": "200px", "marginTop": "10px"}
+                        )
+
+                    ], style={"marginTop": "20px", "textAlign": "center"}),
+                    html.Div([
+                        html.Label("Enter Anomaly Percentage (%):", style={"fontSize": "18px", "color": "#ffffff"}),
+                        dcc.Input(
+                            id="percentage-input",
                             type="number",
                             min=0,
-                            max=23,
+                            max=100,
                             step=1,
-                            placeholder="Hour (0-23)",
+                            placeholder="Percentage",
                             style={"width": "200px", "marginTop": "10px"}
-                        ) 
+                        )
+                    ], style={"marginTop": "20px", "textAlign": "center"}),
+                    html.Div([
+                        html.Label("Enter Duration (in seconds):", style={"fontSize": "18px", "color": "#ffffff"}),
+                        dcc.Input(
+                            id="duration-input",
+                            type="number",
+                            placeholder="Duration (sec)",
+                            style={"width": "200px", "marginTop": "10px"}
+                        )
                         ], style={"marginTop": "20px", "textAlign": "center"}),
-                        html.Div([
-                            html.Label("Enter Magnitude (Default: 1):", style={"fontSize": "18px", "color": "#ffffff"}),
-                            dcc.Input(
-                                id="magnitude-input",
-                                type="number",
-                                placeholder="Magnitude",
-                                value=1,
-                                style={"width": "200px", "marginTop": "10px"}
-                            )
-
-                        ], style={"marginTop": "20px", "textAlign": "center"}),
-                        html.Div([
-                            html.Label("Enter Anomaly Percentage (%):", style={"fontSize": "18px", "color": "#ffffff"}),
-                            dcc.Input(
-                                id="percentage-input",
-                                type="number",
-                                min=0,
-                                max=100,
-                                step=1,
-                                placeholder="Percentage",
-                                style={"width": "200px", "marginTop": "10px"}
-                            )
-                        ], style={"marginTop": "20px", "textAlign": "center"}),
-                        html.Div([
-                            html.Label("Select Column from Dataset:", style={"fontSize": "18px", "color": "#ffffff"}),
-                            dcc.Dropdown(
-                                id="column-dropdown",
-                                options=[
-                                    {"label": "Column 1", "value": "column_1"},
-                                    {"label": "Column 2", "value": "column_2"}
-                                ],
-                                placeholder="Select a Column",
-                                style={"width": "350px", "marginTop": "10px"}
-                            )
-                        ], style={"marginTop": "20px", "textAlign": "center"}),
-                        html.Div([
-                            html.Label("Enter Duration (in seconds):", style={"fontSize": "18px", "color": "#ffffff"}),
-                            dcc.Input(
-                                id="duration-input",
-                                type="number",
-                                placeholder="Duration (sec)",
-                                style={"width": "200px", "marginTop": "10px"}
-                            )
+                    html.Div([
+                        html.Label("Select Columns from Dataset:", style={"fontSize": "18px", "color": "#ffffff"}),
+                        dcc.Dropdown(
+                            id="column-dropdown",
+                            options=[],
+                            value=[],
+                            placeholder="Select Columns",
+                            style={"width": "350px", "marginTop": "10px"}
+                        )
                         ], style={"marginTop": "20px", "textAlign": "center"}),
                     ], id="injection", style={"display": "none"}),
 
+                html.Div([
+                    html.Label("Job name: ", style={"fontSize": "22px", "color": "#ffffff"}),
+                    dcc.Input(
+                                id="name-input",
+                                type="text",
+                                placeholder="JOB_NAME",
+                                style={"width": "200px", "marginTop": "10px"}
+                            )
+                ], style={"display": "block", "marginTop": "15px", "textAlign": "center"}),
 
                 html.Div([
                     html.Label("", style={}),
