@@ -10,7 +10,6 @@ def layout(handler):
     datasets = handler.handle_get_datasets()
     models = handler.handle_get_models()
     injection_methods = handler.handle_get_injection_methods()
-    active_datasets = handler.handle_get_running()
 
     layout = html.Div([
         html.Div(
@@ -96,11 +95,11 @@ def layout(handler):
                         )
                     ], style={"marginTop": "20px", "textAlign": "center"}),
                     html.Div([
-                        html.Label("Enter Duration (in seconds):", style={"fontSize": "18px", "color": "#ffffff"}),
+                        html.Label("Enter a duration: ", style={"fontSize": "18px", "color": "#ffffff"}),
                         dcc.Input(
                             id="duration-input",
                             type="number",
-                            placeholder="Duration (sec)",
+                            placeholder="Duration ('30s', '1H', '30min', '2D', '1h30m')",
                             style={"width": "200px", "marginTop": "10px"}
                         )
                         ], style={"marginTop": "20px", "textAlign": "center"}),
@@ -111,6 +110,7 @@ def layout(handler):
                             options=[],
                             value=[],
                             placeholder="Select Columns",
+                            multi=True,
                             style={"width": "350px", "marginTop": "10px"}
                         )
                         ], style={"marginTop": "20px", "textAlign": "center"}),
@@ -189,10 +189,16 @@ def layout(handler):
                 id="active-jobs-section",
                 children=[
                     html.H3("Currently Running Jobs:", style={"color": "#ffffff", "textAlign": "center"}),
-                    html.Div(id="active-datasets-list", style={
+                    html.Div(id="active-jobs-list", style={
                         "textAlign": "center", "color": "#ffffff", "marginTop": "4px",
                         "width": "25rem", "margin": "10px auto", "padding": "10px", "border": "4px solid #464", "borderRadius": "5px"
-                    })
+                    }),
+                    dcc.Interval(
+                        id="job-interval",
+                        interval=2000,
+                        n_intervals=0,
+                        disabled=False 
+                    )
                 ],
                 style={"display": "none", "marginTop": "30px"}  # Hidden by default
             ),

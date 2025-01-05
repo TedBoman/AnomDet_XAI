@@ -1,4 +1,5 @@
 from dash import Dash, dcc, html, Input, Output, State, ALL, callback, callback_context
+import json
 from get_handler import get_handler
 
 def get_index_callbacks(app):
@@ -17,31 +18,53 @@ def get_index_callbacks(app):
     def update_column_dropdown(selected_dataset):
         print(selected_dataset)
         handler = get_handler()
-        columns = handler.handle_get_columns(selected_dataset)
+        columns = handler.handle_get_dataset_columns(selected_dataset)
         return [{"label": col, "value": col} for col in columns]
 
-    """
     @app.callback(
         Output("active-jobs-section", "style"),
-        Input("active-datasets-list", "children")
+        Input("active-jobs-list", "children")
     )
     def toggle_active_jobs_section(children):
-        # Visa sektionen om det finns några aktiva jobb, annars dölj den
-        if children:
+        # Show the active jobs section if there are active jobs
+        if len(children) > 0:
             return {"display": "block", "marginTop": "30px"}
         return {"display": "none"}
-
-    # Callback to add and manage active datasets
+        
+    # Callback to remove an active job
     @app.callback(
-        Output("active-datasets-list", "children"),
-        [Input("start-job-btn", "n_clicks"),
-        Input({"type": "remove-dataset-btn", "index": ALL}, "n_clicks")],
-        [State("dataset-dropdown", "value")]
+        Output("active-jobs-list", "children"),
+        Input({"type": "confirm-box", "index": ALL}, "submit_n_clicks")
     )
-    def manage_active_datasets(add_clicks, remove_clicks, selected_dataset):
-        global active_datasets
+    def remove_active_job(n_clicks):
+        handler = get_handler()
+        active_jobs = handler.handle_get_running()
+
         ctx = callback_context
 
+        triggered_index = json.loads(ctx.triggered[0]["prop_id"].split(".")[0])["index"]
+    # Callback to add and manage active jobs
+    @app.callback(
+        [Output("active-jobs-list", "children")],
+        [Input("job-interval", "n_intervals")]
+    )
+    def manage_active_jobs(n_intervals):
+        handler = get_handler()
+        active_jobs = handler.handle_get_running()
+
+        return [
+            html.Div([
+                dcc.Link(
+                    dataset,
+                    href=f"/{job}",
+                    style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
+                ),
+                html.Button("Stop", id={"type": "remove-dataset-btn", "index": job}, n_clicks=0, style={
+                    "fontSize": "12px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
+                    "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
+                })
+            ]) for job in active_jobs
+        ]
         if not ctx.triggered:
             return [
                 html.Div([
@@ -82,38 +105,7 @@ def get_index_callbacks(app):
         ]
 
     @app.callback(
-        [Output("popup", "style"), Output("popup-interval", "disabled")],
-        [Input("start-job-btn", "n_clicks"), Input("popup-interval", "n_intervals")],
-        [State("popup", "style")]
-    )
-    def handle_popup(n_clicks, n_intervals, style):
-        ctx = callback_context
-        if not ctx.triggered:
-            return style, True
-
-        trigger = ctx.triggered[0]["prop_id"]
-        if trigger == "start-job-btn.n_clicks" and n_clicks:
-            style.update({"display": "block"})
-            return style, False 
-        elif trigger == "popup-interval.n_intervals":
-            style.update({"display": "none"})
-            return style, True 
-
-        return style, True
-    """
-    inputs = [Input("start-job-btn", "n_clicks"), Input("popup-interval", "n_intervals")]
-    states = [
-                State("dataset-dropdown", "value"),
-                State("detection-model-dropdown", "value"),
-                State("mode-selection", "value"),
-                State("name-input", "value"),
-                State("injection-method-dropdown", "value"),
-                State("date-picker-range", "start_date"),
-                State("date-picker-range", "end_date"),
-                State("popup", "style")
-            ]
-    @app.callback(
-            [Output("popup", "style"), Output("popup-interval", "disabled")],
+            [Output("popup", "style"), Output("popup-interval", "disabled"), Output("popup", "children")],
             [Input("start-job-btn", "n_clicks"), Input("popup-interval", "n_intervals")],
             [
                 State("dataset-dropdown", "value"),
@@ -126,6 +118,7 @@ def get_index_callbacks(app):
                 State("percentage-input", "value"),
                 State("duration-input", "value"),
                 State("column-dropdown", "value"),
+                State("injection-check", "value"),
                 State("popup", "style")
             ]
             )
@@ -142,29 +135,31 @@ def get_index_callbacks(app):
                             percentage,
                             duration,
                             columns,
+                            inj_check,
                             style
                         ):   
         handler = get_handler()
+        children = "Job has started!"
 
         ctx = callback_context
         if not ctx.triggered:
-            return style, True
+            return style, True, children
 
         trigger = ctx.triggered[0]["prop_id"]
         if trigger == "start-job-btn.n_clicks" and n_clicks:
-            response = handler.check_name(selected_dataset)
+            response = handler.check_name(job_name)
             if response == "success":
-                if selected_injection_method is not None:
+                if selected_injection_method == []:
+                    inj_params = None
+                else: 
                     inj_params = {
                                     "anomaly_type": selected_injection_method,
-                                    "timestamp": start_date,
-                                    "magnitude": magnitude,
-                                    "percentage": percentage,
-                                    "duration": duration,
+                                    "timestamp": str(timestamp),
+                                    "magnitude": str(magnitude),
+                                    "percentage": str(percentage),
+                                    "duration": str(duration),
                                     "columns": columns
                                 }
-                else: 
-                    inj_params = None
                 if selected_mode == "batch":
                     response = handler.handle_run_batch(selected_dataset, selected_detection_model, job_name, inj_params)
                 else:
@@ -172,13 +167,14 @@ def get_index_callbacks(app):
                 style.update({"backgroundColor": "#4CAF50"})
             else:
                 style.update({"backgroundColor": "#e74c3c"})
+                children = "Job name already exists!"
             style.update({"display": "block"})
-            return style, False 
+            return style, False, children
         elif trigger == "popup-interval.n_intervals":
             style.update({"display": "none"})
-            return style, True 
+            return style, True, children 
 
-        return style, True
+        return style, True, children
 
 def get_display_callbacks(app):
     """
