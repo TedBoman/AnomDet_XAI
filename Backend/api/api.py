@@ -178,6 +178,7 @@ class BackendAPI:
                         json_data += recv_data
                 
                 data = json.loads(json_data)
+                return data
             else:
                 data = json.dumps(data)
                 sock.sendall(bytes(data, encoding="utf-8"))
