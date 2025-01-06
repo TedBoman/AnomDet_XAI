@@ -159,9 +159,9 @@ def __handle_api_call(conn, data: dict) -> None:
             df["timestamp"] = df["timestamp"].apply(execute_calls.map_to_timestamp)
             df["timestamp"] = df["timestamp"].astype(float)
             data_json = df.to_json(orient="split")
-            
+
             df_dict = {
-                "data": data
+                "data": data_json
             }
             df_json = json.dumps(df_dict)
             conn.sendall(bytes(df_json, encoding="utf-8"))
