@@ -32,7 +32,7 @@ injects anomalies in the data set <name> if manual injection is enabled, <timest
 "python api.py get-running"
 get all running datasets
 
-"python api.py cancel <name>" 
+"python api.py cancel-job <name>" 
 cancels the currently running batch or stream named <name>
 
 "python api.py get-models"
@@ -110,7 +110,7 @@ def main(argv: list[str]) -> None:
             result = api.get_running()
 
         # Cancel a running job if the command is "cancel"
-        case "cancel":
+        case "cancel-job":
             if (arg_len != 3):
                 handle_error(1, "Invalid number of arguments")
             result = api.cancel_job(argv[2])
