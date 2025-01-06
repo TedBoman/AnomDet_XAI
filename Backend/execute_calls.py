@@ -131,3 +131,21 @@ def get_datasets() -> list:
             datasets.append(dataset)
 
     return datasets
+
+# Gets content of complete file to the backend
+def import_dataset(conn: socket, path: str, timestamp_column: str) -> None:
+    file = open(path, "w")
+    data = conn.recv(1024).decode("utf-8")
+    while data:
+        file.write(data)
+        data = conn.recv(1024).decode("utf-8")
+    file.close()
+    
+    # Change the timestamp column name to timestamp and move it to the first column
+    df = pd.read_csv(path)
+    df.rename(columns={timestamp_column: "timestamp"}, inplace=True)
+    cols = df.columns.tolist()
+    cols.remove("timestamp")
+    cols = ["timestamp"] + cols
+    df = df[cols]
+    df.to_csv(path, index=False)
