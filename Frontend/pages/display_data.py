@@ -13,9 +13,10 @@ def create_graphs(df):
     global graphs
     for col in df.columns.tolist():
         if col != "timestamp":
+            normal = df[df["is_anomaly"] == False][["timestamp", col]]
             anomalies = df[df["is_anomaly"] == True][["timestamp", col]]
             fig = go.Figure([
-                go.Scatter(x=df["timestamp"], y=df[col], mode="lines", name=col),
+                go.Scatter(x=normal["timestamp"], y=normal[col], mode="lines", name=col),
                 go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers", marker = dict(color="red", size=10), name="Anomalies")
             ])
             fig.update_layout(title=f"{col} over Time", xaxis_title="Time", yaxis_title=col)
