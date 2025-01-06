@@ -57,8 +57,8 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     sim_engine.main(db_conn_params, batch_job)
 
     api = TimescaleDBAPI(db_conn_params)
-    df = api.read_data(name, datetime.fromtimestamp(0, timezone.utc))
-
+    df = api.read_data(datetime.fromtimestamp(0, timezone.utc), name)
+    
     df["timestamp"] = df["timestamp"].apply(map_to_timestamp)
     df["timestamp"] = df["timestamp"].astype(float)
 

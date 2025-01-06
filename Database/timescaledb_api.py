@@ -82,7 +82,7 @@ class TimescaleDBAPI(DBInterface):
                 conn.rollback()
     
     # Reads each row of data in the table table_name that has a timestamp greater than or equal to time
-    def read_data(self, table_name: str, time: datetime) -> pd.DataFrame:
+    def read_data(self, time: datetime, table_name: str) -> pd.DataFrame:
         # Assuming the docker container is started, connect to the database
         try:
             conn = psycopg2.connect(self.connection_string)
