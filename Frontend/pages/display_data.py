@@ -1,23 +1,27 @@
-from dash import Dash, dcc, html, Input, Output
+from dash import Dash, dcc, html, Input, Output, callback
 import pandas as pd
 import plotly.graph_objs as go
 import random
 
+'''
+    go.Scatter(x=df["timestamp"], y=df[col], mode="lines+markers", name=col),
+    go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers",
+                marker=dict(color="red", size=10), name="Anomalies")'''
 
-# Create the Dash app
-app = Dash(__name__)
-graphs = []
-
+graphs = {}
 def create_graphs(df):
     global graphs
-    for col in df.columns:
+    for col in df.columns.tolist():
         if col != "timestamp":
+            anomalies = df[df["is_anomaly"] == True][["timestamp", col]]
             fig = go.Figure([
-                go.Scatter(x=df["timestamp"], y=df[col], mode="lines", name=col)
+                go.Scatter(x=df["timestamp"], y=df[col], mode="lines", name=col),
+                go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers", marker = dict(color="red", size=10), name="Anomalies")
             ])
             fig.update_layout(title=f"{col} over Time", xaxis_title="Time", yaxis_title=col)
-            graphs.append(dcc.Graph(figure=fig))
-    return graphs
+            graph = dcc.Graph(id = {"type" : "graph", "index" : col}, figure = fig)
+            graphs[col] = graph
+
 
 '''
 # Mock datasets (these datasets should match the job details from starter_page.py)
@@ -35,11 +39,11 @@ current_dataset = list(datasets.keys())[0]
 anomaly_log = []  # Global anomaly log
 
 def layout(handler):
-    global graphs
     #Get data frame from a completed job
     df = handler.get_data()
     # Create graphs of each column in that data frame
-    graphs = create_graphs(df)
+    create_graphs(df)
+
 
     # Layout
     layout = html.Div([
@@ -70,6 +74,8 @@ def layout(handler):
             })
         ], style={"width": "20%", "float": "left", "backgroundColor": "#1e2130", "padding": "20px", "borderRadius": "10px"}),
 
+        
+
         # Right Panel: Graphs
         html.Div(id="selected-graphs", style={"width": "75%", "float": "right", "padding": "20px"}),
 
@@ -77,9 +83,16 @@ def layout(handler):
         dcc.Interval(id="stream-interval", interval=1000, n_intervals=0)
         
     ], style={"backgroundColor": "#282c34", "padding": "50px", "minHeight": "100vh", "position": "relative"})
-    return layout
 
-# Run the app
-if __name__ == '__main__':
-    app.run_server(debug=True)
+
+    @callback(
+        Output('graph-container', 'children'),
+        [Input('graph-dropdown', 'value')]
+    )
+    def update_graphs(selected_graphs):
+        if not selected_graphs:
+            return "Select graphs from the dropdown to display them."
+        return [graphs[graph] for graph in selected_graphs]
+
+    return layout   
 
