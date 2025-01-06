@@ -58,10 +58,10 @@ class BackendAPI:
         self.__send_data(data, response=False)
 
     # Requests each row of data of a running job from timestamp and forward
-    def get_data(self, timestamp: datetime, name: str) -> str:
+    def get_data(self, timestamp: int, name: str) -> str:
         data = {
             "METHOD": "get-data",
-            "timestamp": timestamp,
+            "timestamp": str(timestamp),
             "job_name": name
         }
         return self.__send_data(data)
@@ -154,7 +154,6 @@ class BackendAPI:
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect((self.host, self.port))
-            sock.settimeout(1)
 
             # Send two messages through the same connection if the method is import-dataset
             if data["METHOD"] == "import-dataset":
@@ -164,12 +163,19 @@ class BackendAPI:
                 sock.sendall(bytes(data, encoding="utf-8"))
                 sleep(0.5)
                 sock.sendall(bytes(file_content, encoding="utf-8"))
-            if data["METHOD"] == "get-data":
+            if data["METHOD"] == "get-data":       
+                sock.settimeout(1)
+                data = json.dumps(data)
+                sock.sendall(bytes(data, encoding="utf-8"))
+
                 recv_data = sock.recv(1024).decode("utf-8")
-                json_data = data
+                json_data = recv_data
+                print(json_data)
                 while recv_data:
                     recv_data = sock.recv(1024).decode("utf-8")
-                    json_data += recv_data
+                    print(json_data)
+                    if recv_data:
+                        json_data += recv_data
                 
                 data = json.loads(json_data)
             else:
