@@ -168,6 +168,7 @@ class BackendAPI:
                 sock.sendall(bytes(data, encoding="utf-8"))
             if response:
                 data = sock.recv(1024)
+                data = data.decode("utf-8")
                 return data
         except Exception as e:
             print(e)

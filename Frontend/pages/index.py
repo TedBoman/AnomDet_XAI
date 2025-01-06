@@ -26,6 +26,7 @@ def layout(handler):
                     dcc.Dropdown(
                         id="dataset-dropdown",
                         options=[{"label": dataset, "value": dataset} for dataset in datasets],
+                        value=None,
                         placeholder="Select a dataset",
                         style={"width": "350px", "fontSize": "18px", "margin": "auto", "border": "0.05rem solid black"}
                     )
@@ -189,13 +190,14 @@ def layout(handler):
                 id="active-jobs-section",
                 children=[
                     html.H3("Currently Running Jobs:", style={"color": "#ffffff", "textAlign": "center"}),
-                    html.Div(id="active-jobs-list", style={
+                    html.Div(children=["No active jobs found."], id="active-jobs-list", style={
                         "textAlign": "center", "color": "#ffffff", "marginTop": "4px",
                         "width": "25rem", "margin": "10px auto", "padding": "10px", "border": "4px solid #464", "borderRadius": "5px"
                     }),
+                    dcc.Store(id='active-jobs-json', data=""),
                     dcc.Interval(
                         id="job-interval",
-                        interval=2000,
+                        interval=3 * 1000,
                         n_intervals=0,
                         disabled=False 
                     )

@@ -166,8 +166,15 @@ def __handle_api_call(conn, data: dict) -> None:
             test_json = json.dumps({"test": "inject-anomaly-response" })
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case "get-running":
+            jobs = []
+            for job in backend_data["running-jobs"]:
+                new_job = {
+                    "name": job["name"],
+                    "type": job["type"]
+                }
+                jobs.append(new_job)
             running_dict = {
-                                "running": backend_data["running-jobs"]
+                                "running": jobs
                             }
             running_json = json.dumps(running_dict)
             conn.sendall(bytes(running_json, encoding="utf-8"))

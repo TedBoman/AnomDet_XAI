@@ -88,6 +88,9 @@ class FrontendHandler:
         return response
 
     def handle_get_dataset_columns(self, dataset):
-        columns = json.loads(self.api.get_dataset_columns(dataset))
+        if dataset == None:
+            return []
+        response = self.api.get_dataset_columns(dataset)
+        columns = json.loads(response)
         columns["columns"].remove("timestamp")
         return columns["columns"]

@@ -1,4 +1,4 @@
-from dash import Dash, dcc, html, Input, Output, State, ALL, callback, callback_context
+from dash import Dash, dcc, html, Input, Output, State, ALL, MATCH, callback, callback_context, no_update
 import json
 from get_handler import get_handler
 
@@ -16,7 +16,6 @@ def get_index_callbacks(app):
         Input("dataset-dropdown", "value")
     )
     def update_column_dropdown(selected_dataset):
-        print(selected_dataset)
         handler = get_handler()
         columns = handler.handle_get_dataset_columns(selected_dataset)
         return [{"label": col, "value": col} for col in columns]
@@ -27,44 +26,54 @@ def get_index_callbacks(app):
     )
     def toggle_active_jobs_section(children):
         # Show the active jobs section if there are active jobs
-        if len(children) > 0:
-            return {"display": "block", "marginTop": "30px"}
-        return {"display": "none"}
+        if children == "No active jobs found.":
+            return {"display": "none"}
+        return {"display": "block", "marginTop": "30px"}
         
-    # Callback to remove an active job
+    # Callback to display confirmation box
     @app.callback(
-        Output("active-jobs-list", "children"),
-        Input({"type": "confirm-box", "index": ALL}, "submit_n_clicks")
+        Output({"type": "confirm-box", "index": MATCH}, "displayed"),
+        Input({"type": "remove-dataset-btn", "index": MATCH}, "n_clicks")
     )
-    def remove_active_job(n_clicks):
-        handler = get_handler()
-        active_jobs = handler.handle_get_running()
+    def display_confirm(value):
+        return True if value else False
 
-        ctx = callback_context
-
-        triggered_index = json.loads(ctx.triggered[0]["prop_id"].split(".")[0])["index"]
-    # Callback to add and manage active jobs
+    # Callback to manage active jobs
     @app.callback(
         [Output("active-jobs-list", "children")],
-        [Input("job-interval", "n_intervals")]
+        [Input("job-interval", "n_intervals"), Input({"type": "confirm-box", "index": ALL}, "submit_n_clicks")],
+        [State("active-jobs-json", "data")],
+        
     )
-    def manage_active_jobs(n_intervals):
-        handler = get_handler()
-        active_jobs = handler.handle_get_running()
+    def manage_and_remove_active_jobs(children, submit_n_clicks, active_jobs_json):
+        ctx = callback_context
 
-        return [
-            html.Div([
-                dcc.Link(
-                    dataset,
-                    href=f"/{job}",
-                    style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
-                ),
-                html.Button("Stop", id={"type": "remove-dataset-btn", "index": job}, n_clicks=0, style={
-                    "fontSize": "12px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
-                    "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
-                })
-            ]) for job in active_jobs
-        ]
+        triggered_id = ctx.triggered_id
+
+        if triggered_id == None:
+            return no_update
+
+        handler = get_handler()
+
+        print(f'trigger: {triggered_id}, trigger_type: {type(triggered_id)}')
+
+        if triggered_id != "job-interval":
+            job = triggered_id["index"]
+            print(f'job: {job}')
+            handler.handle_cancel_job(job)
+
+        active_jobs = json.loads(handler.handle_get_running())
+        active_jobs = active_jobs["running"]
+        jobs_json = json.dumps(active_jobs)
+
+        if jobs_json == active_jobs_json:
+            return no_update
+
+        if len(active_jobs) == 0:
+            return ["No active jobs found."]
+        
+        return create_active_jobs(active_jobs)
+        """
         if not ctx.triggered:
             return [
                 html.Div([
@@ -103,7 +112,7 @@ def get_index_callbacks(app):
                 })
             ]) for dataset in active_datasets
         ]
-
+    """
     @app.callback(
             [Output("popup", "style"), Output("popup-interval", "disabled"), Output("popup", "children")],
             [Input("start-job-btn", "n_clicks"), Input("popup-interval", "n_intervals")],
@@ -146,7 +155,7 @@ def get_index_callbacks(app):
             return style, True, children
 
         trigger = ctx.triggered[0]["prop_id"]
-        if trigger == "start-job-btn.n_clicks" and n_clicks:
+        if trigger == "start-job-btn.n_clicks":
             response = handler.check_name(job_name)
             if response == "success":
                 if selected_injection_method == []:
@@ -254,3 +263,25 @@ def get_display_callbacks(app):
 
         anomaly_log.extend(new_anomalies)
         return graphs, html.Ul([html.Li(log) for log in anomaly_log[-10:]])
+
+def create_active_jobs(active_jobs):
+    if len(active_jobs) == 0:
+        return ["No active jobs found."]
+    return [
+        html.Div([
+            dcc.ConfirmDialog(
+                id={"type": "confirm-box", "index": job["name"]},
+                message=f'Are you sure you want to cancel the job {job["name"]}?',
+                displayed=False,
+            ),
+            dcc.Link(
+                children=[job["name"]],
+                href=f'/{job["name"]}' if job["type"] == "stream" else f'/{job["name"]}?batch=True',
+                style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
+            ),
+            html.Button("Stop", id={"type": "remove-dataset-btn", "index": job["name"]}, n_clicks=0, style={
+                "fontSize": "12px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
+                "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
+            })
+        ]) for job in active_jobs
+    ]

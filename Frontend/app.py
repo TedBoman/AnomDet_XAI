@@ -1,5 +1,5 @@
 import dash
-from dash import dcc, html, Input, Output
+from dash import dcc, html, Input, Output, State
 from pages.display_data import layout as data_layout
 from pages.index import layout as index_layout
 from callbacks import get_index_callbacks, get_display_callbacks
