@@ -156,6 +156,7 @@ def layout(handler):
                         id="speedup-input",
                         type="number",
                         value=1,
+                        step=0.1,
                         style={"width": "200px", "marginTop": "10px"}
                     )
                 ], style={"marginTop": "20px", "textAlign": "center"}),
