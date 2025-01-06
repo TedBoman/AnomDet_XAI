@@ -42,6 +42,7 @@ anomaly_log = []  # Global anomaly log
 def layout(handler, job_name, batch=True):
     #Get data frame from a completed job
     df = handler.handle_get_data(0, job_name)
+
     
     #Create graphs of each column in that data frame
     create_graphs(df)
