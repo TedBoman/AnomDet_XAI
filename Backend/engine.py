@@ -172,8 +172,8 @@ def __handle_api_call(conn, data: dict) -> None:
                 }
                 jobs.append(new_job)
             running_dict = {
-                                "running": jobs
-                            }
+                "running": jobs
+            }
             running_json = json.dumps(running_dict)
             conn.sendall(bytes(running_json, encoding="utf-8"))
         case "cancel-job":
