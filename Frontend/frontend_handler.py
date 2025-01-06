@@ -44,7 +44,7 @@ class FrontendHandler:
         return self.api.change_method(selected_injection_method, job_name)
 
     def handle_get_data(self, timestamp, job_name):
-        data = json.loads(self.api.get_data(timestamp, job_name))
+        data = self.api.get_data(timestamp, job_name)
         df = pd.DataFrame(data)
         return df
         
