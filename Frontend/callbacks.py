@@ -55,11 +55,8 @@ def get_index_callbacks(app):
 
         handler = get_handler()
 
-        print(f'trigger: {triggered_id}, trigger_type: {type(triggered_id)}')
-
         if triggered_id != "job-interval":
             job = triggered_id["index"]
-            print(f'job: {job}')
             handler.handle_cancel_job(job)
 
         active_jobs = json.loads(handler.handle_get_running())
