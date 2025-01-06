@@ -2,6 +2,7 @@ from dash import Dash, dcc, html, Input, Output, callback
 import pandas as pd
 import plotly.graph_objs as go
 import random
+from datetime import datetime, timezone
 
 '''
     go.Scatter(x=df["timestamp"], y=df[col], mode="lines+markers", name=col),
@@ -35,15 +36,23 @@ datasets = {
     }) for i in range(1, 6)
 }
 '''
-# Initial dataset (will be overridden by the selected job)
-current_dataset = list(datasets.keys())[0]
+
 anomaly_log = []  # Global anomaly log
 
-def layout(handler):
+def layout(handler, job_name, batch=True):
+
+    timestamp = datetime.fromtimestamp(0, timezone.utc)
+
     #Get data frame from a completed job
-    df = handler.get_data()
-    # Create graphs of each column in that data frame
+    df = handler.handle_get_data(timestamp, job_name)
+    
+    #Create graphs of each column in that data frame
     create_graphs(df)
+    columns = df.columns.tolist()
+    columns.remove("timestamp")
+    columns.remove("is_anomaly")
+    columns.remove("injected_anomaly")
+
 
 
     # Layout
@@ -61,9 +70,13 @@ def layout(handler):
         # Left Panel: Column Selection + Anomaly Log
         html.Div([
             html.H3("Available Columns:", style={"color": "#ffffff", "textAlign": "center"}),
-            dcc.Checklist(
-                id="column-selector", options=[], value=[],
-                style={"color": "#ffffff", "padding": "10px", "fontSize": "16px"}
+            dcc.Dropdown(
+                id="injection-method-dropdown",
+                options=[{"label": col, "value": col} for col in columns],
+                multi=True,
+                value=[],
+                placeholder="Select a method",
+                style={"width": "350px", "margin": "auto"}
             ),
             html.H3("Anomaly Log:", style={"color": "#ffffff", "textAlign": "center", "marginTop": "20px"}),
             html.Div(id="anomaly-log", style={
@@ -78,7 +91,7 @@ def layout(handler):
         html.Div(id="selected-graphs", style={"width": "75%", "float": "right", "padding": "20px"}),
 
         # Interval for streaming
-        dcc.Interval(id="stream-interval", interval=1000, n_intervals=0)
+        dcc.Interval(id="stream-interval", interval=1000, n_intervals=0, disabled=batch)
         
     ], style={"backgroundColor": "#282c34", "padding": "50px", "minHeight": "100vh", "position": "relative"})
 
