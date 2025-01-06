@@ -148,20 +148,10 @@ def get_display_callbacks(app):
          Input("store-data", "data"),
          Input("column-selector", "value")]
     )
-    def update_graphs(n_intervals, store_data, selected_columns):
-        #im not really sure if this is going to be used later on, but i kept it here for now
-        if not store_data or "dataset_name" not in store_data:
-            return html.Div("Dataset not found.", style={"color": "#ffffff", "textAlign": "center"}), []
+    def update_graphs(selected_columns):
         
-        filtered_graphs = [graphs[int(col)] for col in selected_columns]
-
-        anomaly_log = []  # Initialize anomaly log
-        for col in selected_columns:
-            #Dont really know what to really append in the anomaly log but added this as an example
-            anomaly_log.append(f"Anomaly detected in column {col}")
-
-        return filtered_graphs, html.Ul([html.Li(log) for log in anomaly_log])
-
+        
+        
 
         '''
         """ Generate graphs and update anomaly logs based on dataset from URL """
