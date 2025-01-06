@@ -48,9 +48,6 @@ def layout(handler):
 
     # Layout
     layout = html.Div([
-        # Store component to hold the current dataset and columns selection
-        dcc.Store(id="store-data", storage_type="session"),  # Store component for global data
-
         # Back to Home
         html.Div([html.A("← Back to Home", href="/", style={
             "fontSize": "24px", "color": "#ffffff", "fontWeight": "bold",

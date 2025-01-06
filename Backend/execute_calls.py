@@ -70,34 +70,6 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     arr = anomaly_df["timestamp"]
     api.update_anomalies(name, arr)
 
-
-"""
-    #Removing the "is_injected" & "is_anomaly" columns
-    feature_df = df.iloc[:, :-2]
-
-    #Creating an instance of the model
-    match model:
-        case "lstm":
-            time_steps=30
-            lstm_instance = LSTMModel()
-            lstm_instance.run(df.iloc[:, :-2], time_steps)
-            anomalies = lstm_instance.detect(df.iloc[:, :-2])
-            try: 
-                df["is_anomaly"] = anomalies
-            except Exception as e:
-                print(f'ERROR: {e}')
-        
-        case "isolation_forest":
-            if_instance = IsolationForest()
-            if_instance.run(df.iloc[:, :-2])
-
-            anomalies = if_instance.detect(df.iloc[:, :-2])
-            df["is_anoamaly"] = anomalies
-        
-        case _:
-            raise Exception("Model not found")
-"""
-
 # Starts processing of dataset as a stream
 def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, inj_params: dict=None, debug=False) -> None:
     print("Starting Stream-job!")

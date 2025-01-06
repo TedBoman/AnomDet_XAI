@@ -96,8 +96,6 @@ def __handle_api_call(conn, data: dict) -> None:
             name = data["name"]
             debug = data["debug"]
 
-            print(data)
-
             inj_params = data.get("inj_params", None)
 
             db_conn_params = {
@@ -166,15 +164,20 @@ def __handle_api_call(conn, data: dict) -> None:
             test_json = json.dumps({"test": "inject-anomaly-response" })
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case "get-running":
+            jobs = []
+            for job in backend_data["running-jobs"]:
+                new_job = {
+                    "name": job["name"],
+                    "type": job["type"]
+                }
+                jobs.append(new_job)
             running_dict = {
-                                "running": backend_data["running-jobs"]
+                                "running": jobs
                             }
             running_json = json.dumps(running_dict)
             conn.sendall(bytes(running_json, encoding="utf-8"))
-        case "cancel":
-            
-            test_json = json.dumps({"test": "cancel-response" })
-            conn.sendall(bytes(test_json, encoding="utf-8"))
+        case "cancel-job":
+            __cancel_job(data["job_name"])
         case "get-models":
             models = execute_calls.get_models()
             models_dict = {
@@ -222,7 +225,15 @@ def __handle_api_call(conn, data: dict) -> None:
             jobs_json = json.dumps(jobs_dict)
             conn.sendall(bytes(jobs_json, encoding="utf-8"))
         case "get-columns":
-            columns = execute_calls.get_columns(data["name"])
+            columns = backend_data["db_api"].get_columns(data["name"])
+            columns_dict = {
+                                "columns": columns
+                            }
+            columns_json = json.dumps(columns_dict)
+            conn.sendall(bytes(columns_json, encoding="utf-8"))
+        case "get-dataset-columns":
+            df = pd.read_csv(DATASET_DIRECTORY + data["dataset"])
+            columns = df.columns.tolist()
             columns_dict = {
                                 "columns": columns
                             }
@@ -230,7 +241,19 @@ def __handle_api_call(conn, data: dict) -> None:
             conn.sendall(bytes(columns_json, encoding="utf-8"))
         case _: 
             response_json = json.dumps({"error": "method-error-response" })
-            conn.sendall(bytes(response_json, encoding="utf-8"))        
+            conn.sendall(bytes(response_json, encoding="utf-8"))      
+    conn.shutdown(socket.SHUT_RDWR)
+    conn.close()
+            
+def __cancel_job(job_name: str) -> None:
+    print("Cancelling job...")
+    for job in backend_data["running-jobs"]:
+        if job["name"] == job_name:
+            #if job["type"] == "stream" and job["thread"].is_alive():
+                # Stop the streaming thread if it's a running stream job
+            backend_data["db_api"].drop_table(job_name)
+            backend_data["running-jobs"].remove(job)
+            break
 
 if __name__ == "__main__": 
     main()
