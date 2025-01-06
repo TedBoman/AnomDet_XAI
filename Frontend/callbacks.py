@@ -65,9 +65,6 @@ def get_index_callbacks(app):
 
         if jobs_json == active_jobs_json:
             return no_update
-
-        if len(active_jobs) == 0:
-            return ["No active jobs found."]
         
         return create_active_jobs(active_jobs)
         """
@@ -125,6 +122,7 @@ def get_index_callbacks(app):
                 State("duration-input", "value"),
                 State("column-dropdown", "value"),
                 State("injection-check", "value"),
+                State("speedup-input", "value"),
                 State("popup", "style")
             ]
             )
@@ -142,6 +140,7 @@ def get_index_callbacks(app):
                             duration,
                             columns,
                             inj_check,
+                            speedup,
                             style
                         ):   
         handler = get_handler()
@@ -154,10 +153,11 @@ def get_index_callbacks(app):
         trigger = ctx.triggered[0]["prop_id"]
         if trigger == "start-job-btn.n_clicks":
             response = handler.check_name(job_name)
-            if response == "success":
-                if selected_injection_method == []:
-                    inj_params = None
-                else: 
+            if job_name == "":
+                style.update({"backgroundColor": "#e74c3c"})
+                children = "Job name cannot be empty!"
+            elif response == "success":
+                if "use_injection" in inj_check:
                     inj_params = {
                                     "anomaly_type": selected_injection_method,
                                     "timestamp": str(timestamp),
@@ -166,10 +166,12 @@ def get_index_callbacks(app):
                                     "duration": str(duration),
                                     "columns": columns
                                 }
+                else: 
+                    inj_params = None
                 if selected_mode == "batch":
                     response = handler.handle_run_batch(selected_dataset, selected_detection_model, job_name, inj_params)
                 else:
-                    response = handler.handle_run_stream(selected_dataset, selected_detection_model, job_name, inj_params)
+                    response = handler.handle_run_stream(selected_dataset, selected_detection_model, job_name, speedup, inj_params)
                 style.update({"backgroundColor": "#4CAF50"})
             else:
                 style.update({"backgroundColor": "#e74c3c"})
@@ -264,7 +266,7 @@ def get_display_callbacks(app):
 def create_active_jobs(active_jobs):
     if len(active_jobs) == 0:
         return ["No active jobs found."]
-    return [
+    return [[
         html.Div([
             dcc.ConfirmDialog(
                 id={"type": "confirm-box", "index": job["name"]},
@@ -281,4 +283,4 @@ def create_active_jobs(active_jobs):
                 "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
             })
         ]) for job in active_jobs
-    ]
+    ]]

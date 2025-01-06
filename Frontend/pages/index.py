@@ -5,11 +5,18 @@ import json
 import dash
 from dash import dcc, html, Input, Output, State, callback, ctx
 from dash.dependencies import ALL
+from callbacks import create_active_jobs
 
 def layout(handler):
     datasets = handler.handle_get_datasets()
     models = handler.handle_get_models()
     injection_methods = handler.handle_get_injection_methods()
+
+    active_jobs = json.loads(handler.handle_get_running())
+    active_jobs = active_jobs["running"]
+
+    active_jobs_children = create_active_jobs(active_jobs)
+    got_jobs = len(active_jobs) > 0
 
     layout = html.Div([
         html.Div(
@@ -123,6 +130,7 @@ def layout(handler):
                                 id="name-input",
                                 type="text",
                                 placeholder="JOB_NAME",
+                                value="",
                                 style={"width": "200px", "marginTop": "10px"}
                             )
                 ], style={"display": "block", "marginTop": "15px", "textAlign": "center"}),
@@ -141,6 +149,17 @@ def layout(handler):
                         inputStyle={"height": "22px", "width": "30px", "marginRight": "10px"}
                     )
                 ], style={"textAlign": "center", "marginTop": "20px"}),
+
+                html.Div([
+                    html.Label("Select Speedup for Stream (Default: 1):", style={"fontSize": "22px", "color": "#ffffff"}),
+                    dcc.Input(
+                        id="speedup-input",
+                        type="number",
+                        value=1,
+                        step=0.1,
+                        style={"width": "200px", "marginTop": "10px"}
+                    )
+                ], style={"marginTop": "20px", "textAlign": "center"}),
                 
                 html.Div([
                     html.Button("Start Job", id="start-job-btn", style={
@@ -177,7 +196,7 @@ def layout(handler):
                     }),
                     dcc.Interval(
                     id="popup-interval",
-                    interval=3000,
+                    interval=3 * 1000,
                     n_intervals=0,
                     disabled=True 
                     ),
@@ -190,19 +209,19 @@ def layout(handler):
                 id="active-jobs-section",
                 children=[
                     html.H3("Currently Running Jobs:", style={"color": "#ffffff", "textAlign": "center"}),
-                    html.Div(children=["No active jobs found."], id="active-jobs-list", style={
+                    html.Div(children=active_jobs_children[0], id="active-jobs-list", style={
                         "textAlign": "center", "color": "#ffffff", "marginTop": "4px",
                         "width": "25rem", "margin": "10px auto", "padding": "10px", "border": "4px solid #464", "borderRadius": "5px"
                     }),
                     dcc.Store(id='active-jobs-json', data=""),
                     dcc.Interval(
                         id="job-interval",
-                        interval=3 * 1000,
+                        interval=5 * 1000,
                         n_intervals=0,
                         disabled=False 
                     )
                 ],
-                style={"display": "none", "marginTop": "30px"}  # Hidden by default
+                style={"display": "block", "marginTop": "30px"} if got_jobs else {"display": "none"} # Hidden by default
             ),
         ],style={
             "padding": "30px",
