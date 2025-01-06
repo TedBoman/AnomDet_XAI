@@ -3,9 +3,23 @@ import pandas as pd
 import plotly.graph_objs as go
 import random
 
+
 # Create the Dash app
 app = Dash(__name__)
+graphs = []
 
+def create_graphs(df):
+    global graphs
+    for col in df.columns:
+        if col != "timestamp":
+            fig = go.Figure([
+                go.Scatter(x=df["timestamp"], y=df[col], mode="lines", name=col)
+            ])
+            fig.update_layout(title=f"{col} over Time", xaxis_title="Time", yaxis_title=col)
+            graphs.append(dcc.Graph(figure=fig))
+    return graphs
+
+'''
 # Mock datasets (these datasets should match the job details from starter_page.py)
 datasets = {
     f"Dataset {i}": pd.DataFrame({
@@ -15,12 +29,18 @@ datasets = {
         "memory-usage": [random.uniform(30, 80) for _ in range(100)],
     }) for i in range(1, 6)
 }
-
+'''
 # Initial dataset (will be overridden by the selected job)
 current_dataset = list(datasets.keys())[0]
 anomaly_log = []  # Global anomaly log
 
 def layout(handler):
+    global graphs
+    #Get data frame from a completed job
+    df = handler.get_data()
+    # Create graphs of each column in that data frame
+    graphs = create_graphs(df)
+
     # Layout
     layout = html.Div([
         # Store component to hold the current dataset and columns selection
@@ -55,7 +75,9 @@ def layout(handler):
 
         # Interval for streaming
         dcc.Interval(id="stream-interval", interval=1000, n_intervals=0)
+        
     ], style={"backgroundColor": "#282c34", "padding": "50px", "minHeight": "100vh", "position": "relative"})
+    return layout
 
 # Run the app
 if __name__ == '__main__':

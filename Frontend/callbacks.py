@@ -1,4 +1,6 @@
 from dash import Dash, dcc, html, Input, Output, State, ALL, callback, callback_context
+from pages.display_data import graphs
+
 
 def get_index_callbacks(app):
     @app.callback(
@@ -146,7 +148,22 @@ def get_display_callbacks(app):
          Input("store-data", "data"),
          Input("column-selector", "value")]
     )
-    def update_graphs_and_anomalies(n_intervals, store_data, selected_columns):
+    def update_graphs(n_intervals, store_data, selected_columns):
+
+        if not store_data or "dataset_name" not in store_data:
+            return html.Div("Dataset not found.", style={"color": "#ffffff", "textAlign": "center"}), []
+        
+        filtered_graphs = [graphs[int(col)] for col in selected_columns]
+
+        anomaly_log = []  # Initialize anomaly log
+        for col in selected_columns:
+            # Example logic to update anomaly log (replace with actual logic)
+            anomaly_log.append(f"Anomaly detected in column {col}")
+
+        return filtered_graphs, html.Ul([html.Li(log) for log in anomaly_log])
+
+
+        '''
         """ Generate graphs and update anomaly logs based on dataset from URL """
         if not store_data or "dataset_name" not in store_data:
             return html.Div("Dataset not found.", style={"color": "#ffffff", "textAlign": "center"}), []
@@ -184,4 +201,4 @@ def get_display_callbacks(app):
                 new_anomalies.append(f"[{row['timestamp']}] {dataset_name} - Anomaly in {col}: {row[col]:.2f}")
 
         anomaly_log.extend(new_anomalies)
-        return graphs, html.Ul([html.Li(log) for log in anomaly_log[-10:]])
+        return graphs, html.Ul([html.Li(log) for log in anomaly_log[-10:]])'''
