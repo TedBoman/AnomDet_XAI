@@ -159,7 +159,7 @@ def __handle_api_call(conn, data: dict) -> None:
                 "data": df
             }
             df_json = json.dumps(df_dict)
-            conn.sendall(bytes(test_json, encoding="utf-8"))
+            conn.sendall(bytes(df_json, encoding="utf-8"))
         case "inject-anomaly":
             test_json = json.dumps({"test": "inject-anomaly-response" })
             conn.sendall(bytes(test_json, encoding="utf-8"))
