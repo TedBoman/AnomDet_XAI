@@ -114,7 +114,7 @@ class BackendAPI:
     # Uploads a complete dataset to the backend
     def import_dataset(self, file_path: str, timestamp_column: str) -> None:
         if not os.path.isfile(file_path):
-            handle_error(2, "File not found")
+            return #handle_error(2, "File not found")
 
         file = open(file_path, "r")
         file_content = file.read()
@@ -154,6 +154,7 @@ class BackendAPI:
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect((self.host, self.port))
+            sock.settimeout(1)
 
             # Send two messages through the same connection if the method is import-dataset
             if data["METHOD"] == "import-dataset":
@@ -164,10 +165,10 @@ class BackendAPI:
                 sleep(0.5)
                 sock.sendall(bytes(file_content, encoding="utf-8"))
             if data["METHOD"] == "get-data":
-                recv_data = conn.recv(1024).decode("utf-8")
+                recv_data = sock.recv(1024).decode("utf-8")
                 json_data = data
                 while recv_data:
-                    recv_data = conn.recv(1024).decode("utf-8")
+                    recv_data = sock.recv(1024).decode("utf-8")
                     json_data += recv_data
                 
                 data = json.loads(json_data)
