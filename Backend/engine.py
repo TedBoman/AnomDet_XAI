@@ -166,8 +166,15 @@ def __handle_api_call(conn, data: dict) -> None:
             test_json = json.dumps({"test": "inject-anomaly-response" })
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case "get-running":
+            jobs = []
+            for job in backend_data["running-jobs"]:
+                new_job = {
+                    "name": job["name"],
+                    "type": job["type"]
+                }
+                jobs.append(new_job)
             running_dict = {
-                                "running": backend_data["running-jobs"]
+                                "running": jobs
                             }
             running_json = json.dumps(running_dict)
             conn.sendall(bytes(running_json, encoding="utf-8"))
@@ -222,7 +229,15 @@ def __handle_api_call(conn, data: dict) -> None:
             jobs_json = json.dumps(jobs_dict)
             conn.sendall(bytes(jobs_json, encoding="utf-8"))
         case "get-columns":
-            columns = execute_calls.get_columns(data["name"])
+            columns = backend_data["db_api"].get_columns(data["name"])
+            columns_dict = {
+                                "columns": columns
+                            }
+            columns_json = json.dumps(columns_dict)
+            conn.sendall(bytes(columns_json, encoding="utf-8"))
+        case "get-dataset-columns":
+            df = pd.read_csv(DATASET_DIRECTORY + data["dataset"])
+            columns = df.columns.tolist()
             columns_dict = {
                                 "columns": columns
                             }

@@ -68,11 +68,8 @@ class LSTMModel(model_interface.ModelInterface):
 
             X_pred = self.model.predict(X_test)
             mae_loss = np.mean(np.abs(X_pred - X_test), axis=1)
-            print(mae_loss)
             threshold = np.mean(mae_loss) + 3 * np.std(mae_loss)
             boolean_anomalies = mae_loss > threshold
-
-            print("Shape: " + boolean_anomalies.shape)
 
             boolean_anomalies = boolean_anomalies[:,0]
             for i in range(self.time_steps):

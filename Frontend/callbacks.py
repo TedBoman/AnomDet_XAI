@@ -1,4 +1,6 @@
-from dash import Dash, dcc, html, Input, Output, State, ALL, callback, callback_context
+from dash import Dash, dcc, html, Input, Output, State, ALL, MATCH, callback, callback_context, no_update
+import json
+from get_handler import get_handler
 
 def get_index_callbacks(app):
     @app.callback(
@@ -9,29 +11,66 @@ def get_index_callbacks(app):
         if "use_injection" in selected:
             return {"display": "block"}
         return {"display": "none"}
+    @app.callback(
+        Output("column-dropdown", "options"),
+        Input("dataset-dropdown", "value")
+    )
+    def update_column_dropdown(selected_dataset):
+        handler = get_handler()
+        columns = handler.handle_get_dataset_columns(selected_dataset)
+        return [{"label": col, "value": col} for col in columns]
 
-    """
     @app.callback(
         Output("active-jobs-section", "style"),
-        Input("active-datasets-list", "children")
+        Input("active-jobs-list", "children")
     )
     def toggle_active_jobs_section(children):
-        # Visa sektionen om det finns några aktiva jobb, annars dölj den
-        if children:
-            return {"display": "block", "marginTop": "30px"}
-        return {"display": "none"}
-
-    # Callback to add and manage active datasets
+        # Show the active jobs section if there are active jobs
+        if children == "No active jobs found.":
+            return {"display": "none"}
+        return {"display": "block", "marginTop": "30px"}
+        
+    # Callback to display confirmation box
     @app.callback(
-        Output("active-datasets-list", "children"),
-        [Input("start-job-btn", "n_clicks"),
-        Input({"type": "remove-dataset-btn", "index": ALL}, "n_clicks")],
-        [State("dataset-dropdown", "value")]
+        Output({"type": "confirm-box", "index": MATCH}, "displayed"),
+        Input({"type": "remove-dataset-btn", "index": MATCH}, "n_clicks")
     )
-    def manage_active_datasets(add_clicks, remove_clicks, selected_dataset):
-        global active_datasets
+    def display_confirm(value):
+        return True if value else False
+
+    # Callback to manage active jobs
+    @app.callback(
+        [Output("active-jobs-list", "children")],
+        [Input("job-interval", "n_intervals"), Input({"type": "confirm-box", "index": ALL}, "submit_n_clicks")],
+        [State("active-jobs-json", "data")],
+        
+    )
+    def manage_and_remove_active_jobs(children, submit_n_clicks, active_jobs_json):
         ctx = callback_context
 
+        triggered_id = ctx.triggered_id
+
+        if triggered_id == None:
+            return no_update
+
+        handler = get_handler()
+
+        if triggered_id != "job-interval":
+            job = triggered_id["index"]
+            handler.handle_cancel_job(job)
+
+        active_jobs = json.loads(handler.handle_get_running())
+        active_jobs = active_jobs["running"]
+        jobs_json = json.dumps(active_jobs)
+
+        if jobs_json == active_jobs_json:
+            return no_update
+
+        if len(active_jobs) == 0:
+            return ["No active jobs found."]
+        
+        return create_active_jobs(active_jobs)
+        """
         if not ctx.triggered:
             return [
                 html.Div([
@@ -70,42 +109,78 @@ def get_index_callbacks(app):
                 })
             ]) for dataset in active_datasets
         ]
-
-    """
     """
     @app.callback(
-        [Output("popup", "style"), Output("popup-interval", "disabled")],
-        [Input("start-job-btn", "n_clicks"), Input("popup-interval", "n_intervals")],
-        [State("popup", "style")]
-    )
-    def handle_popup(n_clicks, n_intervals, style):
+            [Output("popup", "style"), Output("popup-interval", "disabled"), Output("popup", "children")],
+            [Input("start-job-btn", "n_clicks"), Input("popup-interval", "n_intervals")],
+            [
+                State("dataset-dropdown", "value"),
+                State("detection-model-dropdown", "value"),
+                State("mode-selection", "value"),
+                State("name-input", "value"),
+                State("injection-method-dropdown", "value"),
+                State("timestamp-input", "value"),
+                State("magnitude-input", "value"),
+                State("percentage-input", "value"),
+                State("duration-input", "value"),
+                State("column-dropdown", "value"),
+                State("injection-check", "value"),
+                State("popup", "style")
+            ]
+            )
+    def start_job_handler(
+                            n_clicks,
+                            n_intervals,
+                            selected_dataset,
+                            selected_detection_model,
+                            selected_mode,
+                            job_name,
+                            selected_injection_method,
+                            timestamp,
+                            magnitude,
+                            percentage,
+                            duration,
+                            columns,
+                            inj_check,
+                            style
+                        ):   
+        handler = get_handler()
+        children = "Job has started!"
+
         ctx = callback_context
         if not ctx.triggered:
-            return style, True
+            return style, True, children
 
         trigger = ctx.triggered[0]["prop_id"]
-        if trigger == "start-job-btn.n_clicks" and n_clicks:
+        if trigger == "start-job-btn.n_clicks":
+            response = handler.check_name(job_name)
+            if response == "success":
+                if selected_injection_method == []:
+                    inj_params = None
+                else: 
+                    inj_params = {
+                                    "anomaly_type": selected_injection_method,
+                                    "timestamp": str(timestamp),
+                                    "magnitude": str(magnitude),
+                                    "percentage": str(percentage),
+                                    "duration": str(duration),
+                                    "columns": columns
+                                }
+                if selected_mode == "batch":
+                    response = handler.handle_run_batch(selected_dataset, selected_detection_model, job_name, inj_params)
+                else:
+                    response = handler.handle_run_stream(selected_dataset, selected_detection_model, job_name, inj_params)
+                style.update({"backgroundColor": "#4CAF50"})
+            else:
+                style.update({"backgroundColor": "#e74c3c"})
+                children = "Job name already exists!"
             style.update({"display": "block"})
-            return style, False 
+            return style, False, children
         elif trigger == "popup-interval.n_intervals":
             style.update({"display": "none"})
-            return style, True 
+            return style, True, children 
 
-        return style, True
-    """
-
-    @app.callback(
-            Output("starter-feedback", "children"),
-            State("dataset-dropdown", "value"),
-            State("detection-model-dropdown", "value"),
-            State("mode-selection", "value"),
-            State("injection-method-dropdown", "value"),
-            State("date-picker-range", "start_date"),
-            State("date-picker-range", "end_date"),
-            Input("start-job-btn", "n_clicks")
-            )
-    def start_job(**kwargs):   
-        print("test")
+        return style, True, children
 
 def get_display_callbacks(app):
     """
@@ -185,3 +260,25 @@ def get_display_callbacks(app):
 
         anomaly_log.extend(new_anomalies)
         return graphs, html.Ul([html.Li(log) for log in anomaly_log[-10:]])
+
+def create_active_jobs(active_jobs):
+    if len(active_jobs) == 0:
+        return ["No active jobs found."]
+    return [
+        html.Div([
+            dcc.ConfirmDialog(
+                id={"type": "confirm-box", "index": job["name"]},
+                message=f'Are you sure you want to cancel the job {job["name"]}?',
+                displayed=False,
+            ),
+            dcc.Link(
+                children=[job["name"]],
+                href=f'/{job["name"]}' if job["type"] == "stream" else f'/{job["name"]}?batch=True',
+                style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
+            ),
+            html.Button("Stop", id={"type": "remove-dataset-btn", "index": job["name"]}, n_clicks=0, style={
+                "fontSize": "12px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
+                "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
+            })
+        ]) for job in active_jobs
+    ]
