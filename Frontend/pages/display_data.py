@@ -34,7 +34,8 @@ def create_default_columns(columns):
 def layout(app, handler, job_name, batch=True):
     #Get data frame from a completed job
     df = handler.handle_get_data(0, job_name)
-
+    print(df["is_anomaly"])
+    print(df["injected_anomaly"])
     
     #Create graphs of each column in that data frame
     columns = df.columns.tolist()
