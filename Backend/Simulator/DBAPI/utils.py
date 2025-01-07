@@ -74,6 +74,7 @@ def parse_duration_seconds(duration_str):
             ValueError: If the duration string is invalid.
         """
 
+
         if duration_str == "0" or duration_str == None or duration_str == "":
             return 0
 
