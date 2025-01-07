@@ -72,6 +72,7 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
 def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, inj_params: dict=None, debug=False) -> None:
     print("Starting Stream-job!")
     sys.stdout.flush()
+    
     if inj_params is not None:
         anomaly = AnomalySetting(
         inj_params.get("anomaly_type", None),

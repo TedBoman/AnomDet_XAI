@@ -84,7 +84,7 @@ class TimeSeriesAnomalyInjector:
                                         setting
                                     )
                                     # Mark anomaly flags
-                                    modified_data.loc[anomaly_indices, 'injected_anomaly'] = True
+                                    modified_data.loc[anomaly_indices, "injected_anomaly"] = True
                                     dl.debug_print(f"Data after injection:\n{modified_data.loc[anomaly_indices, column]}")
                                     dl.debug_print(f"Anomaly flags after injection:\n{modified_data.loc[anomaly_indices, 'injected_anomaly']}")
                                     
