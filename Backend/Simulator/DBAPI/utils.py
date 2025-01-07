@@ -48,7 +48,7 @@ def parse_duration(duration_str):
             elif unit in ('W', 'w', 'weeks'):
                 total_seconds += value * 604800
             else:
-                raise ValueError(f"Invalid unit: {unit}")
+                return timedelta(0)
 
         return timedelta(seconds=total_seconds)
 
@@ -75,7 +75,7 @@ def parse_duration_seconds(duration_str):
         """
 
         if duration_str == "0" or duration_str == None:
-            return None
+            return 0
 
         pattern = r'(\d+)\s*([HhmindaysSwW]+)'
         matches = re.findall(pattern, duration_str)
@@ -97,6 +97,6 @@ def parse_duration_seconds(duration_str):
             elif unit in ('W', 'w', 'weeks'):
                 total_seconds += value * 604800
             else:
-                raise ValueError(f"Invalid unit: {unit}")
+                return 0
 
         return total_seconds - 30

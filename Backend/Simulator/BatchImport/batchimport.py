@@ -132,9 +132,6 @@ class BatchImporter:
             injector = TimeSeriesAnomalyInjector()
             chunk_start_time = pd.to_datetime(chunk['timestamp'].min(), unit='s')
             chunk_end_time = pd.to_datetime(chunk['timestamp'].max(), unit='s')
-
-            # Create a new column to track anomalies
-            chunk['injected_anomaly'] = False
             
             for setting in anomaly_settings:
                 anomaly_start = setting.timestamp
@@ -200,6 +197,10 @@ class BatchImporter:
 
         # Set the chunksize to the number of rows in the file / cpu cores available
         self.chunksize = len(full_df.index) / num_processes
+
+        # Create a new column to track anomalies
+        full_df['injected_anomaly'] = False
+        full_df['is_anomaly'] = False
 
         # Process chunks with anomaly injection
         for chunk in [full_df[i:i+int(self.chunksize)] for i in range(0, int(len(full_df)), int(self.chunksize))]:
