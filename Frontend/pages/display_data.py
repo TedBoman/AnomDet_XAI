@@ -13,24 +13,23 @@ def create_graphs(df, columns):
         false_normal = df[(df["is_anomaly"] == False) & (df["injected_anomaly"] == True)][["timestamp", col]]
         anomalies = df[df["is_anomaly"] == True][["timestamp", col]]
         fig_layout = go.Layout(
-            width=800,  # Width of the figure
-            height=400  # Height of the figure
+            height=400,  # Height of the figure
         )
         fig = go.Figure(
                 data=[
-                    go.Scatter(x=true_normal["timestamp"], y=true_normal[col], mode=dict(color="green", size=7), name="True Normal Data"),
-                    go.Scatter(x=false_normal["timestamp"], y=false_normal[col], mode=dict(color="blue", size=7), name="Injected Anomalies Labeled as Normal"),
+                    go.Scatter(x=true_normal["timestamp"], y=true_normal[col], mode="markers", marker=dict(color="green", size=7), name="True Normal Data"),
+                    go.Scatter(x=false_normal["timestamp"], y=false_normal[col], mode="markers", marker=dict(color="blue", size=7), name="Injected Anomalies Labeled as Normal"),
                     go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers", marker=dict(color="red", size=7, symbol="x"), name="All Labeled Anomalies")
                 ],
                 layout=fig_layout
             )
-        fig.update_layout(title=col, xaxis_title="Time", yaxis_title=col)
-        graph = dcc.Graph(id = {"type" : "graph", "index" : col}, figure = fig, style={"padding": "15px"})
+        fig.update_layout(title=col, xaxis_title="Time", yaxis_title=col,)
+        graph = dcc.Graph(id = {"type" : "graph", "index" : col}, figure = fig, style={"padding": "15px", "border-radius": "10px", })
         graphs[col] = graph
 
 def create_default_columns(columns):
     if len(columns) > 3:
-        return random.sample(columns, 3)
+        return [columns[0], columns[1], columns[2]]
     return columns
 
 def layout(handler, job_name, batch=True):
@@ -64,15 +63,16 @@ def layout(handler, job_name, batch=True):
         html.Div([
             html.H3("Available Columns:", style={"color": "#ffffff", "textAlign": "center"}),
             dcc.Checklist(
-                id="graph-dropdown",
+                id="graph-checklist",
                 options=[{"label": col, "value": col} for col in columns],
                 value=columns_to_show,
-                style={"width": "350px", "margin": "auto"}
+                inline=True,
+                style={"width": "1000px", "margin": "auto", "color": "#ffffff"}
             ),
-        ], style={"textAlign": "center", "padding": "20px", "borderRadius": "10px"}),
+        ], style={"display": "flex", "flex-direction": "column", "justify-content": "center"}), 
 
         # Right Panel: Graphs
-        html.Div(children=[graphs[graph] for graph in columns_to_show], id="graph-container", style={"display": "block", "padding": "20px"}),
+        html.Div(children=[graphs[graph] for graph in columns_to_show], id="graph-container", style={"display": "flex", "justify-content": "center", "flex-direction": "column", "padding": "20px", "textAlign": "center"}),
 
         # Interval for streaming
         dcc.Interval(id="stream-interval", interval=1000, n_intervals=0, disabled=batch)
@@ -85,7 +85,7 @@ def get_local_callback(app):
     # Register callback for updating graphs
     @app.callback(
         Output('graph-container', 'children'),
-        [Input('graph-dropdown', 'value')]
+        [Input('graph-checklist', 'value')]
     )
     def update_graphs(selected_graphs):
         print("Selected Graphs: ", selected_graphs)
