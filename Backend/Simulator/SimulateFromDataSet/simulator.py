@@ -98,6 +98,7 @@ class Simulator:
 
         # Create a new column to track anomalies
         df['injected_anomaly'] = False
+        df['is_anomaly'] = False
         
         dl.debug_print(anomaly_settings)
 

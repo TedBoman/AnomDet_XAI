@@ -27,7 +27,7 @@ class TimescaleDBAPI(DBInterface):
         # The first column is of type TIMESTAMPTZ NOT NULL and the rest are VARCHAR(50)
         columns[0] = f'\"{columns[0]}\" TIMESTAMPTZ NOT NULL'
         for i in range(1, length):
-            columns[i] = f'\"{columns[i]}\" VARCHAR(50)'
+            columns[i] = f'\"{columns[i]}\" TEXT'
         columns = columns + ["is_anomaly BOOLEAN"] + ["injected_anomaly BOOLEAN"]
 
         try: 
