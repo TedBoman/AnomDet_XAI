@@ -2,6 +2,7 @@ import os
 import socket
 import json
 from time import sleep
+from datetime import datetime
 
 class BackendAPI:
     # Constructor setting host adress and port for the the backend container
@@ -57,10 +58,10 @@ class BackendAPI:
         self.__send_data(data, response=False)
 
     # Requests each row of data of a running job from timestamp and forward
-    def get_data(self, timestamp: str, name: str) -> str:
+    def get_data(self, timestamp: int, name: str) -> str:
         data = {
             "METHOD": "get-data",
-            "timestamp": timestamp,
+            "timestamp": str(timestamp),
             "job_name": name
         }
         return self.__send_data(data)
@@ -113,7 +114,7 @@ class BackendAPI:
     # Uploads a complete dataset to the backend
     def import_dataset(self, file_path: str, timestamp_column: str) -> None:
         if not os.path.isfile(file_path):
-            handle_error(2, "File not found")
+            return #handle_error(2, "File not found")
 
         file = open(file_path, "r")
         file_content = file.read()
@@ -141,6 +142,13 @@ class BackendAPI:
         }
         return self.__send_data(data)
 
+    def get_dataset_columns(self, dataset: str) -> str:
+        data = {
+            "METHOD": "get-dataset-columns",
+            "dataset": dataset
+        }
+        return self.__send_data(data)
+
     # Initates connection to backend and sends json data through the socket
     def __send_data(self, data: str, response: bool=True) -> str:
         try:
@@ -155,11 +163,28 @@ class BackendAPI:
                 sock.sendall(bytes(data, encoding="utf-8"))
                 sleep(0.5)
                 sock.sendall(bytes(file_content, encoding="utf-8"))
+            if data["METHOD"] == "get-data":       
+                sock.settimeout(1)
+                data = json.dumps(data)
+                sock.sendall(bytes(data, encoding="utf-8"))
+
+                recv_data = sock.recv(1024).decode("utf-8")
+                json_data = recv_data
+                print(json_data)
+                while recv_data:
+                    recv_data = sock.recv(1024).decode("utf-8")
+                    print(json_data)
+                    if recv_data:
+                        json_data += recv_data
+                
+                data = json.loads(json_data)
+                return data
             else:
                 data = json.dumps(data)
                 sock.sendall(bytes(data, encoding="utf-8"))
             if response:
                 data = sock.recv(1024)
+                data = data.decode("utf-8")
                 return data
         except Exception as e:
             print(e)

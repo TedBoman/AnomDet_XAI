@@ -5,6 +5,9 @@ import pandas as pd
 import numpy as np
 import os
 from socket import socket
+from ML_models.get_model import get_model
+from timescaledb_api import TimescaleDBAPI
+from datetime import datetime, timezone
 
 # Third-Party
 import threading
@@ -22,11 +25,22 @@ MODEL_DIRECTORY = "./ML_models"
 INJECTION_METHOD_DIRECTORY = "./Simulator/AnomalyInjector/InjectionMethods"
 DATASET_DIRECTORY = "./Datasets"
 
+
+def map_to_timestamp(time):
+    return time.timestamp()
+
+def map_to_time(time):
+    return datetime.fromtimestamp(time, timezone.utc)
+
 # Starts processing of dataset in one batch
 def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict=None, debug=False) -> None:
     print("Starting Batch-job!")
     sys.stdout.flush()
     
+    model_instance = get_model(model)
+    df = pd.read_csv(path)
+    model_instance.run(df)
+
     if inj_params is not None:
         anomaly = AnomalySetting(
         inj_params.get("anomaly_type", None),
@@ -36,37 +50,25 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
         inj_params.get("columns", None),
         inj_params.get("duration", None)) 
         batch_job = Job(filepath=path, anomaly_settings=[anomaly], simulation_type="batch", speedup=None, table_name=name, debug=debug)
+        
     else:
         batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name, debug=debug)
     sim_engine = se()
     sim_engine.main(db_conn_params, batch_job)
 
-"""
-    #Removing the "is_injected" & "is_anomaly" columns
-    feature_df = df.iloc[:, :-2]
+    api = TimescaleDBAPI(db_conn_params)
+    df = api.read_data(datetime.fromtimestamp(0, timezone.utc), name)
+    
+    df["timestamp"] = df["timestamp"].apply(map_to_timestamp)
+    df["timestamp"] = df["timestamp"].astype(float)
 
-    #Creating an instance of the model
-    match model:
-        case "lstm":
-            time_steps=30
-            lstm_instance = LSTMModel()
-            lstm_instance.run(df.iloc[:, :-2], time_steps)
-            anomalies = lstm_instance.detect(df.iloc[:, :-2])
-            try: 
-                df["is_anomaly"] = anomalies
-            except Exception as e:
-                print(f'ERROR: {e}')
-        
-        case "isolation_forest":
-            if_instance = IsolationForest()
-            if_instance.run(df.iloc[:, :-2])
-
-            anomalies = if_instance.detect(df.iloc[:, :-2])
-            df["is_anoamaly"] = anomalies
-        
-        case _:
-            raise Exception("Model not found")
-"""
+    res = model_instance.detect(df.iloc[:, :-2])
+    df["timestamp"] = df["timestamp"].apply(map_to_time)
+    df["is_anomaly"] = res
+    
+    anomaly_df = df[df["is_anomaly"] == True]
+    arr = anomaly_df["timestamp"]
+    api.update_anomalies(name, arr)
 
 # Starts processing of dataset as a stream
 def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, inj_params: dict=None, debug=False) -> None:
@@ -104,6 +106,7 @@ def get_models() -> list:
     models.remove("model_interface")
     models.remove("__init__")
     models.remove("setup")
+    models.remove("get_model")
     
     return models
 
@@ -130,3 +133,20 @@ def get_datasets() -> list:
 
     return datasets
 
+# Gets content of complete file to the backend
+def import_dataset(conn: socket, path: str, timestamp_column: str) -> None:
+    file = open(path, "w")
+    data = conn.recv(1024).decode("utf-8")
+    while data:
+        file.write(data)
+        data = conn.recv(1024).decode("utf-8")
+    file.close()
+    
+    # Change the timestamp column name to timestamp and move it to the first column
+    df = pd.read_csv(path)
+    df.rename(columns={timestamp_column: "timestamp"}, inplace=True)
+    cols = df.columns.tolist()
+    cols.remove("timestamp")
+    cols = ["timestamp"] + cols
+    df = df[cols]
+    df.to_csv(path, index=False)
