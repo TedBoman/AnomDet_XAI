@@ -21,7 +21,7 @@ app.config.suppress_callback_exceptions = True  # Suppress errors for dynamic co
 app.layout = html.Div([
     dcc.Store(id="store-data"),
     dcc.Location(id="url", refresh=False),  # Monitors URL changes
-    html.Div(id="page-content", style={"display": "block"})            # Dynamic content is updated here
+    html.Div(id="page-content")            # Dynamic content is updated here
 ])
 
 

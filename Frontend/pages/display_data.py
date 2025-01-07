@@ -9,7 +9,8 @@ def create_graphs(df, columns):
     global graphs
     i = 1
     for col in columns:
-        normal = df[df["is_anomaly"] == False][["timestamp", col]]
+        true_normal = df[(df["is_anomaly"] == False) & (df["injected_anomaly"] == False)][["timestamp", col]]
+        false_normal = df[(df["is_anomaly"] == False) & (df["injected_anomaly"] == True)][["timestamp", col]]
         anomalies = df[df["is_anomaly"] == True][["timestamp", col]]
         fig_layout = go.Layout(
             width=800,  # Width of the figure
@@ -17,8 +18,9 @@ def create_graphs(df, columns):
         )
         fig = go.Figure(
                 data=[
-                    go.Scatter(x=normal["timestamp"], y=normal[col], mode="markers", name="Normal Data"),
-                    go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers", marker = dict(color="red", size=10), name="Anomalies")
+                    go.Scatter(x=true_normal["timestamp"], y=true_normal[col], mode=dict(color="green", size=7), name="True Normal Data"),
+                    go.Scatter(x=false_normal["timestamp"], y=false_normal[col], mode=dict(color="blue", size=7), name="Injected Anomalies Labeled as Normal"),
+                    go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers", marker=dict(color="red", size=7, symbol="x"), name="All Labeled Anomalies")
                 ],
                 layout=fig_layout
             )
@@ -61,23 +63,21 @@ def layout(handler, job_name, batch=True):
         # Left Panel: Column Selection + Anomaly Log
         html.Div([
             html.H3("Available Columns:", style={"color": "#ffffff", "textAlign": "center"}),
-            dcc.Dropdown(
+            dcc.Checklist(
                 id="graph-dropdown",
                 options=[{"label": col, "value": col} for col in columns],
-                multi=True,
                 value=columns_to_show,
-                placeholder="Select a method",
                 style={"width": "350px", "margin": "auto"}
             ),
         ], style={"textAlign": "center", "padding": "20px", "borderRadius": "10px"}),
 
         # Right Panel: Graphs
-        html.Div(children=[graphs[graph] for graph in columns_to_show], id="graph-container", style={"display": "flex", "justify-content": "center", "flex-direction": "column", "padding": "20px"}),
+        html.Div(children=[graphs[graph] for graph in columns_to_show], id="graph-container", style={"display": "block", "padding": "20px"}),
 
         # Interval for streaming
         dcc.Interval(id="stream-interval", interval=1000, n_intervals=0, disabled=batch)
         
-    ], style={"display": "flex", "justify-content": "center", "flex-direction": "column", "backgroundColor": "#282c34", "width": "100%"})    
+    ], style={"display": "flex", "justify-content": "center", "flex-direction": "column", "backgroundColor": "#282c34", "width": "100%", "minHeight": "100vh"})    
 
     return layout   
 

@@ -30,7 +30,7 @@ def map_to_timestamp(time):
     return time.timestamp()
 
 def map_to_time(time):
-    return datetime.fromtimestamp(time)
+    return datetime.fromtimestamp(time, tz=timezone.utc)
 
 # Starts processing of dataset in one batch
 def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict=None, debug=False) -> None:
@@ -68,18 +68,15 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     df["timestamp"] = df["timestamp"].astype(float)
 
     res = model_instance.detect(df.iloc[:, :-2])
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit='s')
     df["is_anomaly"] = res
     
     anomaly_df = df[df["is_anomaly"] == True]
-    arr = anomaly_df["timestamp"]
+    
+    arr = [datetime.fromtimestamp(timestamp) for timestamp in anomaly_df["timestamp"]]
+    arr = [f'\'{str(time)}+00\'' for time in arr]
+    #1970-01-01 00:13:30+00
 
-    test_df = api.read_data(datetime.fromtimestamp(0), name)
-    database_time = test_df["timestamp"].to_numpy()
-
-    print(f'database format: {database_time}')
-
-    api.update_anomalies(name, test_df["timestamp"])
+    api.update_anomalies(name, arr)
 
 # Starts processing of dataset as a stream
 def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, inj_params: dict=None, debug=False) -> None:
