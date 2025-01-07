@@ -11,12 +11,19 @@ def create_graphs(df, columns):
     for col in columns:
         normal = df[df["is_anomaly"] == False][["timestamp", col]]
         anomalies = df[df["is_anomaly"] == True][["timestamp", col]]
-        fig = go.Figure([
-            go.Scatter(x=df["timestamp"], y=df[col], mode="markers", name=col),
-            #go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers", marker = dict(color="red", size=10), name="Anomalies")
-        ])
+        fig_layout = go.Layout(
+            width=800,  # Width of the figure
+            height=600  # Height of the figure
+        )
+        fig = go.Figure(
+                data=[
+                    go.Scatter(x=df["timestamp"], y=df[col], mode="markers", name=col),
+                    #go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers", marker = dict(color="red", size=10), name="Anomalies")
+                ],
+                layout=fig_layout
+            )
         fig.update_layout(title=f"{col} over Time", xaxis_title="Time", yaxis_title=col)
-        graph = dcc.Graph(id = {"type" : "graph", "index" : col}, figure = fig, width=800, height=400)
+        graph = dcc.Graph(id = {"type" : "graph", "index" : col}, figure = fig)
         graphs[col] = graph
 
 def create_default_columns(columns):
@@ -69,8 +76,11 @@ def layout(app, handler, job_name, batch=True):
         # Interval for streaming
         dcc.Interval(id="stream-interval", interval=1000, n_intervals=0, disabled=batch)
         
-    ], style={"display": "flex", "justify-content": "center", "flex-direction": "column", "backgroundColor": "#282c34", "width": "100%"})
+    ], style={"display": "flex", "justify-content": "center", "flex-direction": "column", "backgroundColor": "#282c34", "width": "100%"})    
 
+    return layout   
+
+def get_local_callback(app):
     # Register callback for updating graphs
     @app.callback(
         Output('graph-container', 'children'),
@@ -80,8 +90,4 @@ def layout(app, handler, job_name, batch=True):
         print("Selected Graphs: ", selected_graphs)
         if not selected_graphs:
             return "Select graphs from the dropdown to display them."
-        #return [graphs[graph] for graph in selected_graphs]
-        return [[]]
-
-    return layout   
-
+        return [graphs[graph] for graph in selected_graphs]
