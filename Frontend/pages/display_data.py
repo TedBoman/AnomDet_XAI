@@ -11,19 +11,20 @@ def create_graphs(df, columns):
     for col in columns:
         normal = df[df["is_anomaly"] == False][["timestamp", col]]
         anomalies = df[df["is_anomaly"] == True][["timestamp", col]]
+        print(anomalies)
         fig_layout = go.Layout(
             width=800,  # Width of the figure
-            height=600  # Height of the figure
+            height=400  # Height of the figure
         )
         fig = go.Figure(
                 data=[
-                    go.Scatter(x=df["timestamp"], y=df[col], mode="markers", name=col),
-                    #go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers", marker = dict(color="red", size=10), name="Anomalies")
+                    go.Scatter(x=normal["timestamp"], y=normal[col], mode="markers", name=col),
+                    go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers", marker = dict(color="red", size=10), name="Anomalies")
                 ],
                 layout=fig_layout
             )
         fig.update_layout(title=f"{col} over Time", xaxis_title="Time", yaxis_title=col)
-        graph = dcc.Graph(id = {"type" : "graph", "index" : col}, figure = fig)
+        graph = dcc.Graph(id = {"type" : "graph", "index" : col}, figure = fig, style={"padding": "15px"})
         graphs[col] = graph
 
 def create_default_columns(columns):
@@ -72,7 +73,7 @@ def layout(app, handler, job_name, batch=True):
         ], style={"textAlign": "center", "padding": "20px", "borderRadius": "10px"}),
 
         # Right Panel: Graphs
-        html.Div(children=[graphs[graph] for graph in columns_to_show], id="graph-container", style={"padding": "20px"}),
+        html.Div(children=[graphs[graph] for graph in columns_to_show], id="graph-container", style={"padding": "20px", "width": "100%"}),
 
         # Interval for streaming
         dcc.Interval(id="stream-interval", interval=1000, n_intervals=0, disabled=batch)
