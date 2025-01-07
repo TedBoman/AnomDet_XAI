@@ -72,7 +72,7 @@ def layout(handler, job_name, batch=True):
         ], style={"textAlign": "center", "padding": "20px", "borderRadius": "10px"}),
 
         # Right Panel: Graphs
-        html.Div(children=[graphs[graph] for graph in columns_to_show], id="graph-container", style={"display": "flex", "justify-content": "center", "flex-direction": "column","padding": "20px", "width": "100%"}),
+        html.Div(children=[graphs[graph] for graph in columns_to_show], id="graph-container", style={"display": "flex", "justify-content": "center", "flex-direction": "column", "padding": "20px"}),
 
         # Interval for streaming
         dcc.Interval(id="stream-interval", interval=1000, n_intervals=0, disabled=batch)

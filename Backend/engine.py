@@ -155,7 +155,7 @@ def __handle_api_call(conn, data: dict) -> None:
             test_json = json.dumps({"test": "change-method-response" })
             conn.sendall(bytes(test_json, encoding="utf-8"))
         case "get-data":
-            df = backend_data["db_api"].read_data(datetime.fromtimestamp(int(data["timestamp"]), timezone.utc), data["job_name"])
+            df = backend_data["db_api"].read_data(datetime.fromtimestamp(int(data["timestamp"])), data["job_name"])
             df["timestamp"] = df["timestamp"].apply(execute_calls.map_to_timestamp)
             df["timestamp"] = df["timestamp"].astype(float)
             data_json = df.to_json(orient="split")

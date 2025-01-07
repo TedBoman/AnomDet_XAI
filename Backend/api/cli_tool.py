@@ -94,7 +94,7 @@ def main(argv: list[str]) -> None:
         case "get-data":
             if (arg_len != 4):
                 handle_error(1, "Invalid number of arguments")
-            result = api.get_data(datetime.fromtimestamp(argv[2], timezone.utc), argv[3])
+            result = api.get_data(datetime.fromtimestamp(argv[2]), argv[3])
         
         # Inject anomalies into a running job if the command is "inject-anomaly"
         case "inject-anomaly":
