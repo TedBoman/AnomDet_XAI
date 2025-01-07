@@ -17,7 +17,7 @@ def create_graphs(df, columns):
         )
         fig = go.Figure(
                 data=[
-                    go.Scatter(x=normal["timestamp"], y=normal[col], mode="markers", name=col),
+                    go.Scatter(x=normal["timestamp"], y=normal[col], mode="markers", name="Normal Data"),
                     go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers", marker = dict(color="red", size=10), name="Anomalies")
                 ],
                 layout=fig_layout
