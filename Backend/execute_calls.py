@@ -42,14 +42,19 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     model_instance.run(df)
 
     if inj_params is not None:
-        anomaly = AnomalySetting(
-        inj_params.get("anomaly_type", None),
-        int(inj_params.get("timestamp", None)),
-        int(inj_params.get("magnitude", None)),
-        int(inj_params.get("percentage", None)),
-        inj_params.get("columns", None),
-        inj_params.get("duration", None)) 
-        batch_job = Job(filepath=path, anomaly_settings=[anomaly], simulation_type="batch", speedup=None, table_name=name, debug=debug)
+        anomaly_settings = []  # Create a list to hold AnomalySetting objects
+        for params in inj_params:  # Iterate over the list of anomaly dictionaries
+            anomaly = AnomalySetting(
+                params.get("anomaly_type", None),
+                int(params.get("timestamp", None)),
+                int(params.get("magnitude", None)),
+                int(params.get("percentage", None)),
+                params.get("columns", None),
+                params.get("duration", None)
+            )
+            anomaly_settings.append(anomaly)  # Add the AnomalySetting object to the list
+
+        batch_job = Job(filepath=path, anomaly_settings=anomaly_settings, simulation_type="batch", speedup=None, table_name=name, debug=debug)
         
     else:
         batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name, debug=debug)
@@ -76,15 +81,18 @@ def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, i
     sys.stdout.flush()
     
     if inj_params is not None:
-        anomaly = AnomalySetting(
-        inj_params.get("anomaly_type", None),
-        int(inj_params.get("timestamp", None)),
-        int(inj_params.get("magnitude", None)),
-        int(inj_params.get("percentage", None)),
-        inj_params.get("columns", None),
-        inj_params.get("duration", None)) 
-        print("Should inject anomaly.")
-        stream_job = Job(filepath=path, anomaly_settings=[anomaly], simulation_type="stream", speedup=speedup, table_name=name, debug=debug)
+        anomaly_settings = []  # Create a list to hold AnomalySetting objects
+        for params in inj_params:  # Iterate over the list of anomaly dictionaries
+            anomaly = AnomalySetting(
+                params.get("anomaly_type", None),
+                int(params.get("timestamp", None)),
+                int(params.get("magnitude", None)),
+                int(params.get("percentage", None)),
+                params.get("columns", None),
+                params.get("duration", None)
+            )
+            anomaly_settings.append(anomaly)  # Add the AnomalySetting object to the list
+        stream_job = Job(filepath=path, anomaly_settings=anomaly_settings, simulation_type="stream", speedup=speedup, table_name=name, debug=debug)
     else:
         print("Should not inject anomaly.")
         stream_job = Job(filepath=path, simulation_type="stream", speedup=speedup, table_name=name, debug=debug)

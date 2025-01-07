@@ -25,7 +25,7 @@ def parse_duration(duration_str):
             ValueError: If the duration string is invalid.
         """
 
-        if duration_str == "0" or duration_str == None:
+        if duration_str == "0" or duration_str == None or duration_str == "":
             return timedelta(0)
 
         pattern = r'(\d+)\s*([HhmindaysSwW]+)'
@@ -74,7 +74,8 @@ def parse_duration_seconds(duration_str):
             ValueError: If the duration string is invalid.
         """
 
-        if duration_str == "0" or duration_str == None:
+
+        if duration_str == "0" or duration_str == None or duration_str == "":
             return 0
 
         pattern = r'(\d+)\s*([HhmindaysSwW]+)'
