@@ -2,6 +2,7 @@ import sys
 import os
 import pandas as pd
 import json
+from io import StringIO
 
 from api import BackendAPI
 
@@ -45,9 +46,7 @@ class FrontendHandler:
 
     def handle_get_data(self, timestamp, job_name):
         data = self.api.get_data(timestamp, job_name)
-        print(type(data))
-        df = pd.read_json(data["data"], orient="split")
-        print(df)
+        df = pd.read_json(StringIO(data["data"]), orient="split")
         return df
         
     def handle_get_running(self):
