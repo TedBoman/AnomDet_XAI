@@ -170,10 +170,8 @@ class BackendAPI:
 
                 recv_data = sock.recv(1024).decode("utf-8")
                 json_data = recv_data
-                print(json_data)
                 while recv_data:
                     recv_data = sock.recv(1024).decode("utf-8")
-                    print(json_data)
                     if recv_data:
                         json_data += recv_data
                 
