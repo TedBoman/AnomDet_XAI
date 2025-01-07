@@ -28,7 +28,7 @@ class DBInterface(ABC):
         pass
     # Reads each row of data in the table table_name that has a timestamp greater than or equal to time
     @abstractmethod
-    def read_data(self, table_name: str, time: datetime) -> pd.DataFrame:
+    def read_data(self, time: datetime, table_name: str) -> pd.DataFrame:
         pass
     # Deletes the table_name table along with all its data
     @abstractmethod

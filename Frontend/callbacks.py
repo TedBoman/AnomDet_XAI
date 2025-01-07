@@ -215,7 +215,9 @@ def get_display_callbacks(app):
         return []
     """
 
-    # Update graphs and anomaly log based on stored data
+
+'''
+    #Iterates through the selected columns and displays the corresponding graphs
     @app.callback(
         [Output("selected-graphs", "children"),
          Output("anomaly-log", "children")],
@@ -223,7 +225,12 @@ def get_display_callbacks(app):
          Input("store-data", "data"),
          Input("column-selector", "value")]
     )
-    def update_graphs_and_anomalies(n_intervals, store_data, selected_columns):
+    def update_graphs(selected_columns):
+        
+        
+        
+
+        
         """ Generate graphs and update anomaly logs based on dataset from URL """
         if not store_data or "dataset_name" not in store_data:
             return html.Div("Dataset not found.", style={"color": "#ffffff", "textAlign": "center"}), []
@@ -262,7 +269,7 @@ def get_display_callbacks(app):
 
         anomaly_log.extend(new_anomalies)
         return graphs, html.Ul([html.Li(log) for log in anomaly_log[-10:]])
-
+'''
 def create_active_jobs(active_jobs):
     if len(active_jobs) == 0:
         return ["No active jobs found."]
