@@ -30,9 +30,6 @@ class TimescaleDBAPI(DBInterface):
             columns[i] = f'\"{columns[i]}\" VARCHAR(50)'
         columns = columns + ["is_anomaly BOOLEAN"] + ["injected_anomaly BOOLEAN"]
 
-        for column in columns:
-            print(column)
-
         try: 
             conn = psycopg2.connect(self.connection_string)                         # Connect to the database
             cursor = conn.cursor()
@@ -88,7 +85,7 @@ class TimescaleDBAPI(DBInterface):
             conn = psycopg2.connect(self.connection_string)
             cursor = conn.cursor()
 
-            query = f'SELECT * FROM {table_name} WHERE timestamp >= \'{time}\';'
+            query = f'SELECT * FROM {table_name} WHERE timestamp >= \'{time}\' ORDER BY timestamp ASC;'
             cursor.execute(query)
 
             data = cursor.fetchall()
