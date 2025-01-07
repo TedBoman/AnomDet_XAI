@@ -169,6 +169,7 @@ class TimescaleDBAPI(DBInterface):
     # Updates rows of the table that have an anomaly detected
     def update_anomalies(self, table_name: str, anomalies: pd.DataFrame) -> None:
         arr = anomalies.to_numpy()
+        print(arr)
     
         try: 
             conn = psycopg2.connect(self.connection_string)

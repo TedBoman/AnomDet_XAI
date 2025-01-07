@@ -47,7 +47,6 @@ class FrontendHandler:
     def handle_get_data(self, timestamp, job_name):
         data = self.api.get_data(timestamp, job_name)
         df = pd.read_json(StringIO(data["data"]), orient="split")
-        print(df)
         return df
         
     def handle_get_running(self):

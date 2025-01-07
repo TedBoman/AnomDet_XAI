@@ -11,7 +11,6 @@ def create_graphs(df, columns):
     for col in columns:
         normal = df[df["is_anomaly"] == False][["timestamp", col]]
         anomalies = df[df["is_anomaly"] == True][["timestamp", col]]
-        print(anomalies)
         fig_layout = go.Layout(
             width=800,  # Width of the figure
             height=400  # Height of the figure
@@ -23,7 +22,7 @@ def create_graphs(df, columns):
                 ],
                 layout=fig_layout
             )
-        fig.update_layout(title=f"{col} over Time", xaxis_title="Time", yaxis_title=col)
+        fig.update_layout(title=col, xaxis_title="Time", yaxis_title=col)
         graph = dcc.Graph(id = {"type" : "graph", "index" : col}, figure = fig, style={"padding": "15px"})
         graphs[col] = graph
 
@@ -32,7 +31,7 @@ def create_default_columns(columns):
         return random.sample(columns, 3)
     return columns
 
-def layout(app, handler, job_name, batch=True):
+def layout(handler, job_name, batch=True):
     #Get data frame from a completed job
     df = handler.handle_get_data(0, job_name)
 
@@ -72,7 +71,7 @@ def layout(app, handler, job_name, batch=True):
         ], style={"textAlign": "center", "padding": "20px", "borderRadius": "10px"}),
 
         # Right Panel: Graphs
-        html.Div(children=[graphs[graph] for graph in columns_to_show], id="graph-container", style={"padding": "20px", "width": "100%"}),
+        html.Div(children=[graphs[graph] for graph in columns_to_show], id="graph-container", style={"display": "flex", "justify-content": "center", "flex-direction": "column","padding": "20px", "width": "100%"}),
 
         # Interval for streaming
         dcc.Interval(id="stream-interval", interval=1000, n_intervals=0, disabled=batch)
@@ -90,5 +89,5 @@ def get_local_callback(app):
     def update_graphs(selected_graphs):
         print("Selected Graphs: ", selected_graphs)
         if not selected_graphs:
-            return "Select graphs from the dropdown to display them."
+            return [[]]
         return [graphs[graph] for graph in selected_graphs]

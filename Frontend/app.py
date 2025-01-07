@@ -40,8 +40,8 @@ def display_page(pathname, search_string):
         if handler.check_name(pathname[1:]) == "name-error":
             value = search_string.replace("?batch=", "")
             if value == "False":
-                return data_layout(app, handler, pathname[1:], batch=False)
-            return data_layout(app, handler, pathname[1:])
+                return data_layout(handler, pathname[1:], batch=False)
+            return data_layout(handler, pathname[1:])
         else:
             return html.Div("404 - Page Not Found", style={"textAlign": "center", "color": "#000000"})
 

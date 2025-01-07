@@ -73,6 +73,7 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     
     anomaly_df = df[df["is_anomaly"] == True]
     arr = anomaly_df["timestamp"]
+    
     api.update_anomalies(name, arr)
 
 # Starts processing of dataset as a stream

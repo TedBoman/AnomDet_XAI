@@ -28,3 +28,4 @@ db_api = TimescaleDBAPI(conn_params)
 
 df = db_api.read_data(datetime.fromtimestamp(200, timezone.utc), "test")    # Read the data from the database
 print(df)
+df["is_anomaly"] = False
