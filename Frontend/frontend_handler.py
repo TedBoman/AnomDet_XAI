@@ -23,7 +23,7 @@ class FrontendHandler:
             if inj_params is None:
                 self.api.run_batch(selected_model, selected_dataset, job_name)
             else:
-                self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=inj_params)
+                self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=[inj_params])
 
         return response
 
@@ -34,7 +34,7 @@ class FrontendHandler:
             if inj_params is None:
                 response = self.api.run_stream(selected_model, selected_dataset, job_name, speedup)
             else:
-                self.api.run_stream(selected_model, selected_dataset, job_name, speedup, inj_params=inj_params)
+                self.api.run_stream(selected_model, selected_dataset, job_name, speedup, inj_params=[inj_params])
 
         return response
 
