@@ -4,54 +4,46 @@ import plotly.graph_objs as go
 import random
 from datetime import datetime, timezone
 
-'''
-    go.Scatter(x=df["timestamp"], y=df[col], mode="lines+markers", name=col),
-    go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers",
-                marker=dict(color="red", size=10), name="Anomalies")'''
-
 graphs = {}
-def create_graphs(df):
+def create_graphs(df, columns):
     global graphs
-    for col in df.columns.tolist():
-        if col != "timestamp":
-            normal = df[df["is_anomaly"] == False][["timestamp", col]]
-            anomalies = df[df["is_anomaly"] == True][["timestamp", col]]
-            fig = go.Figure([
-                go.Scatter(x=normal["timestamp"], y=normal[col], mode="lines", name=col),
-                go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers", marker = dict(color="red", size=10), name="Anomalies")
-            ])
-            fig.update_layout(title=f"{col} over Time", xaxis_title="Time", yaxis_title=col)
-            graph = dcc.Graph(id = {"type" : "graph", "index" : col}, figure = fig)
-            graphs[col] = graph
+    i = 1
+    for col in columns:
+        true_normal = df[(df["is_anomaly"] == False) & (df["injected_anomaly"] == False)][["timestamp", col]]
+        false_normal = df[(df["is_anomaly"] == False) & (df["injected_anomaly"] == True)][["timestamp", col]]
+        anomalies = df[df["is_anomaly"] == True][["timestamp", col]]
+        fig_layout = go.Layout(
+            height=400,  # Height of the figure
+        )
+        fig = go.Figure(
+                data=[
+                    go.Scatter(x=true_normal["timestamp"], y=true_normal[col], mode="markers", marker=dict(color="green", size=7), name="True Normal Data"),
+                    go.Scatter(x=false_normal["timestamp"], y=false_normal[col], mode="markers", marker=dict(color="blue", size=7, symbol="diamond"), name="Injected Anomalies Labeled as Normal"),
+                    go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers", marker=dict(color="red", size=7, symbol="x"), name="All Labeled Anomalies")
+                ],
+                layout=fig_layout
+            )
+        fig.update_layout(title=col, xaxis_title="Time", yaxis_title=col, xaxis_rangeslider_visible=True)
+        graph = dcc.Graph(id = {"type" : "graph", "index" : col}, figure = fig, style={"padding": "15px", "border-radius": "10px", })
+        graphs[col] = graph
 
-
-'''
-# Mock datasets (these datasets should match the job details from starter_page.py)
-datasets = {
-    f"Dataset {i}": pd.DataFrame({
-        "timestamp": pd.date_range(end=pd.Timestamp.now(), periods=100, freq='min'),
-        "load-15m": [random.uniform(0, 10) for _ in range(100)],
-        "cpu-usage": [random.uniform(20, 90) for _ in range(100)],
-        "memory-usage": [random.uniform(30, 80) for _ in range(100)],
-    }) for i in range(1, 6)
-}
-'''
-
-anomaly_log = []  # Global anomaly log
+def create_default_columns(columns):
+    if len(columns) > 3:
+        return [columns[0], columns[1], columns[2]]
+    return columns
 
 def layout(handler, job_name, batch=True):
     #Get data frame from a completed job
     df = handler.handle_get_data(0, job_name)
-
     
     #Create graphs of each column in that data frame
-    create_graphs(df)
     columns = df.columns.tolist()
     columns.remove("timestamp")
     columns.remove("is_anomaly")
     columns.remove("injected_anomaly")
+    create_graphs(df, columns)
 
-
+    columns_to_show = create_default_columns(columns)
 
     # Layout
     layout = html.Div([
@@ -66,42 +58,32 @@ def layout(handler, job_name, batch=True):
         html.H1("Stream Data Page", style={"textAlign": "center", "color": "#ffffff"}),
 
         # Left Panel: Column Selection + Anomaly Log
-        html.Div([
-            html.H3("Available Columns:", style={"color": "#ffffff", "textAlign": "center"}),
-            dcc.Dropdown(
-                id="injection-method-dropdown",
-                options=[{"label": col, "value": col} for col in columns],
-                multi=True,
-                value=[],
-                placeholder="Select a method",
-                style={"width": "350px", "margin": "auto"}
-            ),
-            html.H3("Anomaly Log:", style={"color": "#ffffff", "textAlign": "center", "marginTop": "20px"}),
-            html.Div(id="anomaly-log", style={
-                "height": "200px", "overflowY": "scroll", "backgroundColor": "#1e2130",
-                "color": "#ffffff", "padding": "10px", "borderRadius": "5px", "border": "1px solid #444"
-            })
-        ], style={"width": "20%", "float": "left", "backgroundColor": "#1e2130", "padding": "20px", "borderRadius": "10px"}),
-
-        
+        html.H3("Available Columns:", style={"color": "#ffffff", "textAlign": "center"}),
+        dcc.Checklist(
+            id="graph-checklist",
+            options=[{"label": col, "value": col} for col in columns],
+            value=columns_to_show,
+            inline=True,
+            style={"width": "1000px", "color": "#ffffff"}
+        ),
 
         # Right Panel: Graphs
-        html.Div(id="selected-graphs", style={"width": "75%", "float": "right", "padding": "20px"}),
+        html.Div(children=[graphs[graph] for graph in columns_to_show], id="graph-container", style={"width": "1000px", "padding": "20px",}),
 
         # Interval for streaming
         dcc.Interval(id="stream-interval", interval=1000, n_intervals=0, disabled=batch)
         
-    ], style={"backgroundColor": "#282c34", "padding": "50px", "minHeight": "100vh", "position": "relative"})
-
-
-    @callback(
-        Output('graph-container', 'children'),
-        [Input('graph-dropdown', 'value')]
-    )
-    def update_graphs(selected_graphs):
-        if not selected_graphs:
-            return "Select graphs from the dropdown to display them."
-        return [graphs[graph] for graph in selected_graphs]
+    ], style={"display": "flex", "align-items": "center", "flex-direction": "column", "backgroundColor": "#282c34", "width": "100%", "minHeight": "100vh"})    
 
     return layout   
 
+def get_local_callback(app):
+    # Register callback for updating graphs
+    @app.callback(
+        Output('graph-container', 'children'),
+        [Input('graph-checklist', 'value')]
+    )
+    def update_graphs(selected_graphs):
+        if not selected_graphs:
+            return [[]]
+        return [graphs[graph] for graph in selected_graphs]

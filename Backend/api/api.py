@@ -164,16 +164,14 @@ class BackendAPI:
                 sleep(0.5)
                 sock.sendall(bytes(file_content, encoding="utf-8"))
             if data["METHOD"] == "get-data":       
-                sock.settimeout(1)
                 data = json.dumps(data)
                 sock.sendall(bytes(data, encoding="utf-8"))
 
                 recv_data = sock.recv(1024).decode("utf-8")
                 json_data = recv_data
-                print(json_data)
                 while recv_data:
+                    sock.settimeout(1)
                     recv_data = sock.recv(1024).decode("utf-8")
-                    print(json_data)
                     if recv_data:
                         json_data += recv_data
                 

@@ -30,7 +30,7 @@ def map_to_timestamp(time):
     return time.timestamp()
 
 def map_to_time(time):
-    return datetime.fromtimestamp(time, timezone.utc)
+    return datetime.fromtimestamp(time, tz=timezone.utc)
 
 # Starts processing of dataset in one batch
 def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict=None, debug=False) -> None:
@@ -62,17 +62,20 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     sim_engine.main(db_conn_params, batch_job)
 
     api = TimescaleDBAPI(db_conn_params)
-    df = api.read_data(datetime.fromtimestamp(0, timezone.utc), name)
+    df = api.read_data(datetime.fromtimestamp(0), name)
     
     df["timestamp"] = df["timestamp"].apply(map_to_timestamp)
     df["timestamp"] = df["timestamp"].astype(float)
 
     res = model_instance.detect(df.iloc[:, :-2])
-    df["timestamp"] = df["timestamp"].apply(map_to_time)
     df["is_anomaly"] = res
     
     anomaly_df = df[df["is_anomaly"] == True]
-    arr = anomaly_df["timestamp"]
+    
+    arr = [datetime.fromtimestamp(timestamp) for timestamp in anomaly_df["timestamp"]]
+    arr = [f'\'{str(time)}+00\'' for time in arr]
+    #1970-01-01 00:13:30+00
+
     api.update_anomalies(name, arr)
 
 # Starts processing of dataset as a stream

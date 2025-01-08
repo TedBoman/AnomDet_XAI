@@ -106,7 +106,7 @@ def layout(handler):
                         html.Label("Enter a duration: ", style={"fontSize": "18px", "color": "#ffffff"}),
                         dcc.Input(
                             id="duration-input",
-                            type="number",
+                            type="text",
                             placeholder="Duration ('30s', '1H', '30min', '2D', '1h30m')",
                             style={"width": "200px", "marginTop": "10px"}
                         )
