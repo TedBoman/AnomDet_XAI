@@ -1,6 +1,7 @@
 import dash
 from dash import dcc, html, Input, Output, State
 from pages.display_data import layout as data_layout
+from pages.display_data import get_local_callback
 from pages.index import layout as index_layout
 from callbacks import get_index_callbacks, get_display_callbacks
 import os
@@ -47,6 +48,7 @@ def display_page(pathname, search_string):
 # Get callbacks from other pages
 get_index_callbacks(app)
 get_display_callbacks(app)
+get_local_callback(app)
 
 
 if __name__ == "__main__":

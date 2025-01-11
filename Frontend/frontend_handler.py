@@ -2,6 +2,7 @@ import sys
 import os
 import pandas as pd
 import json
+from io import StringIO
 
 from api import BackendAPI
 
@@ -22,7 +23,7 @@ class FrontendHandler:
             if inj_params is None:
                 self.api.run_batch(selected_model, selected_dataset, job_name)
             else:
-                self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=inj_params)
+                self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=[inj_params])
 
         return response
 
@@ -33,7 +34,7 @@ class FrontendHandler:
             if inj_params is None:
                 response = self.api.run_stream(selected_model, selected_dataset, job_name, speedup)
             else:
-                self.api.run_stream(selected_model, selected_dataset, job_name, speedup, inj_params=inj_params)
+                self.api.run_stream(selected_model, selected_dataset, job_name, speedup, inj_params=[inj_params])
 
         return response
 
@@ -45,9 +46,7 @@ class FrontendHandler:
 
     def handle_get_data(self, timestamp, job_name):
         data = self.api.get_data(timestamp, job_name)
-        print(type(data))
-        df = pd.read_json(data["data"], orient="split")
-        print(df)
+        df = pd.read_json(StringIO(data["data"]), orient="split")
         return df
         
     def handle_get_running(self):
