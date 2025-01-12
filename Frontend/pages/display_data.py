@@ -42,7 +42,7 @@ def create_graphs(df, columns):
             title=f"{col} timeline", 
             x_axis_label="Time", 
             y_axis_label=col, 
-            x_range=x_range,
+            x_range=(x_min, x_max),
             y_range=y_range,
             tools="pan,reset,save",
         )
@@ -52,9 +52,13 @@ def create_graphs(df, columns):
             p.scatter(false_normal["timestamp"], false_normal[col], size=6, color="blue", alpha=0.7, legend_label="Injected Anomalies Labeled as Normal", marker="diamond")  
         if len(anomalies) > 0:
             p.scatter(anomalies["timestamp"], anomalies[col], size=6, color="red", alpha=0.7, legend_label="Anomalies", marker="x")
-
+    
         p.legend.location = "top_right"
-        p.x_range.bounds = (x_min, x_max)
+
+        if x_max != df["timestamp"].max():
+            p.x_range.bounds = (x_min, df["timestamp"].max() * 1.1)
+        else:    
+            p.x_range.bounds = x_range
         p.y_range.bounds = "auto"
 
         html_content = file_html(p, CDN, f"{col} Plot")
