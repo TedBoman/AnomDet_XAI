@@ -10,21 +10,27 @@ graphs = {}
 def create_graphs(df, columns):
     global graphs
     points_per_frame = 500
-    if len(df) <= points_per_frame:
-        x_range = (df["timestamp"].min(), df["timestamp"].max())
+    print(df)
+    
+    if len(df) == 1:
+        x_min = -1
+        x_max = 1
+    elif len(df) <= points_per_frame:
+        x_min = df["timestamp"].min() * 0.9
+        x_max = df["timestamp"].max() * 1.1
     else:
         max_time = df["timestamp"].max()
         while len(df[df["timestamp"] < max_time]) > points_per_frame:
             max_time *= 0.9
-        x_range = (df["timestamp"].min(), max_time)
+        x_min = df["timestamp"].min() * 0.9
+        x_max = max_time
+    x_range = (x_min, x_max)
 
-    x_min = df["timestamp"].min()
-    x_max = df["timestamp"].max()
     for col in columns:
         y = df[col]
         y_min = df[col].astype("float32").min()
         y_max = df[col].astype("float32").max()
-        y_range = (y_min*0.8, y_max*0.8)
+        y_range = (y_min*0.8, y_max*1.2)
 
         true_normal = df[(df["is_anomaly"] == False) & (df["injected_anomaly"] == False)][["timestamp", col]]
         false_normal = df[(df["is_anomaly"] == False) & (df["injected_anomaly"] == True)][["timestamp", col]]
