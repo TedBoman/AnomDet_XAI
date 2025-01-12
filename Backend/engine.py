@@ -139,6 +139,9 @@ def __handle_api_call(conn, data: dict) -> None:
             new_thread = threading.Thread(target=execute_calls.run_stream, args=(db_conn_params, model, dataset_path, name, speedup, inj_params, debug))
             new_thread.daemon = True
             new_thread.start()
+            detection_thread = threading.Thread(target=execute_calls.single_point_detection, args=(backend_data["db_api"], new_thread, model, name, dataset_path))
+            detection_thread.daemon = True
+            detection_thread.start()
 
             job = {
                 "name": name,
