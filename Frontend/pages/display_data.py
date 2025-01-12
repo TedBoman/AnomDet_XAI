@@ -1,31 +1,58 @@
 from dash import Dash, dcc, html, Input, Output, callback, State
 import pandas as pd
-import plotly.graph_objs as go
+from bokeh.plotting import figure
+from bokeh.embed import file_html
+from bokeh.resources import CDN
 import random
 from datetime import datetime, timezone
 
 graphs = {}
 def create_graphs(df, columns):
     global graphs
-    i = 1
+    points_per_frame = 500
+    if len(df) <= points_per_frame:
+        x_range = (df["timestamp"].min(), df["timestamp"].max())
+    else:
+        max_time = df["timestamp"].max()
+        while len(df[df["timestamp"] < max_time]) > points_per_frame:
+            max_time *= 0.9
+        x_range = (df["timestamp"].min(), max_time)
+
+    x_min = df["timestamp"].min()
+    x_max = df["timestamp"].max()
     for col in columns:
+        y = df[col]
+        y_min = df[col].astype("float32").min()
+        y_max = df[col].astype("float32").max()
+        y_range = (y_min*0.8, y_max*0.8)
+
         true_normal = df[(df["is_anomaly"] == False) & (df["injected_anomaly"] == False)][["timestamp", col]]
         false_normal = df[(df["is_anomaly"] == False) & (df["injected_anomaly"] == True)][["timestamp", col]]
         anomalies = df[df["is_anomaly"] == True][["timestamp", col]]
-        fig_layout = go.Layout(
-            height=400,  # Height of the figure
+
+        p = figure(
+            width=1400, 
+            height=350, 
+            title=f"{col} timeline", 
+            x_axis_label="Time", 
+            y_axis_label=col, 
+            x_range=x_range,
+            y_range=y_range,
+            tools="pan,reset,save",
         )
-        fig = go.Figure(
-                data=[
-                    go.Scatter(x=true_normal["timestamp"], y=true_normal[col], mode="markers", marker=dict(color="green", size=7), name="True Normal Data"),
-                    go.Scatter(x=false_normal["timestamp"], y=false_normal[col], mode="markers", marker=dict(color="blue", size=7, symbol="diamond"), name="Injected Anomalies Labeled as Normal"),
-                    go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers", marker=dict(color="red", size=7, symbol="x"), name="All Labeled Anomalies")
-                ],
-                layout=fig_layout
-            )
-        fig.update_layout(title=col, xaxis_title="Time", yaxis_title=col, xaxis_rangeslider_visible=True)
-        graph = dcc.Graph(id = {"type" : "graph", "index" : col}, figure = fig, style={"padding": "15px", "border-radius": "10px", })
-        graphs[col] = graph
+
+        p.scatter(true_normal["timestamp"], true_normal[col], size=6, color="green", alpha=0.7, legend_label="Normal Data")
+        if len(false_normal) > 0:
+            p.scatter(false_normal["timestamp"], false_normal[col], size=6, color="blue", alpha=0.7, legend_label="Injected Anomalies Labeled as Normal", marker="diamond")  
+        if len(anomalies) > 0:
+            p.scatter(anomalies["timestamp"], anomalies[col], size=6, color="red", alpha=0.7, legend_label="Anomalies", marker="x")
+
+        p.legend.location = "top_right"
+        p.x_range.bounds = (x_min, x_max)
+        p.y_range.bounds = "auto"
+
+        html_content = file_html(p, CDN, f"{col} Plot")
+        graphs[col] = html.Iframe(srcDoc=html_content, style={"width": "100%", "height": "370px", "border": "none"})
 
 def create_default_columns(columns):
     if len(columns) > 3:
@@ -68,7 +95,7 @@ def layout(handler, job_name, batch=True):
         ),
 
         # Right Panel: Graphs
-        html.Div(children=[graphs[graph] for graph in columns_to_show], id="graph-container", style={"width": "1000px", "padding": "20px",}),
+        html.Div(children=[graphs[graph] for graph in columns_to_show], id="graph-container", style={"width": "1410px",}),
 
         # Interval for streaming
         dcc.Interval(id="stream-interval", interval=1000, n_intervals=0, disabled=batch)
