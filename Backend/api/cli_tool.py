@@ -149,7 +149,7 @@ def main(argv: list[str]) -> None:
         case "import-dataset":
             if (arg_len != 4):
                 handle_error(1, "Invalid number of arguments")
-            result = api.import_dataset(argv[2], argv[3])
+            api.import_dataset(argv[2], argv[3])
 
         # Print information about the backend API command line tool if the command is "help"
         case "help":
