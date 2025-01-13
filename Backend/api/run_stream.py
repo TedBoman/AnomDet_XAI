@@ -69,6 +69,6 @@ def run_stream(api: BackendAPI) -> dict:
             }
             inj_params.append(anomaly)  # Add the anomaly dictionary to the list
 
-        api.run_batch(model, dataset, name, debug, inj_params)  # Pass the list of anomalies
+        api.run_stream(model, dataset, name, speedup, debug, inj_params)  # Pass the list of anomalies
     else:
         api.run_stream(model, dataset, name, speedup, debug)
