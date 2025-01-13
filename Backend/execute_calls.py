@@ -4,10 +4,13 @@ from ML_models.isolation_forest import IsolationForest
 import pandas as pd
 import numpy as np
 import os
+import time
+import threading
 from socket import socket
 from ML_models.get_model import get_model
 from timescaledb_api import TimescaleDBAPI
 from datetime import datetime, timezone
+
 
 # Third-Party
 import threading
@@ -82,6 +85,7 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
 def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, inj_params: dict=None, debug=False) -> None:
     print("Starting Stream-job!")
     sys.stdout.flush()
+
     
     if inj_params is not None:
         anomaly_settings = []  # Create a list to hold AnomalySetting objects
@@ -102,6 +106,40 @@ def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, i
 
     sim_engine = se()
     sim_engine.main(db_conn_params, stream_job)
+
+
+
+def single_point_detection(api, simulation_thread, model, name, path):
+    
+    model_instance = get_model(model)
+    df = pd.read_csv(path)
+    model_instance.run(df)
+
+    while not api.table_exists(name):
+        time.sleep(1)
+    
+    
+    timestamp = datetime.fromtimestamp(0)
+    
+    while simulation_thread.is_alive():
+        df = api.read_data(datetime.fromtimestamp(0), name)
+        timestamp = df["timestamp"].iloc[-1].to_pydatetime()
+        print(df["timestamp"].iloc[-1])
+
+        df["timestamp"] = df["timestamp"].apply(map_to_timestamp)
+        df["timestamp"] = df["timestamp"].astype(float)
+
+        res = model_instance.detect(df.iloc[:, :-2])
+        df["is_anomaly"] = res
+        
+        anomaly_df = df[df["is_anomaly"] == True]
+        arr = [datetime.fromtimestamp(timestamp) for timestamp in anomaly_df["timestamp"]]
+        arr = [f'\'{str(time)}+00\'' for time in arr]
+        
+        api.update_anomalies(name, arr)
+    
+        time.sleep(1)
+
 
 # Returns a list of models implemented in MODEL_DIRECTORY
 def get_models() -> list:

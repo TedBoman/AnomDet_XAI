@@ -1,4 +1,4 @@
-from dash import Dash, dcc, html, Input, Output, callback
+from dash import Dash, dcc, html, Input, Output, callback, State
 import pandas as pd
 from bokeh.plotting import figure
 from bokeh.embed import file_html
@@ -10,21 +10,27 @@ graphs = {}
 def create_graphs(df, columns):
     global graphs
     points_per_frame = 500
-    if len(df) <= points_per_frame:
-        x_range = (df["timestamp"].min(), df["timestamp"].max())
+    print(df)
+    
+    if len(df) == 1:
+        x_min = -1
+        x_max = 1
+    elif len(df) <= points_per_frame:
+        x_min = df["timestamp"].min() * 0.9
+        x_max = df["timestamp"].max() * 1.1
     else:
         max_time = df["timestamp"].max()
         while len(df[df["timestamp"] < max_time]) > points_per_frame:
             max_time *= 0.9
-        x_range = (df["timestamp"].min(), max_time)
+        x_min = df["timestamp"].min() * 0.9
+        x_max = max_time
+    x_range = (x_min, x_max)
 
-    x_min = df["timestamp"].min()
-    x_max = df["timestamp"].max()
     for col in columns:
         y = df[col]
         y_min = df[col].astype("float32").min()
         y_max = df[col].astype("float32").max()
-        y_range = (y_min*0.8, y_max*0.8)
+        y_range = (y_min*0.8, y_max*1.2)
 
         true_normal = df[(df["is_anomaly"] == False) & (df["injected_anomaly"] == False)][["timestamp", col]]
         false_normal = df[(df["is_anomaly"] == False) & (df["injected_anomaly"] == True)][["timestamp", col]]
@@ -36,7 +42,7 @@ def create_graphs(df, columns):
             title=f"{col} timeline", 
             x_axis_label="Time", 
             y_axis_label=col, 
-            x_range=x_range,
+            x_range=(x_min, x_max),
             y_range=y_range,
             tools="pan,reset,save",
         )
@@ -46,9 +52,13 @@ def create_graphs(df, columns):
             p.scatter(false_normal["timestamp"], false_normal[col], size=6, color="blue", alpha=0.7, legend_label="Injected Anomalies Labeled as Normal", marker="diamond")  
         if len(anomalies) > 0:
             p.scatter(anomalies["timestamp"], anomalies[col], size=6, color="red", alpha=0.7, legend_label="Anomalies", marker="x")
-
+    
         p.legend.location = "top_right"
-        p.x_range.bounds = (x_min, x_max)
+
+        if x_max != df["timestamp"].max():
+            p.x_range.bounds = (x_min, df["timestamp"].max() * 1.1)
+        else:    
+            p.x_range.bounds = x_range
         p.y_range.bounds = "auto"
 
         html_content = file_html(p, CDN, f"{col} Plot")

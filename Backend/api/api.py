@@ -114,7 +114,7 @@ class BackendAPI:
     # Uploads a complete dataset to the backend
     def import_dataset(self, file_path: str, timestamp_column: str) -> None:
         if not os.path.isfile(file_path):
-            return #handle_error(2, "File not found")
+            return handle_error(2, "File not found")
 
         file = open(file_path, "r")
         file_content = file.read()
@@ -163,7 +163,7 @@ class BackendAPI:
                 sock.sendall(bytes(data, encoding="utf-8"))
                 sleep(0.5)
                 sock.sendall(bytes(file_content, encoding="utf-8"))
-            if data["METHOD"] == "get-data":       
+            elif data["METHOD"] == "get-data":       
                 data = json.dumps(data)
                 sock.sendall(bytes(data, encoding="utf-8"))
 
