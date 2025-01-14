@@ -10,9 +10,11 @@ COPY ./Frontend/ /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ./Backend/api/api.py /app/
+COPY ./Docker/.env /app/
+RUN mkdir -p /app/graphs
 
 EXPOSE ${FRONTEND_PORT}
 
-CMD ["python", "-u", "app.py"]
+RUN chmod +x entrypoint.sh
 
-
+CMD ["bash", "entrypoint.sh"]

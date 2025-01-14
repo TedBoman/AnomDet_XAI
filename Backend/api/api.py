@@ -39,24 +39,6 @@ class BackendAPI:
             
         self.__send_data(data, response=False)
 
-    # Sends a request to the backend to change the model used for a running job
-    def change_model(self, model: str, name: str) -> None:
-        data = {
-            "METHOD": "change-model",
-            "model": model,
-            "job_name": name
-        }
-        self.__send_data(data, response=False)
-
-    # Sends a request to the backend to change the injection method used for a running job
-    def change_method(self, injection_method: str, name: str) -> None:
-        data = {
-            "METHOD": "change-method",
-            "injection-method": injection_method,
-            "job_name": name
-        }
-        self.__send_data(data, response=False)
-
     # Requests each row of data of a running job from timestamp and forward
     def get_data(self, timestamp: int, name: str) -> str:
         data = {
@@ -65,15 +47,6 @@ class BackendAPI:
             "job_name": name
         }
         return self.__send_data(data)
-
-    # Injects anomalies into a running job
-    def inject_anomaly(self, timestamps: list[int], name: str) -> None:
-        data = {
-            "METHOD": "inject-anomaly",
-            "timestamps": timestamps,
-            "job_name": name
-        }
-        self.__send_data(data, response=False)
 
     # Get all running jobs
     def get_running(self) -> str:

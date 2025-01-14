@@ -150,13 +150,6 @@ def __handle_api_call(conn, data: dict) -> None:
             }
 
             backend_data["started-jobs"].append(job)
-
-        case "change-model":
-            test_json = json.dumps({"test": "change-model-respons" })
-            conn.sendall(bytes(test_json, encoding="utf-8"))
-        case "change-method":
-            test_json = json.dumps({"test": "change-method-response" })
-            conn.sendall(bytes(test_json, encoding="utf-8"))
         case "get-data":
             df = backend_data["db_api"].read_data(datetime.fromtimestamp(int(data["timestamp"])), data["job_name"])
             df["timestamp"] = df["timestamp"].apply(execute_calls.map_to_timestamp)
@@ -169,9 +162,6 @@ def __handle_api_call(conn, data: dict) -> None:
             df_json = json.dumps(df_dict)
             conn.sendall(bytes(df_json, encoding="utf-8"))
             print("Data sent")
-        case "inject-anomaly":
-            test_json = json.dumps({"test": "inject-anomaly-response" })
-            conn.sendall(bytes(test_json, encoding="utf-8"))
         case "get-running":
             jobs = []
             for job in backend_data["running-jobs"]:

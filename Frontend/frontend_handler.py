@@ -38,12 +38,6 @@ class FrontendHandler:
 
         return response
 
-    def handle_change_model(self, selected_model, job_name):
-        return self.api.change_model(selected_model, job_name)
-
-    def handle_change_method(self, selected_injection_method, job_name):
-        return self.api.change_method(selected_injection_method, job_name)
-
     def handle_get_data(self, timestamp, job_name):
         data = self.api.get_data(timestamp, job_name)
         df = pd.read_json(StringIO(data["data"]), orient="split")
@@ -82,7 +76,7 @@ class FrontendHandler:
     def handle_get_columns(self, job_name):
         response = self.check_name(job_name)
 
-        if response == "success":
+        if response == "name-error":
             columns = json.loads(self.api.get_columns(job_name))
             return columns["columns"]
 
