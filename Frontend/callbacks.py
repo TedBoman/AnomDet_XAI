@@ -67,46 +67,7 @@ def get_index_callbacks(app):
             return no_update
         
         return create_active_jobs(active_jobs)
-        """
-        if not ctx.triggered:
-            return [
-                html.Div([
-                    dcc.Link(
-                        dataset,
-                        href=f"/stream-data",
-                        style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
-                    ),
-                    html.Button("Stop", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
-                        "fontSize": "12px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
-                        "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
-                    })
-                ]) for dataset in active_datasets
-            ]
 
-        triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
-
-        if "start-job-btn" in triggered_id and selected_dataset:
-            if selected_dataset not in active_datasets:
-                active_datasets.append(selected_dataset)
-
-        elif "remove-dataset-btn" in triggered_id:
-            triggered_index = eval(triggered_id)["index"]
-            active_datasets = [dataset for dataset in active_datasets if dataset != triggered_index]
-
-        return [
-            html.Div([
-                dcc.Link(
-                    dataset,
-                    href=f"/stream-data",
-                    style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
-                ),
-                html.Button("Stop", id={"type": "remove-dataset-btn", "index": dataset}, n_clicks=0, style={
-                    "fontSize": "12px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
-                    "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
-                })
-            ]) for dataset in active_datasets
-        ]
-    """
     @app.callback(
             [Output("popup", "style"), Output("popup-interval", "disabled"), Output("popup", "children")],
             [Input("start-job-btn", "n_clicks"), Input("popup-interval", "n_intervals")],
@@ -184,92 +145,6 @@ def get_index_callbacks(app):
 
         return style, True, children
 
-def get_display_callbacks(app):
-    """
-    # Update the store with selected dataset and columns based on URL
-    @app.callback(
-        Output("store-data", "data"),
-        Input("url", "pathname")
-    )
-    def store_data(pathname):
-        # Store the dataset name and columns selected from the URL
-        dataset_name = pathname.split('/')[-1]
-        if dataset_name in datasets:
-            columns = datasets[dataset_name].columns.tolist()
-            columns.remove("timestamp")
-            return {"dataset_name": dataset_name, "columns": columns}
-        return {}
-
-    # Update available columns based on the selected dataset
-    @app.callback(
-        Output("column-selector", "options"),
-        Input("store-data", "data")
-    )
-    def update_column_selector(store_data):
-        # Update available columns based on the stored dataset
-        if store_data and "dataset_name" in store_data:
-            dataset_name = store_data["dataset_name"]
-            columns = datasets[dataset_name].columns.tolist()
-            columns.remove("timestamp")
-            return [{"label": col, "value": col} for col in columns]
-        return []
-    """
-
-
-'''
-    #Iterates through the selected columns and displays the corresponding graphs
-    @app.callback(
-        [Output("selected-graphs", "children"),
-         Output("anomaly-log", "children")],
-        [Input("stream-interval", "n_intervals"),
-         Input("store-data", "data"),
-         Input("column-selector", "value")]
-    )
-    def update_graphs(selected_columns):
-        
-        
-        
-
-        
-        """ Generate graphs and update anomaly logs based on dataset from URL """
-        if not store_data or "dataset_name" not in store_data:
-            return html.Div("Dataset not found.", style={"color": "#ffffff", "textAlign": "center"}), []
-
-        dataset_name = store_data["dataset_name"]
-        df = datasets[dataset_name]
-
-        # Simulate new streaming data
-        new_data = {"timestamp": [pd.Timestamp.now()]}
-        for col in df.columns:
-            if col != "timestamp":
-                new_data[col] = [random.uniform(df[col].min(), df[col].max())]
-        datasets[dataset_name] = pd.concat([df, pd.DataFrame(new_data)]).tail(100)
-
-        # Generate graphs for selected columns
-        graphs = []
-        new_anomalies = []
-        for col in selected_columns:
-            threshold = df[col].mean() + 2 * df[col].std()
-            anomalies = df[df[col] > threshold]
-
-            fig = go.Figure([ 
-                go.Scatter(x=df["timestamp"], y=df[col], mode="lines+markers", name=col),
-                go.Scatter(x=anomalies["timestamp"], y=anomalies[col], mode="markers",
-                           marker=dict(color="red", size=10), name="Anomalies")
-            ])
-            fig.update_layout(
-                title=f"{col.replace('-', ' ').title()} Over Time ({dataset_name})",
-                xaxis_title="Timestamp", yaxis_title=col.replace("-", " ").title(),
-                template="plotly_dark"
-            )
-            graphs.append(dcc.Graph(figure=fig, style={"marginBottom": "30px"}))
-
-            for _, row in anomalies.iterrows():
-                new_anomalies.append(f"[{row['timestamp']}] {dataset_name} - Anomaly in {col}: {row[col]:.2f}")
-
-        anomaly_log.extend(new_anomalies)
-        return graphs, html.Ul([html.Li(log) for log in anomaly_log[-10:]])
-'''
 def create_active_jobs(active_jobs):
     if len(active_jobs) == 0:
         return ["No active jobs found."]
