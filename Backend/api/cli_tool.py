@@ -7,7 +7,9 @@ from run_batch import run_batch
 from run_stream import run_stream
 from dotenv import load_dotenv
 
-load_dotenv()
+dotenv_path = "../../Docker/.env"
+
+load_dotenv(dotenv_path)
 HOST = 'localhost'
 PORT = int(os.getenv('BACKEND_PORT'))
 
