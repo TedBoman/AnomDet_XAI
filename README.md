@@ -132,9 +132,9 @@ cd Backend/api
 python cli_tool.py help
 ```
 The output from running the help command describes all functionality provided by the CLI-tool to interact with the system:
-![alt text](images/cli_help_output.png)
+![CLI-tool help output](images/cli_help_output.png)
 Running a "run-batch" or "run-stream" will give you further inputs to define before a requests is sent to the backend:
-
+![Starting batch job with CLI-tool](images/cli_run_batch.png)
 
 ## ☕ For Developers
 
