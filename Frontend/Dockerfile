@@ -10,6 +10,7 @@ COPY ./Frontend/ /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ./Backend/api/api.py /app/
+COPY ./Docker/.env /app/
 
 EXPOSE ${FRONTEND_PORT}
 

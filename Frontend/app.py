@@ -53,4 +53,4 @@ get_local_callback(app)
 
 if __name__ == "__main__":
     print("Starting the Dash server...")
-    app.run_server(debug=True, host="0.0.0.0", port=FRONTEND_PORT)
+    app.run_server(debug=False, host="0.0.0.0", port=FRONTEND_PORT)
