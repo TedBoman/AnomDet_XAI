@@ -82,7 +82,7 @@ class FrontendHandler:
     def handle_get_columns(self, job_name):
         response = self.check_name(job_name)
 
-        if response == "success":
+        if response == "name-error":
             columns = json.loads(self.api.get_columns(job_name))
             return columns["columns"]
 

@@ -1,6 +1,9 @@
 from dash import Dash, dcc, html, Input, Output, State, ALL, MATCH, callback, callback_context, no_update
 import json
 from get_handler import get_handler
+from bokeh.plotting import figure
+from bokeh.embed import file_html
+from bokeh.resources import CDN
 
 def get_index_callbacks(app):
     @app.callback(
@@ -148,8 +151,9 @@ def get_index_callbacks(app):
 def create_active_jobs(active_jobs):
     if len(active_jobs) == 0:
         return ["No active jobs found."]
-    return [[
-        html.Div([
+    job_divs = []
+    for job in active_jobs:
+        new_div = html.Div([
             dcc.ConfirmDialog(
                 id={"type": "confirm-box", "index": job["name"]},
                 message=f'Are you sure you want to cancel the job {job["name"]}?',
@@ -164,5 +168,7 @@ def create_active_jobs(active_jobs):
                 "fontSize": "12px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
                 "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
             })
-        ]) for job in active_jobs
-    ]]
+        ])
+        job_divs.append(new_div)
+
+    return [job_divs]
