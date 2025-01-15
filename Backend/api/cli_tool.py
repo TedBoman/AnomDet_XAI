@@ -2,6 +2,9 @@ import sys
 import os
 from datetime import datetime, timezone
 from api import BackendAPI
+import json
+import pandas as pd
+from io import StringIO
 
 from run_batch import run_batch
 from run_stream import run_stream
@@ -19,8 +22,8 @@ starts anomaly detection of batch data after user has been prompted to enter det
 "python api.py run-stream" 
 starts anomaly detection of stream data after user has been prompted to enter details of the job
 
-"python api.py get-data <timestamp> <name>"
-get all processed data from <name>, meaning just the data that has gone through our detection model. <timestamp> allows for filtering of data. <timestamp> is in seconds from epoch.
+"python api.py get-data <from_timestamp> <to_timestamp> <name>"
+get processed data from <name>, meaning just the data that has gone through our detection model. <from_timestamp> allows for filtering of data. All timestamps are in seconds from epoch. If <to_timestamp> is not provided, all data from <from_timestamp> to now is returned.
 
 "python api.py get-running"
 get all running datasets
@@ -73,9 +76,15 @@ def main(argv: list[str]) -> None:
         
         # Get data from a running job if the command is "get-data", the backend will return data that has gone through the detection model
         case "get-data":
-            if (arg_len != 4):
+            if (arg_len == 4):
+                from_timestamp = argv[2]
+                result = api.get_data(from_timestamp, argv[3])
+            elif (arg_len == 5):
+                from_timestamp = argv[2]
+                to_timestamp = argv[3]
+                result = api.get_data(from_timestamp, argv[4], to_timestamp)
+            else:
                 handle_error(1, "Invalid number of arguments")
-            result = api.get_data(datetime.fromtimestamp(argv[2]), argv[3])
         
         # Inject anomalies into a running job if the command is "inject-anomaly"
         case "inject-anomaly":
@@ -141,7 +150,10 @@ def main(argv: list[str]) -> None:
             handle_error(3, f'argument "{argv[1]}" not recognized as a valid command')
 
     # Print return messgage in terminal when API is used by the command line tool
-    if argv[1] != "help" and result:
+    if argv[1] == "get-data" and result:
+        df = pd.read_json(StringIO(result["data"]), orient="split")
+        print(df)
+    elif argv[1] != "help" and argv[1] and result:
         print(f'Recieved from backend: {result}')
         
 def handle_error(code: int, message: str) -> None:
