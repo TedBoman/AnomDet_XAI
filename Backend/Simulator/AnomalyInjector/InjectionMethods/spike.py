@@ -5,6 +5,5 @@ import datetime as dt
 class SpikeAnomaly():
 
     def inject_anomaly(self, data, rng, magnitude):
-        print("Injecting spike anomaly!")
         random_factors = rng.uniform(1, magnitude)
         return data * random_factors
