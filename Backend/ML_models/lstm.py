@@ -17,6 +17,7 @@ class LSTMModel(model_interface.ModelInterface):
 
     #Preprocesses, trains and fits the model
     def run(self, df, time_steps=1):
+        df = df.iloc[:, 1:]
         features = df.shape[1]
         inputs = Input(shape=(1, features))
         encoded = LSTM(64, activation='relu', return_sequences=False)(inputs)
@@ -40,7 +41,7 @@ class LSTMModel(model_interface.ModelInterface):
         self.model.fit(
             X_train, X_train, 
             epochs=10,
-            batch_size=32,
+            batch_size=256,
             validation_split=0.2,
             verbose=1
         )
@@ -60,12 +61,11 @@ class LSTMModel(model_interface.ModelInterface):
 
     #Detects anomalies and returns a list of boolean values that can be mapped to the original dataset
     def detect(self, detection_df):
+        detection_df = detection_df.iloc[:, 1:]
         X = self.__create_sequences(detection_df, 1)
+         print("Detected anomalies in batch data...")
         reconstructed = self.model.predict(X)
         reconstruction_error = np.mean(np.square(X - reconstructed), axis=(1, 2))
         anomalies = reconstruction_error > self.threshold
 
         return anomalies
-
-
-        
