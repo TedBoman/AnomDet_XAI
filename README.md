@@ -195,10 +195,10 @@ You are free to use any imports and as many functions as you need to produce you
 - **data_range (optional): float**: is the value range from the min value to the max value. If the min value is 5 and the max is 12, the data_range will be 7.
 - **magnitude: float (optional)**: is the user-specified scalar value used to scale the anomaly value.
 
-The next step in integrating your injection method is to import your class. In the `/Backend/Simulator/AnomalyInjector/InjectionMethods/__init__.py` file, add your class to the __all__ list of classes. 
+The next step in integrating your injection method is to import your class. In the `/Backend/Simulator/AnomalyInjector/anomaly_injector.py` file, add your class to the top list of file. 
 
 ```py
-__all__ = ["LoweredAnomaly", "SpikeAnomaly", "StepAnomaly", "CustomAnomaly", "OfflineAnomaly", "YourAnomalyInjectionMethod"]
+from Simulator.AnomalyInjector.InjectionMethods.your_method_name import YourAnomalyInjectionMethod
 ```
 
 Now the class is ready to be used in the anomaly injector. Add your method to the _apply_anomaly method. In this method, we have a list of if and elif statements. Simply add your own elif statement here:

@@ -8,10 +8,10 @@ from Simulator.DBAPI import utils as ut
 from Simulator.DBAPI.debug_utils import DebugLogger as dl
 from Simulator.DBAPI.type_classes import AnomalySetting
 from Simulator.AnomalyInjector.InjectionMethods.lowered import LoweredAnomaly
-from Simulator.AnomalyInjector.InjectionMethods.spike import SpikeAnomaly
-from Simulator.AnomalyInjector.InjectionMethods.step import StepAnomaly
-from Simulator.AnomalyInjector.InjectionMethods.custom import CustomAnomaly
 from Simulator.AnomalyInjector.InjectionMethods.offline import OfflineAnomaly
+from Simulator.AnomalyInjector.InjectionMethods.custom import CustomAnomaly
+from Simulator.AnomalyInjector.InjectionMethods.step import StepAnomaly
+from Simulator.AnomalyInjector.InjectionMethods.spike import SpikeAnomaly
 
 class TimeSeriesAnomalyInjector:
     def __init__(self, seed: int = 42, debug=False):
