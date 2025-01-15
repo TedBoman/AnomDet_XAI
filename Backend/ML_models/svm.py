@@ -55,6 +55,6 @@ class SVMModel(model_interface.ModelInterface):
         threshold = np.percentile(decision_function, 5)
         
         adjusted_predictions = (decision_function < threshold).astype(int)
-        boolean_anomalies = adjusted_predictions == 0
+        boolean_anomalies = adjusted_predictions == 1
         return boolean_anomalies
                 
