@@ -5,64 +5,10 @@ from bokeh.embed import file_html
 from bokeh.resources import CDN
 import random
 from datetime import datetime, timezone
+import os
+from time import sleep
 
 graphs = {}
-def create_graphs(df, columns):
-    global graphs
-    points_per_frame = 500
-    print(df)
-    
-    if len(df) == 1:
-        x_min = -1
-        x_max = 1
-    elif len(df) <= points_per_frame:
-        x_min = df["timestamp"].min() * 0.9
-        x_max = df["timestamp"].max() * 1.1
-    else:
-        max_time = df["timestamp"].max()
-        while len(df[df["timestamp"] < max_time]) > points_per_frame:
-            max_time *= 0.9
-        x_min = df["timestamp"].min() * 0.9
-        x_max = max_time
-    x_range = (x_min, x_max)
-
-    for col in columns:
-        y = df[col]
-        y_min = df[col].astype("float32").min()
-        y_max = df[col].astype("float32").max()
-        y_range = (y_min*0.8, y_max*1.2)
-
-        true_normal = df[(df["is_anomaly"] == False) & (df["injected_anomaly"] == False)][["timestamp", col]]
-        false_normal = df[(df["is_anomaly"] == False) & (df["injected_anomaly"] == True)][["timestamp", col]]
-        anomalies = df[df["is_anomaly"] == True][["timestamp", col]]
-
-        p = figure(
-            width=1400, 
-            height=350, 
-            title=f"{col} timeline", 
-            x_axis_label="Time", 
-            y_axis_label=col, 
-            x_range=(x_min, x_max),
-            y_range=y_range,
-            tools="pan,reset,save",
-        )
-
-        p.scatter(true_normal["timestamp"], true_normal[col], size=6, color="green", alpha=0.7, legend_label="Normal Data")
-        if len(false_normal) > 0:
-            p.scatter(false_normal["timestamp"], false_normal[col], size=6, color="blue", alpha=0.7, legend_label="Injected Anomalies Labeled as Normal", marker="diamond")  
-        if len(anomalies) > 0:
-            p.scatter(anomalies["timestamp"], anomalies[col], size=6, color="red", alpha=0.7, legend_label="Anomalies", marker="x")
-    
-        p.legend.location = "top_right"
-
-        if x_max != df["timestamp"].max():
-            p.x_range.bounds = (x_min, df["timestamp"].max() * 1.1)
-        else:    
-            p.x_range.bounds = x_range
-        p.y_range.bounds = "auto"
-
-        html_content = file_html(p, CDN, f"{col} Plot")
-        graphs[col] = html.Iframe(srcDoc=html_content, style={"width": "100%", "height": "370px", "border": "none"})
 
 def create_default_columns(columns):
     if len(columns) > 3:
@@ -70,15 +16,13 @@ def create_default_columns(columns):
     return columns
 
 def layout(handler, job_name, batch=True):
-    #Get data frame from a completed job
-    df = handler.handle_get_data(0, job_name)
-    
-    #Create graphs of each column in that data frame
-    columns = df.columns.tolist()
+    # Get columns in the graph
+    columns = handler.handle_get_columns(job_name)
     columns.remove("timestamp")
-    columns.remove("is_anomaly")
-    columns.remove("injected_anomaly")
-    create_graphs(df, columns)
+
+    # Load graphs from the graphs folder associated with the jobs
+    load_graphs(job_name, columns)
+    print("THIS WORKS")
 
     columns_to_show = create_default_columns(columns)
 
@@ -113,6 +57,20 @@ def layout(handler, job_name, batch=True):
     ], style={"display": "flex", "align-items": "center", "flex-direction": "column", "backgroundColor": "#282c34", "width": "100%", "minHeight": "100vh"})    
 
     return layout   
+
+def load_graphs(job_name, columns):
+    global graphs
+    directory = f"./graphs/{job_name}"
+
+    while not os.path.exists(directory):
+        print("Graph is being generated...")
+        sleep(2)
+
+    for col in columns:
+        file_handle = open(f"{directory}/{col}.html", "r")
+        html_content = file_handle.read()
+        file_handle.close()
+        graphs[col] = html.Iframe(srcDoc=html_content, style={"width": "100%", "height": "370px", "border": "none"})
 
 def get_local_callback(app):
     # Register callback for updating graphs

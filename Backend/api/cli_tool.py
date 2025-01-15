@@ -7,7 +7,9 @@ from run_batch import run_batch
 from run_stream import run_stream
 from dotenv import load_dotenv
 
-load_dotenv()
+dotenv_path = "../../Docker/.env"
+
+load_dotenv(dotenv_path)
 HOST = 'localhost'
 PORT = int(os.getenv('BACKEND_PORT'))
 
@@ -17,17 +19,8 @@ starts anomaly detection of batch data after user has been prompted to enter det
 "python api.py run-stream" 
 starts anomaly detection of stream data after user has been prompted to enter details of the job
 
-"python api.py change-model <model> <name>"
-changes the model used for anomaly detection for the currently run batch named <name> to <model>
-
-"python api.py change-injection <injection-method> <name>"
-changes the injection method used for anomaly detection for the currently run batch named <name> to <injection-method>
-
 "python api.py get-data <timestamp> <name>"
 get all processed data from <name>, meaning just the data that has gone through our detection model. <timestamp> allows for filtering of data. <timestamp> is in seconds from epoch.
-    
-"python api.py inject-anomaly <timestamps> <name>"    
-injects anomalies in the data set <name> if manual injection is enabled, <timestamps> is a comma separated list of timestamps in seconds from now to inject anomalies at. (python api.py inject-anomaly 10,20,30 system1 injects an anomaly at 10, 20 and 30 seconds from now)
 
 "python api.py get-running"
 get all running datasets
@@ -77,18 +70,6 @@ def main(argv: list[str]) -> None:
             
             # Makes user input and sends request to the backend
             run_stream(api)
-            
-        # Change the model used for a running job if the command is "change-model"
-        case "change-model":
-            if (arg_len != 4):
-                handle_error(1, "Invalid number of arguments")
-            result = api.change_model(argv[2], argv[3])
-
-        # Change the injection method used for a running job if the command is "change-injection"
-        case "change-injection":
-            if (arg_len != 4):
-                handle_error(1, "Invalid number of arguments")
-            result = api.change_method(argv[2], argv[3])
         
         # Get data from a running job if the command is "get-data", the backend will return data that has gone through the detection model
         case "get-data":
