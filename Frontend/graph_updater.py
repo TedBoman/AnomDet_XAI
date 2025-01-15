@@ -91,7 +91,8 @@ def create_graphs(job_name, handler):
             tools="pan,reset,save",
         )
 
-        p.scatter(true_normal["timestamp"], true_normal[col], size=6, color="green", alpha=0.7, legend_label="Normal Data")
+        if len(true_normal) > 0:
+            p.scatter(true_normal["timestamp"], true_normal[col], size=6, color="green", alpha=0.7, legend_label="Normal Data")
         if len(false_normal) > 0:
             p.scatter(false_normal["timestamp"], false_normal[col], size=6, color="blue", alpha=0.7, legend_label="Injected Anomalies Labeled as Normal", marker="diamond")  
         if len(anomalies) > 0:
