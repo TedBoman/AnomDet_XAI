@@ -151,7 +151,10 @@ def __handle_api_call(conn, data: dict) -> None:
 
             backend_data["started-jobs"].append(job)
         case "get-data":
-            df = backend_data["db_api"].read_data(datetime.fromtimestamp(int(data["timestamp"])), data["job_name"])
+            if data["to_timestamp"] == None:
+                df = backend_data["db_api"].read_data(datetime.fromtimestamp(int(data["from_timestamp"])), data["job_name"])
+            else:
+                df = backend_data["db_api"].read_data(datetime.fromtimestamp(int(data["from_timestamp"])), data["job_name"], datetime.fromtimestamp(int(data["to_timestamp"])))
             df["timestamp"] = df["timestamp"].apply(execute_calls.map_to_timestamp)
             df["timestamp"] = df["timestamp"].astype(float)
             data_json = df.to_json(orient="split")

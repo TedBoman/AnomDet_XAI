@@ -131,7 +131,7 @@ def update_stream_graphs():
             for job in active_jobs:
                 if job["type"] == "stream":
                     create_graphs(job["name"], handler)
-        sleep(20)
+        sleep(10)
 
 if __name__ == "__main__":
     main()

@@ -32,7 +32,7 @@ The system also provides a set of self-defined anomaly detection algorithms and 
 
 ### Installation
 
-1. Install Docker Desktop
+1. Install and run Docker Desktop or install Headless Docker on the system of your choice
 2. Ensure that you have Git installed on your system
 3. Clone the repository using a terminal running the following command:
    ```sh 
@@ -59,7 +59,8 @@ The system also provides a set of self-defined anomaly detection algorithms and 
    docker-compose up -d
    ```
 8. Your system should now be built and the system is ready 
-![Terminal output from build](./images/terminal_output.png)
+
+   ![Terminal output from build](./images/terminal_output.png)
 
 ### Additional Commands
 
@@ -155,9 +156,9 @@ class ModelInterface(ABC):
     def detect(self, detection_df):
          pass
 ```
-The abstract class is not strict at all, it defines a constructor where you should instatiate a model object with parameters of your choosing. In the "run" method, your model should do all the necessary preprocessing of the data and train your model. The "detect" method should label each row of data in "detection_df" and return it as a list of predictions.
+The abstract class is not strict at all, it defines a constructor where you should instantiate a model object with parameters of your choosing. In the "run" method, your model should do all the necessary preprocessing of the data and train your model. The "detect" method should label each row of data in "detection_df" and return it as a list of predictions.
 
-Finally, you need to modify the "get_model" script to provide your model as an option to the system:
+Finally, you need to modify the "get_model" script to provide your model as an option to the system. You do this by importing your model class as well as modifying the get_model function:
 ```py
 def get_model(model):
     match model:
@@ -176,7 +177,7 @@ def get_model(model):
 
 ### Adding an injection method
 
-The anomaly injector has been made modular to allow for easy addition of anomaly injection methods. To add a method, create a new python file in the `/Backend/Simulator/AnomalyInjector/InjectionMethods`. Here you will need to use the following template:
+The anomaly injector has been made modular to allow for easy addition of anomaly injection methods. To add a method, create a new python file in the `/Backend/Simulator/AnomalyInjector/InjectionMethods` directory. Here you will need to use the following template:
 
 ```py
 class YourAnomalyInjectionMethod():
@@ -233,13 +234,15 @@ def get_all_jobs(self) -> str:
 def import_dataset(self, file_path: str, timestamp_column: str) -> None:
 ```
 
-More detailed documentation can be found in our [API_README](https://github.com/MarcusHammarstrom/AnomDet/blob/main/Backend/API_README.md)
+More detailed documentation on the API itself can be found in our [API_README](https://github.com/MarcusHammarstrom/AnomDet/blob/main/Backend/API_README.md)
+
+To add your own Frontend to the system, run your frontend in a container or your hosting method of choice and then interact with the Backend with this API.
 
 ### Database API
 
 Since we have designed a database interface for our system to be more modular, changing database manager does not affect the rest of the system. To change database manager, all that is needed is to provide an API that follows our database interface and then provide the right connection parameters when instantiating a API object. 
 
-The Database API has the following methods defined:
+The Database API interface has the following methods defined:
 ```py
 class DBInterface(ABC):
     # Constructor that adds all connection parameters needed to connect to the database to the object
@@ -286,6 +289,8 @@ class DBInterface(ABC):
     def update_anomalies(self, table_name: str, anomalies: pd.DataFrame) -> None:
         pass
 ```
+
+To use your own database manager of choice, run it in a container or in your preferred environment. Then implement a Database API that follows the interface specified. Provide the right credentials to the backend and instantiate  an object of your Database API class in the backend.
 
 ## 📄 License
 
