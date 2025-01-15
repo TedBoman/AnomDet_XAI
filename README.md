@@ -32,7 +32,7 @@ The system also provides a set of self-defined anomaly detection algorithms and 
 
 ### Installation
 
-1. Install Docker Desktop
+1. Install and run Docker Desktop or install Headless Docker on the system of your choice
 2. Ensure that you have Git installed on your system
 3. Clone the repository using a terminal running the following command:
    ```sh 
@@ -155,7 +155,7 @@ class ModelInterface(ABC):
     def detect(self, detection_df):
          pass
 ```
-The abstract class is not strict at all, it defines a constructor where you should instatiate a model object with parameters of your choosing. In the "run" method, your model should do all the necessary preprocessing of the data and train your model. The "detect" method should label each row of data in "detection_df" and return it as a list of predictions.
+The abstract class is not strict at all, it defines a constructor where you should instantiate a model object with parameters of your choosing. In the "run" method, your model should do all the necessary preprocessing of the data and train your model. The "detect" method should label each row of data in "detection_df" and return it as a list of predictions.
 
 Finally, you need to modify the "get_model" script to provide your model as an option to the system:
 ```py
