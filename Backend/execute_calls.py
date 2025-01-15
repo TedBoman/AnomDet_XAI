@@ -86,7 +86,6 @@ def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, i
     print("Starting Stream-job!")
     sys.stdout.flush()
 
-    
     if inj_params is not None:
         anomaly_settings = []  # Create a list to hold AnomalySetting objects
         for params in inj_params:  # Iterate over the list of anomaly dictionaries
@@ -106,8 +105,6 @@ def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, i
 
     sim_engine = se()
     sim_engine.main(db_conn_params, stream_job)
-
-
 
 def single_point_detection(api, simulation_thread, model, name, path):
     

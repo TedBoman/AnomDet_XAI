@@ -176,6 +176,44 @@ def get_model(model):
 
 ### Adding an injection method
 
+The anomaly injector has been made modular to allow for easy addition of anomaly injection methods. To add a method, create a new python file in the `/Backend/Simulator/AnomalyInjector/InjectionMethods`. Here you will need to use the following template:
+
+```py
+class YourAnomalyInjectionMethod():
+
+   def inject_anomaly(self, data, rng=None, data_range=None, mean=None, magnitude=None):
+      your_logic
+      return data
+```
+
+You are free to use any imports and as many functions as you need to produce your anomaly. As the anomaly injector works with pandas dataseries (dataframe in the injectionmethods) your code must be able to work with these aswell. It is not mandatory to create classes for the methods however, this makes it easier to allow for more sophisticated methods.
+
+- **data: Pandas DataFrame/Series**. data is the pandas dataframe containing the data. It looks like this [row-number, column-data]. So you will just need to perform calculations on the dataframe as if it was a normal variable.
+- **rng: NumPy random number generator (optional)**: is a pre-seeded random class that will allow for the methods to have some randomness to them.
+- **mean: float (optional)**: is the mean between all the data in the column that the anomaly will be injected on. 
+- **data_range (optional): float**: is the value range from the min value to the max value. If the min value is 5 and the max is 12, the data_range will be 7.
+- **magnitude: float (optional)**: is the user-specified scalar value used to scale the anomaly value.
+
+The next step in integrating your injection method is to import your class. In the `/Backend/Simulator/AnomalyInjector/InjectionMethods/__init__.py` file, add your class to the __all__ list of classes. 
+
+```py
+__all__ = ["LoweredAnomaly", "SpikeAnomaly", "StepAnomaly", "CustomAnomaly", "OfflineAnomaly", "YourAnomalyInjectionMethod"]
+```
+
+Now the class is ready to be used in the anomaly injector. Add your method to the _apply_anomaly method. In this method, we have a list of if and elif statements. Simply add your own elif statement here:
+
+```py
+elif anomaly_type == 'your_method_name':
+    injector = YourAnomalyInjectionMethod()
+    result = injector.inject_anomaly(data, magnitude)
+    dl.debug_print(f"New data after custom anomaly: {result}")
+    return result
+```
+
+Currently, the anomaly injector will give the method access to one row of data to reduce data dependency All the code is wrapped in try-except statements meaning that is you start a job with debugging enabled or disabled in the cli-tool, any errors will be printed to the backend terminal. 
+
+For easier confirmation if your anomaly works and if it produces the correct values, you can enable the debug parameter in the cli-tool when starting a job. This will print out all the values of the data before and after injecting an anomaly on it. 
+
 ### Backend API
 
 Since our system provides information to the Frontend through a generalized API, it is easy to create your own Frontend to interact with the system rather than the one provided. All necessary information provided to the Frontend is accessed by sending requests to the backend and no system information is stored in the Frontend.
