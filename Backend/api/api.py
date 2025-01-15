@@ -40,12 +40,13 @@ class BackendAPI:
         self.__send_data(data, response=False)
 
     # Requests each row of data of a running job from timestamp and forward
-    def get_data(self, timestamp: int, name: str) -> str:
+    def get_data(self, from_timestamp: str, name: str, to_timestamp: str=None) -> str:
         data = {
-            "METHOD": "get-data",
-            "timestamp": str(timestamp),
-            "job_name": name
-        }
+                "METHOD": "get-data",
+                "from_timestamp": from_timestamp,
+                "to_timestamp": to_timestamp,
+                "job_name": name
+            }
         return self.__send_data(data)
 
     # Get all running jobs
