@@ -16,39 +16,39 @@ load_dotenv(dotenv_path)
 HOST = 'localhost'
 PORT = int(os.getenv('BACKEND_PORT'))
 
-DOC = """"python api.py run-batch"
+DOC = """"python cli-tool.py run-batch"
 starts anomaly detection of batch data after user has been prompted to enter details of the job
 
-"python api.py run-stream" 
+"python cli-tool.py run-stream" 
 starts anomaly detection of stream data after user has been prompted to enter details of the job
 
-"python api.py get-data <from_timestamp> <to_timestamp> <name>"
+"python cli-tool.py get-data <from_timestamp> <to_timestamp> <name>"
 get processed data from <name>, meaning just the data that has gone through our detection model. <from_timestamp> allows for filtering of data. All timestamps are in seconds from epoch. If <to_timestamp> is not provided, all data from <from_timestamp> to now is returned.
 
-"python api.py get-running"
+"python cli-tool.py get-running"
 get all running datasets
 
-"python api.py cancel-job <name>" 
+"python cli-tool.py cancel-job <name>" 
 cancels the currently running batch or stream named <name>
 
-"python api.py get-models"
+"python cli-tool.py get-models"
 gets all available models for anomaly detection
 
-"python api.py get-injection-methods"
+"python cli-tool.py get-injection-methods"
 gets all available injection methods for anomaly detection
 
-"python api.py get-datasets"
+"python cli-tool.py get-datasets"
 gets all available datasets
 
-"python api.py get-all-jobs"
+"python cli-tool.py get-all-jobs"
 gets all started and/or running jobs
 
-"python api.py get-columns <name>"
+"python cli-tool.py get-columns <name>"
 
-"python api.py import-dataset <dataset-file-path> <timestamp-column-name>"
+"python cli-tool.py import-dataset <dataset-file-path> <timestamp-column-name>"
 uploads a dataset to the backend by adding the file to the Dataset directory
         
-"python api.py help"
+"python cli-tool.py help"
 prints this help message
 """
 
