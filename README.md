@@ -28,6 +28,10 @@ AnomDet allows for anomaly detection by importing a complete dataset in one batc
 
 The system also provides a set of self-defined anomaly detection algorithms and anomaly injection methods. By instatiating a backend API object our Frontend and CLI-tool offers users two ways of interacting with the system. The API provides ways to check what models and injection methods are provided as well as listing jobs currently running. More details can be found in the [Guide](#guide).
 
+### Westermo test system performance data set
+
+To develop our product, to evaluate our models and to test our system during development, we have used Westermo test system performance data set retrieved from: [https://github.com/westermo/test-system-performance-dataset](https://github.com/westermo/test-system-performance-dataset). This dataset contains anonymized data from 19 of [Westermo's](https://www.westermo.com/) test servers with more than 20 performance metrics such as CPU and memory usage. 
+
 ## 📝 How To Build
 
 ### Installation
