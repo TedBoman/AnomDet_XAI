@@ -24,7 +24,6 @@ app.layout = html.Div([
     html.Div(id="page-content")            # Dynamic content is updated here
 ])
 
-
 handler = get_handler()
 
 # Callback: Display the correct page content based on the URL
@@ -52,4 +51,4 @@ get_display_callbacks(app)
 
 if __name__ == "__main__":
     print("Starting the Dash server...")
-    app.run_server(debug=False, host="0.0.0.0", port=FRONTEND_PORT)
+    app.run(debug=False, host="0.0.0.0", port=FRONTEND_PORT)

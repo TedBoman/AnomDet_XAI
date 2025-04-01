@@ -24,14 +24,14 @@ class TimescaleDBAPI(DBInterface):
     def create_table(self, table_name: str, columns: list[str]) -> None:
         length = len(columns)
         
-        # The first column is of type TIMESTAMPTZ NOT NULL and the rest are VARCHAR(50)
+        # The first column is of type TIMESTAMPTZ NOT NULL and the rest are
         columns[0] = f'\"{columns[0]}\" TIMESTAMPTZ NOT NULL'
         for i in range(1, length):
-            columns[i] = f'\"{columns[i]}\" TEXT'
+            columns[i] = f'\"{columns[i]}\" NUMERIC'
         columns = columns + ["is_anomaly BOOLEAN"] + ["injected_anomaly BOOLEAN"]
 
         try: 
-            conn = psycopg2.connect(self.connection_string)                         # Connect to the database
+            conn = psycopg2.connect(self.connection_string) # Connect to the database
             cursor = conn.cursor()
             
             query_create_table = f'CREATE TABLE "{table_name}" ({",".join(columns)});'

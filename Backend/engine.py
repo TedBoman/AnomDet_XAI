@@ -8,6 +8,7 @@ import pandas as pd
 from timescaledb_api import TimescaleDBAPI
 from datetime import datetime, timezone
 from dotenv import load_dotenv
+import requests
 
 load_dotenv()
 BACKEND_HOST = os.getenv('BACKEND_HOST')
@@ -19,6 +20,8 @@ DATABASE = {
     "PASSWORD": os.getenv('DATABASE_PASSWORD'),
     "DATABASE": os.getenv('DATABASE_NAME')
 }
+GRAFANA_URL = f"localhost:{os.getenv('GRAFANA_PORT')}"
+GRAFANA_API_KEY = os.getenv('GRAFANA_API_KEY')
 
 DATASET_DIRECTORY = "./Datasets/"
 
@@ -27,6 +30,30 @@ backend_data = {
     "started-jobs": [],
     "running-jobs": []
 }
+
+def send_grafana_annotation(dashboard_uid, panel_id, text, tags=None):
+    if not GRAFANA_URL or not GRAFANA_API_KEY or not dashboard_uid or panel_id is None:
+        print("Grafana URL, API Key, Dashboard UID, or Panel ID not configured. Cannot send annotation.")
+        return
+
+    annotation_data = {
+        "dashboardUid": dashboard_uid,
+        "panelId": panel_id,
+        "time": int(datetime.now(timezone.utc).timestamp()) * 1000,  # Milliseconds
+        "text": text,
+        "tags": tags if tags else []
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {GRAFANA_API_KEY}"
+    }
+    url = f"{GRAFANA_URL}/api/annotations"
+    try:
+        response = requests.post(url, headers=headers, json=annotation_data)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        print(f"Grafana annotation sent: {response.json()}")
+    except requests.exceptions.RequestException as e:
+        print(f"Error sending Grafana annotation: {e}")
 
 def main():
     # Start a thread listening for requests
@@ -54,12 +81,24 @@ def main():
                     if job["thread"].is_alive() == False:
                         backend_data["running-jobs"].append(job)
                         backend_data["started-jobs"].remove(job)
+                        send_grafana_annotation(
+                            dashboard_uid="1",  # Replace with your dashboard UID
+                            panel_id=1,  # Replace with the ID of the panel you want to annotate
+                            text=f"Batch job '{job['name']}' completed.",
+                            tags=["batch", "completed"]
+                        )
                 # If the job is a stream job, check if there is a table with the name of the job in the database to add to run job
                 else:
                     found = backend_data["db_api"].table_exists(job["name"])
                     if found:
                         backend_data["running-jobs"].append(job)
                         backend_data["started-jobs"].remove(job)
+                        send_grafana_annotation(
+                            dashboard_uid="2",  # Replace with your dashboard UID
+                            panel_id=2,  # Replace with the ID of the panel you want to annotate
+                            text=f"Stream job '{job['name']}' started and table created.",
+                            tags=["stream", "started"]
+                        )
                 sleep(1)
     except KeyboardInterrupt:
         print("Exiting backend...")
@@ -118,7 +157,14 @@ def __handle_api_call(conn, data: dict) -> None:
             }
 
             backend_data["started-jobs"].append(job)
-            
+
+            send_grafana_annotation(
+                dashboard_uid="1",  # Replace with your dashboard UID
+                panel_id=1,  # Replace with the ID of the panel you want to annotate
+                text=f"Batch job '{name}' started.",
+                tags=["batch", "started"]
+            )
+
         case "run-stream":
             model = data["model"]
             dataset_path = DATASET_DIRECTORY + data["dataset"]
@@ -150,6 +196,13 @@ def __handle_api_call(conn, data: dict) -> None:
             }
 
             backend_data["started-jobs"].append(job)
+
+            send_grafana_annotation(
+                dashboard_uid="2",  # Replace with your dashboard UID
+                panel_id=2,  # Replace with the ID of the panel you want to annotate
+                text=f"Stream job '{name}' requested to start.",
+                tags=["stream", "requested"]
+            )
         case "get-data":
             if data["to_timestamp"] == None:
                 df = backend_data["db_api"].read_data(datetime.fromtimestamp(int(data["from_timestamp"])), data["job_name"])

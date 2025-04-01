@@ -46,10 +46,10 @@ services:
     restart: always
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana-enterprise:latest
     container_name: Grafana
     ports:
-      - "${GRAFANA_PORT:-3000}:3000"
+      - "${GRAFANA_PORT}:3000"
     volumes:
       - grafana_data:/var/lib/grafana
     environment:
@@ -63,7 +63,10 @@ services:
       GF_DATABASE_NAME: ${DATABASE_NAME}
     depends_on:
       - timescaledb
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: always
   
 volumes:
   timescaledb_data:
+  grafana_data:
