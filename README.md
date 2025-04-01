@@ -12,7 +12,10 @@
 
 ## 💻 About The Project
 
-### Overview
+### Overview of AnomDet_XAI
+This repo is a fork of the AnomDet with the visualization library switched to Grafana and integration of XAI to explain anomalies.
+
+### Overview of AnomDet
 
 Anomaly detection of real-world data consists of recognizing outlier data points. These outliers are what's called anomalies and anomaly detection algortihms have been researched extensively. The performance of these algorithms can be very dependent on the dataset it is used on. This means that if an algorithm performs well on one data set, it doesn't necessarily mean that it performs well on another.
 
