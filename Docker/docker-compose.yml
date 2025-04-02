@@ -41,6 +41,7 @@ services:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     depends_on:
       - timescaledb
+      - grafana
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: always
@@ -61,6 +62,8 @@ services:
       GF_DATABASE_USER: ${DATABASE_USER}
       GF_DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       GF_DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
     depends_on:
       - timescaledb
     extra_hosts:
