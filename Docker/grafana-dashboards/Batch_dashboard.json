@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 4,
+  "id": 1,
   "links": [],
   "panels": [
     {
@@ -147,7 +147,7 @@
         }
       },
       "pluginVersion": "11.6.0",
-      "repeat": "job_name",
+      "repeat": "batch_name",
       "repeatDirection": "v",
       "targets": [
         {
@@ -158,7 +158,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\r\n  timestamp AS \"time\",  -- Alias timestamp column as \"time\"\r\n  *\r\n\r\nFROM\r\n  \"${job_name:raw}\"         -- Use the variable here. Double quotes help with case sensitivity or special chars.\r\nWHERE $__timeFilter(timestamp) \r\nORDER BY\r\n  timestamp ASC",
+          "rawSql": "SELECT\r\n  timestamp AS \"time\",  -- Alias timestamp column as \"time\"\r\n  *\r\n\r\nFROM\r\n  \"${batch_name:raw}\"         -- Use the variable here. Double quotes help with case sensitivity or special chars.\r\nWHERE $__timeFilter(timestamp) \r\nORDER BY\r\n  timestamp ASC",
           "refId": "A",
           "sql": {
             "columns": [
@@ -179,7 +179,7 @@
           }
         }
       ],
-      "title": "$job_name",
+      "title": "$batch_name",
       "transformations": [
         {
           "id": "filterFieldsByName",
@@ -231,14 +231,18 @@
           "text": "All",
           "value": "$__all"
         },
-        "definition": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'job_%' ORDER BY table_name",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "timescaledb-main-ds-01"
+        },
+        "definition": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'job_batch_%' ORDER BY table_name",
         "description": "",
         "includeAll": true,
-        "label": "Select Job",
+        "label": "Select Batch Job",
         "multi": true,
-        "name": "job_name",
+        "name": "batch_name",
         "options": [],
-        "query": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'job_%' ORDER BY table_name",
+        "query": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'job_batch_%' ORDER BY table_name",
         "refresh": 1,
         "regex": "",
         "sort": 1,
@@ -252,7 +256,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Dashboard",
-  "uid": "dehor1y1i90cge",
-  "version": 11
+  "title": "Batch Jobs",
+  "uid": "batch01",
+  "version": 1
 }

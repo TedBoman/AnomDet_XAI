@@ -4,6 +4,7 @@ from get_handler import get_handler
 from bokeh.plotting import figure
 from bokeh.embed import file_html
 from bokeh.resources import CDN
+import os
 
 def get_index_callbacks(app):
     @app.callback(
@@ -152,6 +153,7 @@ def create_active_jobs(active_jobs):
     if len(active_jobs) == 0:
         return ["No active jobs found."]
     job_divs = []
+    GRAFANA_URL = f"http://localhost:{os.getenv('GRAFANA_PORT')}"
     for job in active_jobs:
         new_div = html.Div([
             dcc.ConfirmDialog(
@@ -159,9 +161,10 @@ def create_active_jobs(active_jobs):
                 message=f'Are you sure you want to cancel the job {job["name"]}?',
                 displayed=False,
             ),
-            dcc.Link(
+            html.A(
                 children=[job["name"]],
-                href=f'/{job["name"]}' if job["type"] == "stream" else f'/{job["name"]}?batch=True',
+                # href=f'/{job["name"]}' if job["type"] == "stream" else f'/{job["name"]}?batch=True', #Old version with bokeh
+                href=f'{GRAFANA_URL}/d/stream01/stream-jobs' if job["type"] == "stream" else f'{GRAFANA_URL}/d/batch01/batch-jobs', # New version with grafana
                 style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
             ),
             html.Button("Stop", id={"type": "remove-dataset-btn", "index": job["name"]}, n_clicks=0, style={
