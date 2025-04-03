@@ -24,7 +24,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "behl4ike13jswe"
+        "uid": "timescaledb-main-ds-01"
       },
       "fieldConfig": {
         "defaults": {
@@ -153,7 +153,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "behl4ike13jswe"
+            "uid": "timescaledb-main-ds-01"
           },
           "editorMode": "code",
           "format": "time_series",

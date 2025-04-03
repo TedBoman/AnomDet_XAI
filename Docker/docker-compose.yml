@@ -51,19 +51,19 @@ services:
     container_name: Grafana
     ports:
       - "${GRAFANA_PORT}:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_DATABASE_TYPE: postgres
-      GF_DATABASE_HOST: timescaledb
+      GF_DATABASE_HOST: ${DATABASE_HOST}
       GF_DATABASE_PORT: ${DATABASE_PORT}
       GF_DATABASE_USER: ${DATABASE_USER}
       GF_DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       GF_DATABASE_NAME: ${DATABASE_NAME}
-      DATABASE_HOST: ${DATABASE_HOST}
-      DATABASE_PORT: ${DATABASE_PORT}
+    volumes:
+      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana-dashboards:/var/lib/grafana/dashboards
     depends_on:
       - timescaledb
     extra_hosts:

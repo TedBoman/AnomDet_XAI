@@ -1,0 +1,22 @@
+# file: grafana-provisioning/dashboards/dashboard_provider.yml
+apiVersion: 1
+
+providers:
+  # <string> an unique provider name. Required
+  - name: 'default' # Or any provider name you like
+    # <int> Org id. Default to org 1
+    orgId: 1
+    # <string> name of the dashboard folder.
+    folder: '' # Empty means the 'General' folder
+    # <string> provider type. Default to 'file'
+    type: file
+    # <boolean> disable dashboard deletion
+    disableDeletion: false
+    # <boolean> enable dashboard editing
+    editable: true # Allow edits in UI (changes won't persist container recreation unless you update the JSON file)
+    # <string> Options depends on the provider type. Required
+    options:
+      # <string, required> path to dashboard files on disk. Required when using the 'file' type
+      path: /var/lib/grafana/dashboards # This is the path *inside the container* where JSON files will be mounted
+      # <boolean> use folder names from filesystem to create folders in Grafana
+      # foldersFromFilesStructure: true

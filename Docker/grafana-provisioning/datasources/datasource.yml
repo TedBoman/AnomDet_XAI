@@ -1,0 +1,60 @@
+# file: grafana-provisioning/datasources/datasource.yml
+apiVersion: 1
+
+# list of datasources to insert/update depending
+# whats available in the database
+datasources:
+  # <string, required> name of the datasource. Required
+  - name: TimescaleDB_Auto  # Or any name you prefer
+    # <string, required> datasource type. Required
+    type: postgres
+    # <string, required> uid of the datasource. Required
+    uid: 'timescaledb-main-ds-01'
+    # <string, required> access mode. direct or proxy. Required
+    access: proxy # 'proxy' means the Grafana backend handles requests
+    # <string> url
+    url: $GF_DATABASE_HOST:$GF_DATABASE_PORT # Use host.docker.internal or your DB service name & port
+    # <string> database name, if used
+    database: $GF_DATABASE_NAME # Replace with your DATABASE_NAME from .env
+    # <string> database user, if used
+    user: $GF_DATABASE_USER # Use environment variable for username
+    # <string> Deprecated: Set PGSSLMode in jsonData.sslmode
+    # sslMode: disable # old way, use jsonData.sslmode instead
+
+    # <map> fields that will be converted to json and stored in jsonData
+    jsonData:
+      sslmode: disable # require, verify-full, or disable - based on your DB setup
+      # <boolean> enable/disable escaping of literal values in templating variables
+      # escapeLiteralValues: false
+      # <string> The parameter handling style for prepared statements (dollar or question_mark)
+      # preparedStatementParameterStyle: dollar
+      # <boolean> Enable TimescaleDB extensions
+      timescaledb: true # <<< Enable TimescaleDB specific features
+      # <string> Determine the database time zone
+      # timezone: browser # Example: Use browser's timezone
+      # <string> Specifies the maximum number of connections in the idle connection pool.
+      # maxIdleConns: 100
+      # <boolean> If true, sets the maximum number of connections in the idle connection pool to unlimited.
+      # maxIdleConnsAuto: false
+      # <string> Specifies the maximum number of open connections to the database.
+      # maxOpenConns: 100
+      # <string> Specifies the maximum amount of time a connection may be reused.
+      # connMaxLifetime: 14400s
+      # <string> PostgreSQL version (available values: 903, 904, 905, 906, 1000, 1100, 1200, 1300, 1400, 1500, 1600)
+      # postgresVersion: 1200 # Example: Set your PG version
+
+    # <map> fields that will be converted to json and stored in secureJsonData
+    # secureJsonData:
+      # <string> database password, if used
+      # tlsCACert: '...' # Example: CA certificate content
+      # tlsClientCert: '...' # Example: Client certificate content
+      # tlsClientKey: '...' # Example: Client key content
+    secureJsonData:
+       password: $GF_DATABASE_PASSWORD # Use environment variable for password
+
+    # <int> org id. Defaults to org 1
+    # orgId: 1
+    # <string> uid. If specified, Grafana will dynamically assign UID
+    # uid: tsdb-auto # Optional: Give it a fixed UID
+    # <boolean> allow users to edit datasources from the UI.
+    editable: true # Set to false if you want to lock it via provisioning only
