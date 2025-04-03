@@ -16,7 +16,7 @@ class BackendAPI:
             "METHOD": "run-batch",
             "model": model,
             "dataset": dataset,
-            "name": "job_"+name,
+            "name": "job_batch_"+name,
             "debug": debug
         }
         if inj_params:
@@ -30,7 +30,7 @@ class BackendAPI:
             "METHOD": "run-stream",
             "model": model,
             "dataset": dataset,
-            "name": "job_"+name,
+            "name": "job_stream_"+name,
             "speedup": speedup,
             "debug" : debug
         }
