@@ -300,8 +300,9 @@ class DBInterface(ABC):
 To use your own database manager of choice, run it in a container or in your preferred environment. Then implement a Database API that follows the interface specified. Provide the right credentials to the backend and instantiate  an object of your Database API class in the backend.
 
 ## Copyright
-### OpenXAI
-Copyright (c) 2022 AI4LIFE-GROUP
+### OmniXAI
+Copyright (c) 2021, Salesforce.com, Inc.
+All rights reserved.
 
 ## 📄 License
 

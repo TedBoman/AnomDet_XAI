@@ -180,43 +180,6 @@
         }
       ],
       "title": "$batch_name",
-      "transformations": [
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "names": [
-                "Time",
-                "load-1m",
-                "load-5m",
-                "load-15m",
-                "sys-mem-swap-total",
-                "sys-mem-swap-free",
-                "sys-mem-free",
-                "sys-mem-cache",
-                "sys-mem-buffered",
-                "sys-mem-available",
-                "sys-mem-total",
-                "sys-fork-rate",
-                "sys-interrupt-rate",
-                "sys-context-switch-rate",
-                "sys-thermal",
-                "disk-io-time",
-                "disk-bytes-read",
-                "disk-bytes-written",
-                "disk-io-read",
-                "disk-io-write",
-                "cpu-iowait",
-                "cpu-system",
-                "cpu-user",
-                "server-up",
-                "is_anomaly",
-                "injected_anomaly"
-              ]
-            }
-          }
-        }
-      ],
       "type": "timeseries"
     }
   ],

@@ -19,6 +19,10 @@ import multiprocessing as mp
 import pandas as pd
 from typing import Union, List, Optional, Dict
 
+# OmniXAI
+from omnixai.data.timeseries import Timeseries
+from omnixai.explainers.timeseries import TimeseriesExplainer
+
 # Custom
 from Simulator.DBAPI.type_classes import Job
 from Simulator.DBAPI.type_classes import AnomalySetting
@@ -28,6 +32,19 @@ MODEL_DIRECTORY = "./ML_models"
 INJECTION_METHOD_DIRECTORY = "./Simulator/AnomalyInjector/InjectionMethods"
 DATASET_DIRECTORY = "./Datasets"
 
+def split_data(data):
+    """Split the dataseries into 2 data series in a ratio of """
+
+    total_rows = len(data)
+
+    # Calculate split indices
+    train_end = int(total_rows * 0.7) # 70% for training
+
+    # Split the data
+    training_data = data.iloc[:train_end]
+    testing_data = data.iloc[train_end:] # Remaining 30% is testing
+
+    return training_data, testing_data
 
 def map_to_timestamp(time):
     return time.timestamp()
@@ -35,15 +52,40 @@ def map_to_timestamp(time):
 def map_to_time(time):
     return datetime.fromtimestamp(time, tz=timezone.utc)
 
+def evaluate_classification(df: pd.DataFrame) -> dict:
+    # Ensure the DataFrame has the necessary columns
+    if "is_anomaly" not in df.columns:
+        raise ValueError("DataFrame must contain an 'is_anomaly' column.")
+    if "label" not in df.columns:
+        raise ValueError("DataFrame must contain a 'label' column.")
+
+    # Convert boolean columns to integers for easier comparison (True=1, False=0)
+    df["predicted"] = df["is_anomaly"].astype(int)
+    df["actual"] = df["label"].astype(int)
+
+    # Calculate evaluation metrics
+    correct_anomalies = df[(df["predicted"] == 1) & (df["actual"] == 1)].shape[0]
+    correct_non_anomalies = df[(df["predicted"] == 0) & (df["actual"] == 0)].shape[0]
+    false_positives = df[(df["predicted"] == 1) & (df["actual"] == 0)].shape[0]
+    false_negatives = df[(df["predicted"] == 0) & (df["actual"] == 1)].shape[0]
+
+    total_predictions = len(df)
+    accuracy = (correct_anomalies + correct_non_anomalies) / total_predictions if total_predictions > 0 else 0
+
+    return {
+        "correct_anomalies": correct_anomalies,
+        "correct_non_anomalies": correct_non_anomalies,
+        "false_positives": false_positives,
+        "false_negatives": false_negatives,
+        "total_predictions": total_predictions,
+        "accuracy": accuracy,
+    }
+
 # Starts processing of dataset in one batch
 def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict=None, debug=False) -> None:
     print("Starting Batch-job!")
     sys.stdout.flush()
     
-    model_instance = get_model(model)
-    df = pd.read_csv(path)
-    model_instance.run(df)
-
     if inj_params is not None:
         anomaly_settings = []  # Create a list to hold AnomalySetting objects
         for params in inj_params:  # Iterate over the list of anomaly dictionaries
@@ -62,24 +104,49 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     else:
         batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name, debug=debug)
     sim_engine = se()
-    sim_engine.main(db_conn_params, batch_job)
+    result = sim_engine.main(db_conn_params, batch_job)
+    if result == 1:
+        api = TimescaleDBAPI(db_conn_params)
+        df = api.read_data(datetime.fromtimestamp(0), name)
 
-    api = TimescaleDBAPI(db_conn_params)
-    df = api.read_data(datetime.fromtimestamp(0), name)
-    
-    df["timestamp"] = df["timestamp"].apply(map_to_timestamp)
-    df["timestamp"] = df["timestamp"].astype(float)
+        training_data, testing_data = split_data(df)
+        model_instance = get_model(model) # Get the model
+        model_instance.run(training_data.iloc[:, :-3]) # Run train on the data
+        
+        df["timestamp"] = df["timestamp"].apply(map_to_timestamp)
+        df["timestamp"] = df["timestamp"].astype(float)
 
-    res = model_instance.detect(df.iloc[:, :-2])
-    df["is_anomaly"] = res
-    
-    anomaly_df = df[df["is_anomaly"] == True]
-    
-    arr = [datetime.fromtimestamp(timestamp) for timestamp in anomaly_df["timestamp"]]
-    arr = [f'\'{str(time)}+00\'' for time in arr]
-    #1970-01-01 00:13:30+00
+        res = model_instance.detect(df.iloc[:, :-3]) # detect anomalies without "is_anomaly", "inj_anomaly" or "label"
+        df["is_anomaly"] = res
+        
+        anomaly_df = df[df["is_anomaly"] == True]
+        
+        arr = [datetime.fromtimestamp(timestamp) for timestamp in anomaly_df["timestamp"]]
+        arr = [f'\'{str(time)}+00\'' for time in arr]
+        #1970-01-01 00:13:30+00
 
-    api.update_anomalies(name, arr)
+        api.update_anomalies(name, arr)
+
+        explainer = TimeseriesExplainer(
+            explainers=["shap"],
+            mode="anomaly_detection",
+            data=Timeseries.from_pd(training_data),
+            model=model_instance.detect,
+            preprocess=None,
+            postprocess=None,
+        )
+
+        test_instances = Timeseries.from_pd(testing_data)
+        local_explanations = explainer.explain(
+            test_instances,
+        )
+
+        # Now, assuming your 'df' DataFrame contains the 'label' column
+        evaluation_results = evaluate_classification(df)
+        print("Evaluation Results:")
+        print(evaluation_results)
+    else:
+        return 0
 
 # Starts processing of dataset as a stream
 def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, inj_params: dict=None, debug=False) -> None:

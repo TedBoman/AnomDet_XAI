@@ -151,7 +151,7 @@ class BatchImporter:
             dl.print_exception(f"Error injecting anomalies into chunk: {e}")
             return chunk
 
-    def start_simulation(self, conn_params, anomaly_settings=None, table_name=None):
+    def start_simulation(self, conn_params, anomaly_settings=None, table_name=None, timestamp_index=0, label_index=None):
         """
         Starts the batch data import process.
 
@@ -186,10 +186,15 @@ class BatchImporter:
             dl.print_exception("Canceling job")
             return
         
+        full_df.columns.values[timestamp_index] = "timestamp"
+
+        if label_index != None:
+            full_df.columns.values[label_index] = "label"
+        
         columns = list(full_df.columns.values)
         
         table_name = self.create_table(conn_params, Path(self.file_path).stem if table_name is None else table_name, columns)
-            
+
         # Drop rows with invalid timestamps
         full_df = full_df.dropna(subset=[full_df.columns[0]])
 
@@ -232,6 +237,7 @@ class BatchImporter:
             result.get()  # This will raise any exceptions that occurred in the process
 
         dl.debug_print("Inserting done!")
+        return 1
         
 
     def read_file(self):

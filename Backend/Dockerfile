@@ -2,7 +2,11 @@ FROM python:3.10-slim
 
 ARG BACKEND_PORT
 
-COPY ./Backend/OpenXAI/ ./OpenXAI 
+RUN apt-get update && \
+    apt-get install -y build-essential g++ && \
+    # Clean up apt cache to reduce image size
+    rm -rf /var/lib/apt/lists/*
+
 COPY ./Backend/requirements.txt .
 
 RUN pip install -r requirements.txt
