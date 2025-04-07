@@ -1,0 +1,120 @@
+{
+    "model_names": [
+        "lr", "ann"
+    ],
+    "data_names": [
+       "adult", "compas", "gaussian", "german",
+       "gmsc", "heart", "heloc", "pima"
+    ],
+    "methods": [
+        "control", "grad", "ig", "itg", "sg", "shap", "lime"
+    ],
+    "metrics": [
+        "PRA", "RC",
+        "FA", "RA", "SA", "SRA",
+        "PGU", "PGI",
+        "RIS", "RRS", "ROS"
+    ],
+    "n_test_samples": 1000,
+    "explainers": {
+        "control": {
+            "seed": 0
+        },
+        "grad": {
+            "absolute_value": false
+        },
+        "ig": {
+            "method": "gausslegendre", 
+            "multiply_by_inputs": false
+        },
+        "itg": {},
+        "sg": {
+            "n_samples": 100,
+            "standard_deviation": 0.1,
+            "seed": 0
+        },
+        "shap": {
+            "n_samples": 500,
+            "model_impl": "torch",
+            "seed": 0
+        },
+        "lime": {
+            "n_samples": 1000,
+            "kernel_width": 0.75,
+            "std": 0.1,
+            "mode": "tabular",
+            "sample_around_instance": true,
+            "discretize_continuous": false,
+            "seed": 0
+        }
+    },
+    "evaluators": {
+        "ground_truth_metrics": {
+            "k": 0.25,
+            "AUC": true
+        },
+        "prediction_metrics": {
+            "k": 0.25,
+            "AUC": true,
+            "std": 0.1,
+            "n_samples": 100,
+            "seed": -1,
+            "n_jobs": -1
+        },
+        "stability_metrics": {
+            "std": 1e-5,
+            "n_samples": 1000,
+            "n_perturbations": 100,
+            "p_norm": 2,
+            "seed": -1,
+            "n_jobs": -1
+        }
+    },
+    "training": {
+        "epochs": 100,
+        "learning_rate": 0.001,
+        "scaler": "minmax",
+        "seed": 0, 
+        "warmup": 5,
+        "adult": {
+            "batch_size": 256,
+            "pos_class_weight": 0.55,
+            "mean_pred_bound": 0.15
+        },
+        "compas": {
+            "batch_size": 32,
+            "pos_class_weight": 0.4,
+            "mean_pred_bound": 0.93
+        },
+        "gaussian": {
+            "batch_size": 32,
+            "pos_class_weight": 0.5,
+            "mean_pred_bound": 0.4
+        },
+        "german": {
+            "batch_size": 16,
+            "pos_class_weight": 0.4,
+            "mean_pred_bound": 0.9
+        },
+        "gmsc": {
+            "batch_size": 256,
+            "pos_class_weight": 0.25,
+            "mean_pred_bound": 0.96
+        },
+        "heart": {
+            "batch_size": 16,
+            "pos_class_weight": 0.75,
+            "mean_pred_bound": 0.1
+        },
+        "heloc": {
+            "batch_size": 32,
+            "pos_class_weight": 0.5,
+            "mean_pred_bound": 0.4
+        },
+        "pima": {
+            "batch_size": 16,
+            "pos_class_weight": 0.65,
+            "mean_pred_bound": 0.3
+        }
+    }
+}
