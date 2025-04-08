@@ -19,8 +19,7 @@ class SVMModel(model_interface.ModelInterface):
         
     #Preprocesses, trains and fits the model
     def run(self, df):
-        X = df.iloc[:, 1:]
-        X_train = X
+        X_train = df
 
         X_train = self.scaler.fit_transform(X_train)
         
@@ -39,7 +38,7 @@ class SVMModel(model_interface.ModelInterface):
 
         autoencoder = Model(inputs=input_layer, outputs=decoded)
         autoencoder.compile(optimizer='adam', loss='mse')
-        autoencoder.fit(X_train, X_train, epochs=50, batch_size=32, verbose=1)
+        autoencoder.fit(X_train, X_train, epochs=10, batch_size=32, verbose=1)
 
         encoder = Model(inputs=input_layer, outputs=encoded)
         encoded_data = encoder.predict(X_train)
@@ -47,7 +46,7 @@ class SVMModel(model_interface.ModelInterface):
 
     #Detects anomalies and returns a list of boolean values that can be mapped to the original dataset
     def detect(self, df):
-        X_test = df.iloc[:, 1:]
+        X_test = df
         X_test = self.scaler.fit_transform(X_test)
         test_encoded_data = self.__run_autoencoder(X_test)
 

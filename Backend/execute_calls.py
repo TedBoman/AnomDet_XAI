@@ -19,10 +19,6 @@ import multiprocessing as mp
 import pandas as pd
 from typing import Union, List, Optional, Dict
 
-# OmniXAI
-from omnixai.data.timeseries import Timeseries
-from omnixai.explainers.timeseries import TimeseriesExplainer
-
 # Custom
 from Simulator.DBAPI.type_classes import Job
 from Simulator.DBAPI.type_classes import AnomalySetting
@@ -38,7 +34,7 @@ def split_data(data):
     total_rows = len(data)
 
     # Calculate split indices
-    train_end = int(total_rows * 0.7) # 70% for training
+    train_end = int(total_rows * 0.99) # 99% for training
 
     # Split the data
     training_data = data.iloc[:train_end]
@@ -110,13 +106,20 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
         df = api.read_data(datetime.fromtimestamp(0), name)
 
         training_data, testing_data = split_data(df)
+        training_data = training_data.iloc[:, 1:-3]
+        testing_data = testing_data.iloc[:, 1:-3]
+        print("Training data shape:", training_data.shape)
+        print("Testing data shape:", testing_data.shape)
+        print("Training columns:", training_data.columns)
+        print("Testing columns:", testing_data.columns)
+
         model_instance = get_model(model) # Get the model
-        model_instance.run(training_data.iloc[:, :-3]) # Run train on the data
+        model_instance.run(df.iloc[:, 1:-3]) # Run train on the data
         
         df["timestamp"] = df["timestamp"].apply(map_to_timestamp)
         df["timestamp"] = df["timestamp"].astype(float)
 
-        res = model_instance.detect(df.iloc[:, :-3]) # detect anomalies without "is_anomaly", "inj_anomaly" or "label"
+        res = model_instance.detect(df.iloc[:, 1:-3]) # detect anomalies without "is_anomaly", "inj_anomaly" or "label"
         df["is_anomaly"] = res
         
         anomaly_df = df[df["is_anomaly"] == True]
@@ -127,24 +130,11 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
 
         api.update_anomalies(name, arr)
 
-        explainer = TimeseriesExplainer(
-            explainers=["shap"],
-            mode="anomaly_detection",
-            data=Timeseries.from_pd(training_data),
-            model=model_instance.detect,
-            preprocess=None,
-            postprocess=None,
-        )
-
-        test_instances = Timeseries.from_pd(testing_data)
-        local_explanations = explainer.explain(
-            test_instances,
-        )
-
         # Now, assuming your 'df' DataFrame contains the 'label' column
         evaluation_results = evaluate_classification(df)
         print("Evaluation Results:")
         print(evaluation_results)
+        sys.stdout.flush()
     else:
         return 0
 

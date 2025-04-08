@@ -9,4 +9,4 @@ scikit-learn
 openpyxl
 xlrd
 requests
-omnixai
+shap

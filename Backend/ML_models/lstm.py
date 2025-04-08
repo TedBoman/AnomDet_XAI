@@ -17,7 +17,6 @@ class LSTMModel(model_interface.ModelInterface):
 
     #Preprocesses, trains and fits the model
     def run(self, df, time_steps=1):
-        df = df.iloc[:, 1:]
         features = df.shape[1]
         inputs = Input(shape=(1, features))
         encoded = LSTM(64, activation='relu', return_sequences=False)(inputs)
@@ -40,7 +39,7 @@ class LSTMModel(model_interface.ModelInterface):
 
         self.model.fit(
             X_train, X_train, 
-            epochs=10,
+            epochs=25,
             batch_size=256,
             validation_split=0.2,
             verbose=1
@@ -58,13 +57,24 @@ class LSTMModel(model_interface.ModelInterface):
             sequences.append(seq)
         return np.array(sequences)
         
-    #Detects anomalies and returns a list of boolean values that can be mapped to the original dataset
-    def detect(self, detection_df):
-        detection_df = detection_df.iloc[:, 1:]
-        data_normalized = self.scaler.fit_transform(detection_df)
-        X = self.__create_sequences(data_normalized, 1)
+    # Detects anomalies and returns a list of boolean values
+    def detect(self, detection_data): # Renamed input variable for clarity
+        # Check if the input is an OmniXAI Timeseries object and convert it
+        if hasattr(detection_data, 'to_pd') and callable(detection_data.to_pd):
+            detection_df = detection_data.to_pd()
+        else:
+            # Assume it might be called directly with a DataFrame
+            detection_df = detection_data
+
+        # --- IMPORTANT FIX from previous analysis ---
+        # Use transform, NOT fit_transform, on detection data
+        data_normalized = self.scaler.transform(detection_df)
+        # --- END FIX ---
+
+        X = self.__create_sequences(data_normalized, 1) # Hardcoded time_steps=1 aligns with model
         reconstructed = self.model.predict(X)
         reconstruction_error = np.mean(np.square(X - reconstructed), axis=(1, 2))
         anomalies = reconstruction_error > self.threshold
 
-        return anomalies
+        # OmniXAI expects numpy arrays as output
+        return np.array(anomalies)

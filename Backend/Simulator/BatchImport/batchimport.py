@@ -188,6 +188,7 @@ class BatchImporter:
         
         full_df.columns.values[timestamp_index] = "timestamp"
 
+        label_index = len(full_df.columns) - 1
         if label_index != None:
             full_df.columns.values[label_index] = "label"
         
