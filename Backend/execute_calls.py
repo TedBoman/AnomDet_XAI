@@ -120,6 +120,7 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
         df["timestamp"] = df["timestamp"].astype(float)
 
         res = model_instance.detect(df.iloc[:, 1:-3]) # detect anomalies without "is_anomaly", "inj_anomaly" or "label"
+        print(f"anomalies: {res}")
         df["is_anomaly"] = res
         
         anomaly_df = df[df["is_anomaly"] == True]

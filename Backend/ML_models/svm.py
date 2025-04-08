@@ -19,7 +19,8 @@ class SVMModel(model_interface.ModelInterface):
         
     #Preprocesses, trains and fits the model
     def run(self, df):
-        X_train = df
+        X = df
+        X_train = X
 
         X_train = self.scaler.fit_transform(X_train)
         
@@ -38,7 +39,7 @@ class SVMModel(model_interface.ModelInterface):
 
         autoencoder = Model(inputs=input_layer, outputs=decoded)
         autoencoder.compile(optimizer='adam', loss='mse')
-        autoencoder.fit(X_train, X_train, epochs=10, batch_size=32, verbose=1)
+        autoencoder.fit(X_train, X_train, epochs=50, batch_size=32, verbose=1)
 
         encoder = Model(inputs=input_layer, outputs=encoded)
         encoded_data = encoder.predict(X_train)
@@ -56,4 +57,3 @@ class SVMModel(model_interface.ModelInterface):
         adjusted_predictions = (decision_function < threshold).astype(int)
         boolean_anomalies = adjusted_predictions == 1
         return boolean_anomalies
-                

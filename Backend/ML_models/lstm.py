@@ -58,18 +58,8 @@ class LSTMModel(model_interface.ModelInterface):
         return np.array(sequences)
         
     # Detects anomalies and returns a list of boolean values
-    def detect(self, detection_data): # Renamed input variable for clarity
-        # Check if the input is an OmniXAI Timeseries object and convert it
-        if hasattr(detection_data, 'to_pd') and callable(detection_data.to_pd):
-            detection_df = detection_data.to_pd()
-        else:
-            # Assume it might be called directly with a DataFrame
-            detection_df = detection_data
-
-        # --- IMPORTANT FIX from previous analysis ---
-        # Use transform, NOT fit_transform, on detection data
+    def detect(self, detection_df): # Renamed input variable for clarity
         data_normalized = self.scaler.transform(detection_df)
-        # --- END FIX ---
 
         X = self.__create_sequences(data_normalized, 1) # Hardcoded time_steps=1 aligns with model
         reconstructed = self.model.predict(X)
