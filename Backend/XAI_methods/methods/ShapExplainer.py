@@ -95,7 +95,7 @@ class ShapExplainer(ExplainerMethodAPI):
             print(f"Summarizing background data using shap.kmeans (k={k_summary})...")
             try:
                 # Added round_values=False which can sometimes help stability
-                summary_object = ShapExplainer.kmeans(background_data_flat, k_summary, round_values=False)
+                summary_object = shap.kmeans(background_data_flat, k_summary, round_values=False)
 
                 if hasattr(summary_object, 'data') and isinstance(summary_object.data, np.ndarray):
                     background_summary_np = summary_object.data
@@ -117,7 +117,7 @@ class ShapExplainer(ExplainerMethodAPI):
         print("Initializing shap.KernelExplainer...")
         try:
             # Now _predict_fn_shap and background_summary_np are defined
-            self._explainer = ShapExplainer.KernelExplainer(
+            self._explainer = shap.KernelExplainer(
                 _predict_fn_shap,
                 background_summary_np,
                 link=self.link_arg

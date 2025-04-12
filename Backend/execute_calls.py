@@ -206,7 +206,7 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
         model_instance = get_model(model) # Get the model object
 
         start_time = time.perf_counter()
-        model_instance.run(all_features_df, epochs=10) # Train on the selected feature columns
+        model_instance.run(all_features_df, epochs=2) # Train on the selected feature columns
         end_time = time.perf_counter()
         print(f"Training took {end_time-start_time}s")
         print("Model training complete.")
@@ -478,7 +478,7 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
                             }
                             if method_name == "lime":
                                 handler_args["instance_index"] = instance_idx_for_lime # Pass index for LIME file naming
-                                
+
                             handler_func(**handler_args) # Call the specific handler
                         else:
                             print(f"No plot handler defined for method '{method_name}'.")
