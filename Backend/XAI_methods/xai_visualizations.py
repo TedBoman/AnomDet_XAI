@@ -21,7 +21,8 @@ def process_and_plot_shap(
     output_dir: str,
     mode: str,                          # 'classification' or 'regression'
     class_index_to_plot: int = 0,       # Default class to plot for classification
-    max_display_features: int = 20      # Max features for plots like bar/waterfall
+    max_display_features: int = 20,      # Max features for plots like bar/waterfall
+    job_name='none'
     ):
     """Processes SHAP results (already reshaped) and generates standard plots."""
     print(f"--- Processing and Plotting SHAP Results (Class Index: {class_index_to_plot if mode=='classification' else 'N/A'}) ---")
@@ -97,7 +98,7 @@ def process_and_plot_shap(
         plt.figure()
         shap.summary_plot(shap_values_flat, features=features_flat_np, feature_names=feature_names_flat, show=False, plot_type='dot')
         plt.title(f"SHAP Summary Plot (Dot{plot_suffix})")
-        plt.savefig(os.path.join(output_dir, f"shap_summary_dot{plot_suffix}.png"), bbox_inches='tight')
+        plt.savefig(os.path.join(output_dir, f"{job_name}_shap_summary_dot{plot_suffix}.png"), bbox_inches='tight')
         print("Saved Summary Plot (Dot).")
     except Exception as e: print(f"Failed Summary Plot (Dot): {e}")
     finally: plt.close() # Ensure figure is closed
@@ -108,7 +109,7 @@ def process_and_plot_shap(
             plt.figure()
             shap.plots.bar(shap_explanation, max_display=max_display_features, show=False)
             plt.title(f"SHAP Feature Importance (Bar{plot_suffix})")
-            plt.savefig(os.path.join(output_dir, f"shap_summary_bar{plot_suffix}.png"), bbox_inches='tight')
+            plt.savefig(os.path.join(output_dir, f"{job_name}_shap_summary_bar{plot_suffix}.png"), bbox_inches='tight')
             print("Saved Summary Plot (Bar).")
         except Exception as e: print(f"Failed Summary Plot (Bar): {e}")
         finally: plt.close()
@@ -120,7 +121,7 @@ def process_and_plot_shap(
         try:
             plt.figure()
             shap.plots.waterfall(shap_explanation[instance_idx_to_plot], max_display=max_display_features, show=False)
-            plt.savefig(os.path.join(output_dir, f"shap_waterfall_inst{instance_idx_to_plot}{plot_suffix}.png"), bbox_inches='tight')
+            plt.savefig(os.path.join(output_dir, f"{job_name}_shap_waterfall_inst{instance_idx_to_plot}{plot_suffix}.png"), bbox_inches='tight')
             print(f"Saved Waterfall Plot for Instance {instance_idx_to_plot}.")
         except Exception as e: print(f"Failed Waterfall Plot: {e}")
         finally: plt.close()
@@ -136,7 +137,7 @@ def process_and_plot_shap(
             fig_height = max(6, n_instances_explained * 0.4) # Adjust height dynamically
             plt.figure(figsize=(8, fig_height)) # Set figure size before plotting
             shap.plots.heatmap(shap_explanation, max_display=min(max_display_features, n_flat_features), show=False)
-            plt.savefig(os.path.join(output_dir, f"shap_heatmap{plot_suffix}.png"), bbox_inches='tight')
+            plt.savefig(os.path.join(output_dir, f"{job_name}_shap_heatmap{plot_suffix}.png"), bbox_inches='tight')
             print("Saved Heatmap Plot.")
         except Exception as e: print(f"Failed Heatmap Plot: {e}")
         finally: plt.close()
@@ -155,6 +156,7 @@ def process_and_plot_lime(
      output_dir: str,
      mode: str,
      instance_index: int = 0,            # Index if looping outside
+     job_name='none',
      **kwargs):
      """Processes LIME results and generates standard plots/output."""
      print(f"--- Processing and Plotting LIME Results for Instance Index {instance_index} ---")
@@ -169,7 +171,7 @@ def process_and_plot_lime(
      try:
          # Save as HTML file (most common way to save LIME plots)
          os.makedirs(output_dir, exist_ok=True) # Ensure dir exists
-         html_file = os.path.join(output_dir, f"lime_explanation_inst{instance_index}.html")
+         html_file = os.path.join(output_dir, f"{job_name}_lime_explanation_inst{instance_index}.html")
          lime_explanation.save_to_file(html_file)
          print(f"Saved LIME explanation HTML to {html_file}")
 

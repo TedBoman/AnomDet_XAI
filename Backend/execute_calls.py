@@ -9,7 +9,6 @@ from socket import socket
 from timescaledb_api import TimescaleDBAPI
 from datetime import datetime, timezone
 from typing import Any, Union
-import time
 
 # Third-Party
 import threading
@@ -332,7 +331,7 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
                 "k_summary": 50,        # Max clusters for background summary (LOWER = FASTER INIT)
 
                 # Passed to ShapExplainer.explain via ts_explainer.explain's **kwargs
-                "nsamples": 100,        # Perturbations per instance (LOWER = FASTER EXPLAIN)
+                "nsamples": 25,        # Perturbations per instance (LOWER = FASTER EXPLAIN)
 
                 # Used locally to calculate l1_reg for SHAP explain call
                 "l1_reg_k_features": 20 # Max features for SHAP's internal Lasso (adjust as needed)
@@ -474,11 +473,12 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
                                 "feature_names": feature_columns,
                                 "sequence_length": sequence_length,
                                 "output_dir": output_dir,
+                                "job_name": name, # Pass job name for file differantiating
                                 "mode": ts_explainer.mode
                             }
                             if method_name == "lime":
                                 handler_args["instance_index"] = instance_idx_for_lime # Pass index for LIME file naming
-
+                                
                             handler_func(**handler_args) # Call the specific handler
                         else:
                             print(f"No plot handler defined for method '{method_name}'.")

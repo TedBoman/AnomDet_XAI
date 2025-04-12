@@ -3,8 +3,8 @@ import warnings
 import numpy as np
 
 # Import the specific explainer CLASSES
-from XAI_methods.methods.shap import ShapExplainer
-# from XAI_methods.lime import LimeExplainer # Import others if you have them
+from XAI_methods.methods.ShapExplainer import ShapExplainer
+from XAI_methods.methods.LimeExplainer import LimeExplainer
 
 # Import the base API if you use type hints or checks
 try:
@@ -66,7 +66,23 @@ def xai_factory(
                  raise RuntimeError(f"Failed to instantiate ShapExplainer for method '{method_key}'") from e
 
         case "lime":
-            raise NotImplementedError("LIME method not fully configured in get_explainer.")
+            print(f"Attempting to instantiate ShapExplainer...")
+            try:
+                # Pass the received arguments TO the LimeExplainer constructor
+                explainer_instance = LimeExplainer(
+                    model=ml_model,
+                    background_data=background_data,
+                    **kwargs
+                )
+                # Quick check (optional): Verify it matches the expected API type
+                if not isinstance(explainer_instance, ExplainerMethodAPI):
+                     warnings.warn(f"Instantiated object for '{method_key}' may not fully implement ExplainerMethodAPI.", RuntimeWarning)
+
+                return explainer_instance
+            
+            except Exception as e:
+                print(f"Error instantiating LimeExplainer: {e}")
+                raise RuntimeError(f"Failed to instantiate LimeExplainer for method '{method_key}'") from e
 
         case _:
             # Handle unsupported method names
