@@ -1,16 +1,15 @@
 import sys
-from ML_models.lstm import LSTMModel
-from ML_models.isolation_forest import IsolationForest
+import warnings
 import pandas as pd
 import numpy as np
 import os
 import time
 import threading
 from socket import socket
-from ML_models.get_model import get_model
 from timescaledb_api import TimescaleDBAPI
 from datetime import datetime, timezone
-
+from typing import Any, Union
+import time
 
 # Third-Party
 import threading
@@ -23,10 +22,84 @@ from typing import Union, List, Optional, Dict
 from Simulator.DBAPI.type_classes import Job
 from Simulator.DBAPI.type_classes import AnomalySetting
 from Simulator.SimulatorEngine import SimulatorEngine as se
+from ML_models.get_model import get_model
+
+# --- XAI ---
+from ML_models.model_wrapper import ModelWrapperForXAI
+import XAI_methods.preprocessor as pre
+from XAI_methods.timeseriesExplainer import TimeSeriesExplainer
+import shap
+import matplotlib.pyplot as plt
+from XAI_methods import xai_visualizations as x
+import utils as ut
 
 MODEL_DIRECTORY = "./ML_models"
 INJECTION_METHOD_DIRECTORY = "./Simulator/AnomalyInjector/InjectionMethods"
 DATASET_DIRECTORY = "./Datasets"
+
+def get_anomaly_rows(
+    data: pd.DataFrame,
+    label_column: str = 'label', # Common name for the label column
+    anomaly_value: Any = 1       # The value indicating an anomaly (often 1 or True)
+) -> pd.DataFrame:
+    """
+    Filters a pandas DataFrame to return only the rows marked as anomalies
+    based on a specific label column and value.
+
+    Args:
+        data (pd.DataFrame): The input DataFrame containing the data and labels.
+        label_column (str): The name of the column containing the anomaly labels.
+                            Defaults to 'label'. Common alternatives might be
+                            'is_anomaly', 'anomaly', 'target'.
+        anomaly_value (Any): The value within the `label_column` that signifies
+                             an anomaly. Defaults to 1. This could also be True,
+                             'anomaly', etc., depending on your dataset.
+
+    Returns:
+        pd.DataFrame: A new DataFrame containing only the rows from the input `data`
+                      where the value in the `label_column` equals `anomaly_value`.
+                      Preserves the original index and columns. Returns an empty
+                      DataFrame with the same columns if no anomalies are found
+                      or if the input DataFrame is empty.
+
+    Raises:
+        TypeError: If 'data' is not a pandas DataFrame.
+        ValueError: If 'label_column' is not found in the DataFrame's columns.
+    """
+    # 1. Input Validation
+    if not isinstance(data, pd.DataFrame):
+        raise TypeError("Input 'data' must be a pandas DataFrame.")
+
+    if label_column not in data.columns:
+        raise ValueError(
+            f"Label column '{label_column}' not found in DataFrame columns. "
+            f"Available columns: {data.columns.tolist()}"
+        )
+
+    if data.empty:
+        print("Input DataFrame is empty. Returning an empty DataFrame.")
+        # Return an empty frame structure matching the input
+        return pd.DataFrame(columns=data.columns).astype(data.dtypes)
+
+    # 2. Filtering Logic
+    try:
+        # Create a boolean mask where the condition is true
+        anomaly_mask = (data[label_column] == anomaly_value)
+
+        # Use the mask to select rows. Use .copy() to avoid potential
+        # SettingWithCopyWarning if the returned DataFrame is modified later.
+        anomaly_rows = data.loc[anomaly_mask].copy()
+
+        print(f"Found {len(anomaly_rows)} rows where '{label_column}' == {anomaly_value}.")
+
+    except Exception as e:
+        # Catch potential errors during comparison or indexing
+        print(f"An error occurred during filtering: {e}")
+        # Return an empty DataFrame with original structure on error
+        return pd.DataFrame(columns=data.columns).astype(data.dtypes)
+
+    # 3. Return Filtered DataFrame
+    return anomaly_rows
 
 def split_data(data):
     """Split the dataseries into 2 data series in a ratio of """
@@ -38,7 +111,7 @@ def split_data(data):
 
     # Split the data
     training_data = data.iloc[:train_end]
-    testing_data = data.iloc[train_end:] # Remaining 30% is testing
+    testing_data = data.iloc[train_end:] # Remaining 1% is testing
 
     return training_data, testing_data
 
@@ -82,6 +155,8 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
     print("Starting Batch-job!")
     sys.stdout.flush()
     
+    start_time = time.perf_counter()
+
     if inj_params is not None:
         anomaly_settings = []  # Create a list to hold AnomalySetting objects
         for params in inj_params:  # Iterate over the list of anomaly dictionaries
@@ -101,40 +176,335 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
         batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name, debug=debug)
     sim_engine = se()
     result = sim_engine.main(db_conn_params, batch_job)
+    end_time = time.perf_counter()
+    print(f"Batch import took {end_time-start_time}s")
+
     if result == 1:
         api = TimescaleDBAPI(db_conn_params)
         df = api.read_data(datetime.fromtimestamp(0), name)
 
+        # --- Data Splitting and Feature Selection ---
         training_data, testing_data = split_data(df)
-        training_data = training_data.iloc[:, 1:-3]
-        testing_data = testing_data.iloc[:, 1:-3]
-        print("Training data shape:", training_data.shape)
-        print("Testing data shape:", testing_data.shape)
-        print("Training columns:", training_data.columns)
-        print("Testing columns:", testing_data.columns)
+        anomaly_rows = get_anomaly_rows(df)
 
-        model_instance = get_model(model) # Get the model
-        model_instance.run(df.iloc[:, 1:-3]) # Run train on the data
-        
-        df["timestamp"] = df["timestamp"].apply(map_to_timestamp)
-        df["timestamp"] = df["timestamp"].astype(float)
+        # Define feature columns based on the slicing used for the model
+        # This assumes df columns are like: [id?, timestamp, feature1, feature2, ..., label, inj_anomaly, something_else?]
+        # iloc[:, 1:-3] selects columns starting from the second up to the fourth-to-last
+        feature_columns = df.columns[1:-3].tolist()
+        print(f"Selected Feature Columns: {feature_columns}")
 
-        res = model_instance.detect(df.iloc[:, 1:-3]) # detect anomalies without "is_anomaly", "inj_anomaly" or "label"
-        print(f"anomalies: {res}")
-        df["is_anomaly"] = res
+        training_features_df = training_data[feature_columns]
+        testing_features_df = testing_data[feature_columns]
+        anomaly_feature_df = anomaly_rows[feature_columns]
+        all_features_df = df[feature_columns] # Features from the whole dataset for detection
+
+        print("Training features shape:", training_features_df.shape)
+        print("Testing features shape:", testing_features_df.shape)
+        print("All features shape:", all_features_df.shape)
+        # --- End Data Splitting ---
+
+        # --- Model Training ---
+        model_instance = get_model(model) # Get the model object
+
+        start_time = time.perf_counter()
+        model_instance.run(all_features_df, epochs=10) # Train on the selected feature columns
+        end_time = time.perf_counter()
+        print(f"Training took {end_time-start_time}s")
+        print("Model training complete.")
+        # --- End Model Training ---
+
+        # !! CRITICAL CHECK !! - Can we get sequence length?
+        if not hasattr(model_instance, 'sequence_length') or not isinstance(model_instance.sequence_length, int) or model_instance.sequence_length <= 0:
+             print("Error: Cannot determine 'sequence_length' from model_instance. Skipping XAI.")
+             # Handle the error appropriately - maybe return or just skip XAI
+             sequence_length = None # Flag that we can't proceed
+        else:
+            sequence_length = model_instance.sequence_length
+            print(f"Determined sequence_length from model: {sequence_length}")
+
+        # --- Create Wrapper for XAI ---
+        model_wrapper_for_xai = None # Initialize
+        if sequence_length is not None: # Only proceed if sequence length is known
+            try:
+                print("Wrapping trained model instance for XAI compatibility...")
+                # Create the wrapper instance HERE
+                model_wrapper_for_xai = ModelWrapperForXAI(
+                    actual_model_instance=model_instance, # Pass the trained LSTM
+                    feature_names=feature_columns      # Pass the list of feature names
+                )
+                # Optional check (good practice)
+                _ = model_wrapper_for_xai.sequence_length # Check if it forwards correctly
+                _ = model_wrapper_for_xai.predict # Check if predict method exists
+                print("Model wrapped successfully.")
+            except Exception as e:
+                print(f"Error wrapping model: {e}. Skipping XAI.")
+                model_wrapper_for_xai = None
+        # --- End Wrapper ---
+
+        # --- Anomaly Detection ---
+        # Process timestamps if needed AFTER getting features (assuming map_to_timestamp not needed for model)
+        df_eval = df.copy() # Create copy for timestamp manipulation if needed for evaluation/update
+        df_eval["timestamp"] = df_eval["timestamp"].apply(map_to_timestamp)
+        df_eval["timestamp"] = df_eval["timestamp"].astype(float)
+
+        start_time = time.perf_counter()
+        res = model_instance.detect(all_features_df) # Detect using selected feature columns
+        end_time = time.perf_counter()
+        print(f"Anomaly detection took {end_time-start_time}s")
+        print(f"Detection results length: {len(res)}")
         
-        anomaly_df = df[df["is_anomaly"] == True]
-        
+        # --- Assign Detection Results with Alignment ---
+        print(f"Detection results length: {len(res)}, DataFrame index length: {len(df_eval)}")
+
+        # Check if sequence_length is valid and > 0 before proceeding
+        if sequence_length is None or sequence_length <= 0:
+             raise RuntimeError("Cannot assign detection results: sequence_length is unknown or invalid.")
+
+        if len(res) == len(df_eval):
+            # Lengths already match (e.g., sequence_length was 1 or model handled padding)
+            print("Assigning detection results directly (lengths match).")
+            df_eval["is_anomaly"] = res.values if isinstance(res, pd.Series) else res
+        elif len(res) < len(df_eval):
+            # Length of results is shorter - likely due to sequence window. Pad the beginning.
+            padding_len = len(df_eval) - len(res)
+            expected_padding = sequence_length - 1
+            if padding_len != expected_padding:
+                 warnings.warn(
+                     f"Length difference ({padding_len}) between df_eval and detection results "
+                     f"does not match expected padding ({expected_padding}) based on sequence_length={sequence_length}. "
+                     "Alignment might be incorrect.", RuntimeWarning
+                 )
+
+            print(f"Padding detection results with {padding_len} 'False' values at the beginning.")
+            # Default value for padding (usually False for anomaly detection)
+            padding = [False] * padding_len
+
+            # Ensure 'res' is in a list format for concatenation
+            if isinstance(res, (pd.Series, np.ndarray)):
+                res_list = res.tolist()
+            elif isinstance(res, list):
+                res_list = res
+            else:
+                # Attempt conversion for other types, but issue a warning
+                warnings.warn(f"Unexpected type for detection result: {type(res)}. Attempting conversion to list.", RuntimeWarning)
+                try:
+                    res_list = list(res)
+                except TypeError:
+                    raise TypeError(f"Cannot convert detection result of type {type(res)} to list for padding.")
+
+            # Combine padding and results
+            combined_values = padding + res_list
+
+            # Final check - should always match now if padding was correct
+            if len(combined_values) != len(df_eval):
+                 raise ValueError(f"Internal Error: Padded values length ({len(combined_values)}) still mismatch index length ({len(df_eval)}).")
+
+            df_eval["is_anomaly"] = combined_values
+        else: # len(res) > len(df_eval)
+            # This is unexpected - the result should not be longer than the input frame index
+            raise ValueError(f"Detection result length ({len(res)}) is greater than DataFrame index length ({len(df_eval)}). Cannot assign.")
+        # --- End Assign Detection Results ---
+        # --- End Anomaly Detection ---
+
+        # --- Anomaly Update and Evaluation ---
+        anomaly_df = df_eval[df_eval["is_anomaly"] == True]
         arr = [datetime.fromtimestamp(timestamp) for timestamp in anomaly_df["timestamp"]]
         arr = [f'\'{str(time)}+00\'' for time in arr]
-        #1970-01-01 00:13:30+00
-
         api.update_anomalies(name, arr)
-
-        # Now, assuming your 'df' DataFrame contains the 'label' column
-        evaluation_results = evaluate_classification(df)
+        evaluation_results = evaluate_classification(df_eval) # Use df_eval with 'is_anomaly'
         print("Evaluation Results:")
         print(evaluation_results)
+        # --- End Anomaly Update ---
+        
+        # ============================================
+        # --- MODULAR XAI INTEGRATION ---
+        # ============================================
+        # Define which XAI methods to run and the output directory
+        xai_methods_to_run = ["shap"] # Add "lime" later if implemented
+        output_dir = "/output" # Ensure this path is accessible/writable in Docker
+
+        # === Performance / Configuration Parameters ===
+        # These can be adjusted to trade speed vs. accuracy/detail
+        # They are passed down via kwargs where appropriate
+        xai_config = {
+            "shap": {
+                # Passed to ShapExplainer.__init__ via get_explainer's **params
+                "k_summary": 50,        # Max clusters for background summary (LOWER = FASTER INIT)
+
+                # Passed to ShapExplainer.explain via ts_explainer.explain's **kwargs
+                "nsamples": 100,        # Perturbations per instance (LOWER = FASTER EXPLAIN)
+
+                # Used locally to calculate l1_reg for SHAP explain call
+                "l1_reg_k_features": 20 # Max features for SHAP's internal Lasso (adjust as needed)
+            },
+            "lime": {
+                # Passed to a potential LimeExplainer.explain via ts_explainer.explain's **kwargs
+                "num_features": 15,     # Max features LIME shows
+                "num_samples": 1000     # Perturbations for LIME (LOWER = FASTER)
+            }
+            # Add config for other methods if needed
+        }
+        # === End Performance Parameters ===
+        # --- SHAP Max background samples (affects performance and time)
+        max_bg_samples = 50 # Keep relatively small for KernelSHAP
+
+        # Check prerequisites
+        if (TimeSeriesExplainer is not None and
+                ut.dataframe_to_sequences is not None and
+                sequence_length is not None and
+                model_wrapper_for_xai is not None and
+                # Make sure plot handlers are imported
+                x.process_and_plot_shap is not None):
+
+            print("\n--- Starting XAI Initialization & Execution ---")
+            try:
+                # 1. Prepare Common Background Data
+                print(f"Preparing background data...")
+                background_data_np = ut.dataframe_to_sequences(
+                    df=training_features_df, sequence_length=sequence_length,
+                    feature_cols=feature_columns
+                )
+                max_bg_samples = 50 # Keep relatively small for KernelSHAP
+                if len(background_data_np) > max_bg_samples:
+                    print(f"Sampling background data down to {max_bg_samples} instances.")
+                    indices = np.random.choice(len(background_data_np), max_bg_samples, replace=False)
+                    background_data_np = background_data_np[indices]
+
+                if background_data_np.size == 0:
+                     print("Warning: Background data generation resulted in empty array. Skipping XAI.")
+                     raise ValueError("Empty background data") # Stop XAI if background fails
+
+                # 2. Initialize TimeSeriesExplainer (once)
+                ts_explainer = TimeSeriesExplainer(
+                    model=model_wrapper_for_xai, background_data=background_data_np,
+                    feature_names=feature_columns, mode='classification'
+                )
+
+                # 3. Prepare Instances for Explanation
+                # Choose data: anomalies if available, otherwise fallback to test sample
+                data_source_for_explanation = anomaly_feature_df if not anomaly_feature_df.empty else testing_features_df
+                source_name = "anomalies" if not anomaly_feature_df.empty else "test_data_sample"
+                print(f"Preparing instances to explain from: {source_name}")
+
+                instances_to_explain_np = ut.dataframe_to_sequences(
+                     df=data_source_for_explanation, sequence_length=sequence_length,
+                     feature_cols=feature_columns
+                )
+
+                # Limit number of explanations for performance
+                n_explain_max = 10 # Max instances to explain
+                if len(instances_to_explain_np) > n_explain_max:
+                    print(f"Selecting first {n_explain_max} instances from {source_name} for explanation.")
+                    # Maybe select strategically? e.g., highest error? For now, just take first N.
+                    instances_to_explain_np = instances_to_explain_np[:n_explain_max]
+
+                if instances_to_explain_np.size == 0:
+                    print(f"Warning: Could not generate sequences from {source_name} data. Skipping XAI explanations.")
+                    raise ValueError(f"No sequences generated from {source_name}") # Stop XAI if no instances
+
+                print(f"Prepared {instances_to_explain_np.shape[0]} instances for explanation.")
+
+
+                # 4. Define Plot Handlers Dictionary (mapping names to functions)
+                plot_handlers = {
+                    "shap": x.process_and_plot_shap,
+                    "lime": x.process_and_plot_lime if x.process_and_plot_lime else None, # Add LIME handler if imported
+                }
+
+                # 5. Loop Through XAI Methods
+                for method_name in xai_methods_to_run:
+                    print(f"\n===== Running Method: {method_name.upper()} =====")
+                    try:
+                        explainer_object = ts_explainer._get_or_initialize_explainer(method_name)
+
+                        # --- Prepare Method-Specific Runtime Arguments ---
+                        method_kwargs = xai_config.get(method_name, {}).copy() # Get config, copy to modify
+                        current_instances_np = instances_to_explain_np
+                        instance_idx_for_lime = 0 # Used if LIME runs instance-per-instance
+
+                        if method_name == "shap":
+                            n_flat_features = sequence_length * len(feature_columns)
+                            # Use configured nsamples
+                            n_samples_shap = method_kwargs.get('nsamples', 50) # Default if not in config
+                            # Use configured k for l1_reg heuristic
+                            k_features = method_kwargs.get('l1_reg_k_features', 20)
+                            # Calculate l1_reg based on nsamples and n_flat_features
+                            l1_reg_shap = f'num_features({k_features})' if n_samples_shap < n_flat_features else 'auto'
+                            # Update method_kwargs for the explain call
+                            method_kwargs['nsamples'] = n_samples_shap
+                            method_kwargs['l1_reg'] = l1_reg_shap
+                            # Remove params only used locally for calculation
+                            method_kwargs.pop('l1_reg_k_features', None)
+                            method_kwargs.pop('k_summary', None) # k_summary is used at INIT, not explain
+                            print(f"SHAP Runtime Params: nsamples={n_samples_shap}, l1_reg='{l1_reg_shap}'")
+
+                        elif method_name == "lime":
+                            if len(instances_to_explain_np) == 0: continue
+                            current_instances_np = instances_to_explain_np[instance_idx_for_lime:instance_idx_for_lime+1]
+                            if current_instances_np.size == 0: continue
+                            print(f"Configuring LIME for instance index: {instance_idx_for_lime}, Kwargs: {method_kwargs}")
+
+                        # --- Get Explainer (Initialization happens on first call) ---
+                        # Pass k_summary here IF get_explainer/ShapExplainer were modified to accept it explicitly at init
+                        # Otherwise, the k_summary from xai_config will be used if passed through params in get_explainer
+                        explainer_object = ts_explainer._get_or_initialize_explainer(
+                             method_name
+                             # Example if passing explicitly: k_summary=xai_config.get(method_name,{}).get('k_summary')
+                         )
+
+                        # --- Run explanation ---
+                        start_explain_time = time.perf_counter()
+                        xai_results = ts_explainer.explain(
+                            instances_to_explain=current_instances_np,
+                            method_name=method_name,
+                            **method_kwargs # Pass runtime kwargs (like nsamples, l1_reg for SHAP)
+                        )
+                        end_explain_time = time.perf_counter()
+                        print(f"{method_name.upper()} explanation took {end_explain_time - start_explain_time:.2f}s")
+
+                        # --- Process and plot ---
+                        handler_func = plot_handlers.get(method_name)
+                        if handler_func:
+                            print(f"Calling plot handler for {method_name}...")
+                            # Pass necessary context
+                            handler_args = {
+                                "results": xai_results,
+                                "explainer_object": explainer_object,
+                                "instances_explained": current_instances_np,
+                                "feature_names": feature_columns,
+                                "sequence_length": sequence_length,
+                                "output_dir": output_dir,
+                                "mode": ts_explainer.mode
+                            }
+                            if method_name == "lime":
+                                handler_args["instance_index"] = instance_idx_for_lime # Pass index for LIME file naming
+
+                            handler_func(**handler_args) # Call the specific handler
+                        else:
+                            print(f"No plot handler defined for method '{method_name}'.")
+
+                        # --- Increment index if looping LIME (Example) ---
+                        # If you wanted to explain ALL instances with LIME one-by-one, you'd loop here
+                        # and increment instance_idx_for_lime. For now, we only do one.
+
+                    except Exception as explain_err:
+                         print(f"ERROR during explanation/plotting for method '{method_name}': {explain_err}")
+                         # Continue to next method if one fails? Or re-raise? For now, just print.
+                         import traceback
+                         traceback.print_exc()
+
+            except Exception as xai_init_err:
+                 print(f"ERROR during XAI initialization or data preparation: {xai_init_err}")
+                 import traceback
+                 traceback.print_exc()
+        else:
+            skip_reasons = []
+            # ... (collect skip reasons) ...
+            print(f"Skipping XAI step. Prerequisites not met. Reasons: {', '.join(skip_reasons)}")
+        # ============================================
+        # --- END MODULAR XAI INTEGRATION ---
+        # ============================================
+
         sys.stdout.flush()
     else:
         return 0

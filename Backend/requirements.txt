@@ -9,4 +9,6 @@ scikit-learn
 openpyxl
 xlrd
 requests
+numba
 shap
+matplotlib
