@@ -224,10 +224,14 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
 
         model_wrapper_for_xai = None
         # Determine score interpretation based on model type string 'model'
-        if model == 'lstm': # Assuming 'lstm_ae' is the name string for LSTMModel
+        if model == 'lstm': # LSTMModel
              interpretation = 'higher_is_anomaly'
-        elif model == 'svm': # Assuming 'svm_ae' is the name string for SVMModel
+        elif model == 'svm': # SVMModel
              interpretation = 'lower_is_anomaly'
+        elif model == 'XG-boost':
+            raise NotImplementedError("XG-boost is NOT implemented!")
+        elif model == 'decision_tree':
+            raise NotImplementedError("decision_tree is NOT implemented!")
         else:
              interpretation = 'higher_is_anomaly' # Default or raise error
              warnings.warn(f"Unknown model type '{model}' for score interpretation. Assuming higher score is anomaly.", RuntimeWarning)
@@ -264,7 +268,7 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
 
         # Check if sequence_length is valid and > 0 before proceeding
         if sequence_length is None or sequence_length <= 0:
-             raise RuntimeError("Cannot assign detection results: sequence_length is unknown or invalid.")
+            raise RuntimeError("Cannot assign detection results: sequence_length is unknown or invalid.")
 
         if len(res) == len(df_eval):
             # Lengths already match (e.g., sequence_length was 1 or model handled padding)
@@ -275,11 +279,11 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
             padding_len = len(df_eval) - len(res)
             expected_padding = sequence_length - 1
             if padding_len != expected_padding:
-                 warnings.warn(
-                     f"Length difference ({padding_len}) between df_eval and detection results "
-                     f"does not match expected padding ({expected_padding}) based on sequence_length={sequence_length}. "
-                     "Alignment might be incorrect.", RuntimeWarning
-                 )
+                warnings.warn(
+                    f"Length difference ({padding_len}) between df_eval and detection results "
+                    f"does not match expected padding ({expected_padding}) based on sequence_length={sequence_length}. "
+                    "Alignment might be incorrect.", RuntimeWarning
+                )
 
             print(f"Padding detection results with {padding_len} 'False' values at the beginning.")
             # Default value for padding (usually False for anomaly detection)
@@ -303,7 +307,7 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
 
             # Final check - should always match now if padding was correct
             if len(combined_values) != len(df_eval):
-                 raise ValueError(f"Internal Error: Padded values length ({len(combined_values)}) still mismatch index length ({len(df_eval)}).")
+                raise ValueError(f"Internal Error: Padded values length ({len(combined_values)}) still mismatch index length ({len(df_eval)}).")
 
             df_eval["is_anomaly"] = combined_values
         else: # len(res) > len(df_eval)
