@@ -135,7 +135,7 @@ class LimeExplainer(ExplainerMethodAPI):
              # 'training_data' and 'feature_names' are positional below
         }
         try:
-            self._explainer = LimeExplainer.lime_tabular.LimeTabularExplainer(
+            self._explainer = lime.lime_tabular.LimeTabularExplainer(
                 training_data=self.background_data_flat, # Background data (2D)
                 feature_names=self.feature_names_flat,   # Flattened feature names
                 class_names=self.class_names,            # List of class names if classification

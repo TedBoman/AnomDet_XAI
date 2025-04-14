@@ -126,3 +126,55 @@ class SVMModel(model_interface.ModelInterface):
         anomalies = scores < self.threshold
         print(f"Detected {np.sum(anomalies)} anomalies using threshold {self.threshold:.6f}.")
         return anomalies # Returns 1D boolean array
+    
+    def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+        """
+        Calculates the anomaly score (SVM decision function) for input data.
+        Operates on the encoded representation. Lower scores indicate higher anomaly likelihood.
+        Expects 2D input (samples, features).
+
+        Args:
+            detection_data (Union[pd.DataFrame, np.ndarray]): Input data (samples, features).
+
+        Returns:
+            np.ndarray: The decision function scores (1D array, shape: (n_samples,)).
+        """
+        # Reuse the internal preprocessing and encoding helper
+        # This ensures scaling and encoding are done consistently
+        print("Calculating anomaly scores via get_anomaly_score...")
+        # Ensure model is trained before calling helper
+        if self.scaler is None or self.encoder is None or self.svm_model is None:
+             raise RuntimeError("Model components (scaler/encoder/svm) not available. Call run() first.")
+
+        encoded_data = self._preprocess_and_encode(detection_data) # Gets 2D encoded data
+
+        # Get SVM score on encoded data - lower means more anomalous
+        # Ensure svm_model is fitted (checked implicitly by _preprocess_and_encode checking encoder)
+        if not hasattr(self.svm_model, "decision_function"):
+             raise RuntimeError("Internal SVM model is not fitted or invalid.")
+
+        scores = self.svm_model.decision_function(encoded_data)
+        # print(f"Calculated {len(scores)} scores.") # Optional print
+        return scores # Return the raw scores (1D array)
+
+    # Ensure the _preprocess_and_encode helper method also exists in your class
+    def _preprocess_and_encode(self, data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+        """ Internal helper: Scales (using fitted scaler) and encodes input data. """
+        if self.scaler is None or self.encoder is None:
+            raise RuntimeError("Model is not trained (scaler or encoder missing). Call run() first.")
+        # ...(rest of the implementation as provided before)...
+        # Scale -> Ensure float32 -> Encode -> Return encoded_data
+        # ... (previous implementation) ...
+        if isinstance(data, pd.DataFrame):
+            if data.shape[1] != self.n_features: raise ValueError(f"Input data has {data.shape[1]} feats, expected {self.n_features}.")
+            input_np = data.values
+        elif isinstance(data, np.ndarray):
+            if data.ndim == 1: data = data.reshape(1, -1)
+            if data.ndim != 2: raise ValueError(f"NumPy input must be 2D (samples, features), got {data.ndim}D.")
+            if data.shape[1] != self.n_features: raise ValueError(f"NumPy input has {data.shape[1]} feats, expected {self.n_features}.")
+            input_np = data
+        else: raise TypeError("Input must be a pandas DataFrame or a 2D NumPy array.")
+        data_scaled = self.scaler.transform(input_np)
+        data_scaled = data_scaled.astype(np.float32)
+        encoded_data = self.encoder.predict(data_scaled)
+        return encoded_data

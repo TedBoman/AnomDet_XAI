@@ -98,6 +98,7 @@ def __handle_api_call(conn, data: dict) -> None:
             dataset_path = DATASET_DIRECTORY + data["dataset"]
             name = data["name"]
             debug = data["debug"]
+            #xai_method = data["xai-method"] if data["xai-method"] else None
 
             inj_params = data.get("inj_params", None)
 
@@ -109,7 +110,7 @@ def __handle_api_call(conn, data: dict) -> None:
                 "database": DATABASE["DATABASE"]
             }
             
-            new_thread = threading.Thread(target=execute_calls.run_batch, args=(db_conn_params, model, dataset_path, name, inj_params, debug))
+            new_thread = threading.Thread(target=execute_calls.run_batch, args=(db_conn_params, model, dataset_path, name, inj_params, debug, None))
             new_thread.daemon = True
             new_thread.start()
 
@@ -190,6 +191,13 @@ def __handle_api_call(conn, data: dict) -> None:
                             }
             models_json = json.dumps(models_dict)
             conn.sendall(bytes(models_json, encoding="utf-8"))
+        case "get-xai-methods":
+            methods = execute_calls.get_xai_methods()
+            methods_dict = {
+                                "methods": methods
+                            }
+            methods_json = json.dumps(methods_dict)
+            conn.sendall(bytes(methods_json, encoding="utf-8"))
         case "get-injection-methods":
             injection_methods = execute_calls.get_injection_methods()
             injection_methods_dict = {

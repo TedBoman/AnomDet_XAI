@@ -21,7 +21,9 @@ def process_and_plot_shap(
     output_dir: str,
     mode: str,                          # 'classification' or 'regression'
     class_index_to_plot: int = 0,       # Default class to plot for classification
-    max_display_features: int = 20,      # Max features for plots like bar/waterfall
+    max_display_features: int = 20,     
+    
+    # Max features for plots like bar/waterfall
     job_name='none'
     ):
     """Processes SHAP results (already reshaped) and generates standard plots."""

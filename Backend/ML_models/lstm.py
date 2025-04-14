@@ -124,119 +124,123 @@ class LSTMModel(model_interface.ModelInterface):
                   self.threshold = np.inf
                   print("Error: Cannot set threshold - no data available.")
 
-    # Creates sequences - unchanged internally, but called with self.sequence_length
-    def __create_sequences(self, data, time_steps):
+    def __create_sequences(self, data: np.ndarray, sequence_length: int) -> np.ndarray:
+        """ Helper method to create 3D windowed sequences from 2D data. """
         sequences = []
-        # Correct loop range: stops when there aren't enough points left for a full sequence
-        for i in range(len(data) - time_steps + 1):
-            seq = data[i:i + time_steps]
-            sequences.append(seq)
+        n_samples_total = data.shape[0]
+        if n_samples_total < sequence_length:
+            print(f"Warning in __create_sequences: Data length ({n_samples_total}) < sequence_length ({sequence_length}).")
+            # Return empty array with correct feature dimension if possible
+            n_features = data.shape[1] if data.ndim == 2 else 0
+            return np.empty((0, sequence_length, n_features))
+        for i in range(n_samples_total - sequence_length + 1):
+            sequences.append(data[i:(i + sequence_length)])
+        if not sequences: return np.empty((0, sequence_length, data.shape[1]))
         return np.array(sequences)
-
-    # Detects anomalies and returns a list of boolean values
-    def detect(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    
+    def _preprocess_and_create_sequences(self, input_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """
-        Detects anomalies using the trained model. Accepts either a pandas DataFrame
-        (raw features) or a pre-windowed 3D NumPy array.
+        Scales and windows input data (DataFrame or 3D NumPy), returning 3D NumPy sequences.
+        """
+        if self.scaler is None or self.sequence_length is None or self.model is None:
+            raise RuntimeError("Model/scaler not ready or sequence length unknown. Call run() first.")
 
-        Args:
-            detection_data (Union[pd.DataFrame, np.ndarray]):
-                - If DataFrame: Contains features (shape: n_timesteps, n_features).
-                                Must have the same features as training data.
-                - If NumPy array: Contains pre-windowed sequences
-                                  (shape: n_sequences, sequence_length, n_features).
-                                  sequence_length and n_features must match the model.
+        n_features_expected = self.model.input_shape[-1]
+        X: Optional[np.ndarray] = None
+
+        if isinstance(input_data, pd.DataFrame):
+            #print("Preprocessing DataFrame...") # Optional print
+            if input_data.shape[1] != n_features_expected:
+                raise ValueError(f"Input DataFrame has {input_data.shape[1]} features, model expects {n_features_expected}.")
+            try:
+                data_normalized = self.scaler.transform(input_data)
+                X = self.__create_sequences(data_normalized, self.sequence_length)
+            except Exception as e: raise RuntimeError(f"Failed to scale/sequence DataFrame: {e}") from e
+
+        elif isinstance(input_data, np.ndarray):
+            #print("Preprocessing NumPy array...") # Optional print
+            if input_data.ndim != 3: raise ValueError(f"NumPy input must be 3D, got {input_data.ndim}D.")
+            if input_data.shape[1] != self.sequence_length: raise ValueError(f"NumPy seq length {input_data.shape[1]} != expected {self.sequence_length}.")
+            if input_data.shape[2] != n_features_expected: raise ValueError(f"NumPy features {input_data.shape[2]} != expected {n_features_expected}.")
+
+            X_input_3d = input_data
+            n_samples, seq_len, n_feat = X_input_3d.shape
+            try:
+                X_reshaped_2d = X_input_3d.reshape(-1, n_feat)
+                X_scaled_2d = self.scaler.transform(X_reshaped_2d)
+                X = X_scaled_2d.reshape(n_samples, seq_len, n_feat)
+            except Exception as e: raise RuntimeError(f"Failed to scale 3D NumPy input: {e}") from e
+        else:
+            raise TypeError("Input must be a pandas DataFrame or a 3D NumPy array.")
+
+        if X is None or X.size == 0:
+            warnings.warn("No sequences created from input data.", RuntimeWarning)
+            return np.empty((0, self.sequence_length, n_features_expected))
+
+        # Ensure float32 for model prediction
+        if X.dtype != np.float32:
+            try: X = X.astype(np.float32)
+            except ValueError: warnings.warn("Could not cast sequences to float32.", RuntimeWarning)
+
+        return X
+
+
+    # --- NEW Method to get anomaly score ---
+    def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+        """
+        Calculates reconstruction error for input data using the trained autoencoder.
+        Higher error indicates a higher likelihood of anomaly.
+        Accepts DataFrame (features) or 3D NumPy (pre-windowed sequences).
 
         Returns:
-            np.ndarray: A 1D boolean NumPy array indicating anomaly status for each
-                        sequence evaluated. Length is n_sequences.
+            np.ndarray: 1D array of reconstruction errors per sequence (shape: (n_sequences,)).
         """
-        # 1. --- Prerequisite Checks ---
-        if self.model is None or self.scaler is None or self.threshold is None or self.sequence_length is None:
-            raise RuntimeError("Model is not trained or sequence length/scaler/threshold is not set. Call run() first.")
+        #print("Calculating anomaly scores (reconstruction error)...") # Optional print
+        # Preprocess input data into scaled 3D sequences
+        X = self._preprocess_and_create_sequences(detection_data)
 
-        X: Optional[np.ndarray] = None # To store the final 3D scaled sequences for the model
-        n_features_expected = self.model.input_shape[-1] # Get expected features from model
+        if X.size == 0: return np.array([]) # No sequences to score
 
-        # 2. --- Input Type Handling & Preprocessing ---
-        if isinstance(detection_data, pd.DataFrame):
-            # --- DataFrame Path ---
-            # Check feature count
-            if detection_data.shape[1] != n_features_expected:
-                raise ValueError(f"Input DataFrame has {detection_data.shape[1]} features, but model expects {n_features_expected}.")
-            # Check for expected columns (optional but good)
-            # if not all(col in detection_data.columns for col in self.feature_names): ...
-
-            # Scale the 2D DataFrame features
-            try:
-                data_normalized = self.scaler.transform(detection_data)
-            except ValueError as e:
-                 raise ValueError(f"Could not scale DataFrame. Ensure it has the correct features ({n_features_expected}). Error: {e}") from e
-
-            # Window the scaled 2D data into 3D sequences
-            X = self.__create_sequences(data_normalized, self.sequence_length)
-
-        elif isinstance(detection_data, np.ndarray):
-            # --- NumPy Path ---
-            # Validate NumPy array shape
-            if detection_data.ndim != 3:
-                raise ValueError(f"NumPy input must be 3D (samples/sequences, steps, features), got {detection_data.ndim}D.")
-            if detection_data.shape[1] != self.sequence_length:
-                raise ValueError(f"NumPy input sequence length ({detection_data.shape[1]}) does not match model sequence length ({self.sequence_length}).")
-            if detection_data.shape[2] != n_features_expected:
-                raise ValueError(f"NumPy input feature count ({detection_data.shape[2]}) does not match model feature count ({n_features_expected}).")
-
-            # Input is already windowed (3D), just needs scaling
-            X_input_3d = detection_data
-            n_samples, seq_len, n_feat = X_input_3d.shape
-
-            # Scale (requires reshape -> transform -> reshape back)
-            try:
-                # Reshape to 2D for scaler: (samples * steps, features)
-                X_reshaped_2d = X_input_3d.reshape(-1, n_feat)
-                # Apply scaler
-                X_scaled_2d = self.scaler.transform(X_reshaped_2d)
-                # Reshape back to 3D: (samples, steps, features)
-                X = X_scaled_2d.reshape(n_samples, seq_len, n_feat)
-            except Exception as e:
-                # Catch potential errors during reshape or scaling
-                raise RuntimeError(f"Failed to scale 3D NumPy input. Error: {e}") from e
-        else:
-             raise TypeError("Input 'detection_data' must be a pandas DataFrame or a 3D NumPy array.")
-
-        # 3. --- Common Anomaly Detection Logic ---
-        if X is None or X.size == 0:
-            print("Warning: No valid sequences to process after preprocessing.")
-            return np.array([], dtype=bool) # Return empty boolean array
-
-        # Ensure X is float32 for many TF/Keras models
-        if hasattr(self.model, 'predict') and X.dtype != np.float32:
-             try:
-                 X = X.astype(np.float32)
-             except ValueError:
-                 warnings.warn(f"Could not cast input sequences to float32. Model prediction might fail.", RuntimeWarning)
-
-        print(f"Predicting reconstructions for {X.shape[0]} sequences...")
+        # Get reconstruction from autoencoder
+        #print(f"Predicting reconstructions for {X.shape[0]} sequences...") # Optional print
         try:
-            reconstructed = self.model.predict(X) # Model predict expects 3D NumPy
+            reconstructed = self.model.predict(X)
         except Exception as e:
-            print(f"ERROR during model.predict: {e}")
-            # Consider how to handle prediction errors, maybe return empty/error indicator?
-            raise RuntimeError(f"Model prediction failed. Input shape: {X.shape}") from e
+            raise RuntimeError(f"Model prediction failed during scoring. Input shape: {X.shape}. Error: {e}") from e
 
-        # Validate reconstruction shape
+        # Handle shape mismatch (optional, but good practice)
         if X.shape != reconstructed.shape:
-             warnings.warn(f"Shape mismatch between input sequences {X.shape} and reconstructed sequences {reconstructed.shape}. Check model architecture or prediction output.", RuntimeWarning)
-             # Attempt to proceed if only batch size differs (e.g., stateful prediction)
+             warnings.warn(f"Shape mismatch input {X.shape} vs reconstruction {reconstructed.shape}.", RuntimeWarning)
              min_samples = min(X.shape[0], reconstructed.shape[0])
-             if min_samples == 0:
-                 return np.array([], dtype=bool) # Cannot calculate error
+             if min_samples == 0: return np.array([])
+             # Calculate error only on matching samples
              reconstruction_error = np.mean(np.square(X[:min_samples] - reconstructed[:min_samples]), axis=(1, 2))
         else:
             # Calculate reconstruction error (MSE per sequence)
              reconstruction_error = np.mean(np.square(X - reconstructed), axis=(1, 2))
 
-        anomalies = reconstruction_error > self.threshold
+        #print(f"Calculated {len(reconstruction_error)} scores.") # Optional print
+        return reconstruction_error # Return 1D scores
 
-        # Return 1D boolean numpy array as specified
-        return np.array(anomalies) # Shape: (num_sequences,)
+    # Detects anomalies and returns a list of boolean values
+    def detect(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+        """
+        Detects anomalies by comparing reconstruction error scores to the threshold.
+        Accepts DataFrame (features) or 3D NumPy (pre-windowed sequences).
+
+        Returns:
+             np.ndarray: A 1D boolean array (True=Anomaly), shape (n_sequences,).
+        """
+        if self.threshold is None:
+             raise RuntimeError("Threshold not set. Call run() first.")
+
+        # Get the reconstruction error scores using the new method
+        scores = self.get_anomaly_score(detection_data)
+
+        if scores.size == 0: return np.array([], dtype=bool)
+
+        # Compare scores to threshold (higher error = anomaly for reconstruction)
+        anomalies = scores > self.threshold
+        print(f"Detected {np.sum(anomalies)} anomalies using threshold {self.threshold:.6f}.")
+        return np.array(anomalies) # Return 1D boolean array
+    
