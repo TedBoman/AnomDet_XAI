@@ -13,3 +13,4 @@ numba==0.61.2
 shap==0.47.1
 matplotlib==3.10.1
 lime==0.2.0.1
+xgboost==3.0.0

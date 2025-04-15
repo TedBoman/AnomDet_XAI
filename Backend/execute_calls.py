@@ -229,7 +229,7 @@ def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict
         elif model == 'svm': # SVMModel
              interpretation = 'lower_is_anomaly'
         elif model == 'XG-boost':
-            raise NotImplementedError("XG-boost is NOT implemented!")
+            interpretation = 'higher_is_anomaly'
         elif model == 'decision_tree':
             raise NotImplementedError("decision_tree is NOT implemented!")
         else:
