@@ -8,12 +8,32 @@ from dash.dependencies import ALL
 from callbacks import create_active_jobs
 
 def layout(handler):
-    datasets = handler.handle_get_datasets()
-    models = handler.handle_get_models()
-    injection_methods = handler.handle_get_injection_methods()
-
-    active_jobs = json.loads(handler.handle_get_running())
-    active_jobs = active_jobs["running"]
+    try:
+        datasets = handler.handle_get_datasets()
+    except Exception as e:
+        print(f"Error getting datasets: {e}")
+        datasets = []
+    try:
+        models = handler.handle_get_models()
+    except Exception as e:
+        print(f"Error getting models: {e}")
+        models = []
+    try:
+        xai_methods = handler.handle_get_xai_methods()
+    except Exception as e:
+        print(f"Error getting XAI methods: {e}")
+        xai_methods = []
+    try:
+        injection_methods = handler.handle_get_injection_methods()
+    except Exception as e:
+        print(f"Error getting injection methods: {e}")
+        injection_methods = []
+    try:
+        active_jobs_data = handler.handle_get_running()
+        active_jobs = json.loads(active_jobs_data)["running"] if active_jobs_data else []
+    except Exception as e:
+        print(f"Error getting running jobs: {e}")
+        active_jobs = []
 
     active_jobs_children = create_active_jobs(active_jobs)
     got_jobs = len(active_jobs) > 0
@@ -39,6 +59,34 @@ def layout(handler):
                     )
                 ], style={"textAlign": "center", "marginBottom": "30px"}),
 
+                 # --- Labeled Dataset Section ---
+                html.Div([
+                    dcc.Checklist(
+                        id="labeled-check",
+                        options=[{"label": "Is dataset labeled for anomalies?", "value": "is_labeled"}],
+                        value=[], # Initially unchecked
+                        style={"fontSize": "20px", "color": "#ffffff", "marginBottom": "10px"}
+                    ),
+                    # Div to hold the conditional label column dropdown
+                    html.Div(
+                        id="label-column-selection-div",
+                        children=[
+                            html.Label("Select Label Column:", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block"}),
+                            dcc.Dropdown(
+                                id="label-column-dropdown", # NEW ID for clarity
+                                options=[], # Populated by callback
+                                value=None, # Reset by callback
+                                placeholder="Select label column",
+                                multi=False, # Select only ONE label column
+                                style={"width": "300px", "margin": "5px auto", "border": "0.05rem solid black"}
+                            )
+                        ],
+                        # Initially hidden, shown by callback
+                        style={"display": "none", "marginTop": "10px", "textAlign": "center"}
+                    )
+                ], style={"textAlign": "center", "marginBottom": "20px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px"}),
+
+                # --- Detection Model Selection ---
                 html.Div([
                     html.Label("Select a Detection Model:", style={"fontSize": "22px", "color": "#ffffff"}),
                     dcc.Dropdown(
@@ -49,28 +97,63 @@ def layout(handler):
                     )
                 ], style={"textAlign": "center", "marginTop": "30px"}),
 
-                # Injection Checkbox
+                # --- XAI Section ---
                 html.Div([
-                    dcc.Checklist(
-                        id="injection-check",
-                        options=[{"label": "Use Injection", "value": "use_injection"}],
-                        value=[],
-                        style={"textAlign": "center", "fontSize": "20px", "color": "#ffffff"}
-                    ),
-                    html.Div(id="injection-panel", style={"display": "none"})
-                ], style={"marginTop": "30px"}),
+                     dcc.Checklist(
+                         id="xai-check",
+                         options=[{"label": "Run Explainability (XAI)?", "value": "use_xai"}], # Changed value for clarity
+                         value=[], # Initially unchecked
+                         style={"fontSize": "20px", "color": "#ffffff", "marginBottom": "10px"}
+                     ),
+                     # Div to hold conditional XAI options
+                     html.Div(
+                        id="xai-options-div",
+                        children=[
+                            # XAI Method Selection
+                            html.Div([
+                                html.Label("Select XAI Method:", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block"}),
+                                dcc.Dropdown(
+                                    id="xai-method-dropdown",
+                                    options=[{"label": method, "value": method} for method in xai_methods],
+                                    value="none", # Default to None
+                                    placeholder="Select XAI method",
+                                    clearable=False,
+                                    style={"width": "300px", "margin": "5px auto", "border": "0.05rem solid black"}
+                                ),
+                             ], style={"marginTop": "10px"}),
+                            # Div for Dynamic XAI Settings
+                            html.Div(
+                                id="xai-settings-panel",
+                                children=[], # Populated by callback
+                                style={"marginTop": "15px", "padding": "10px", "border": "1px solid #444", "borderRadius": "5px", "backgroundColor": "#145E88"}
+                            )
+                        ],
+                        # Initially hidden, shown by callback
+                        style={"display": "none", "marginTop": "10px", "textAlign": "center"}
+                    )
+                ], style={"textAlign": "center", "marginBottom": "20px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px"}),
 
-
-                html.Div(children=[
-                    html.Label("Select an Injection Method:", style={"fontSize": "22px", "color": "#ffffff"}),
-                    dcc.Dropdown(
-                        id="injection-method-dropdown",
-                        options=[{"label": method, "value": method} for method in injection_methods],
-                        value="None",
-                        placeholder="Select a method",
-                        style={"width": "350px", "margin": "auto"}
-                    ),
-                    html.Div([
+                # --- Injection Section ---
+                html.Div([
+                    dcc.Checklist( id="injection-check", options=[{"label": "Inject Anomalies?", "value": "use_injection"}], value=[],
+                                   style={"fontSize": "20px", "color": "#ffffff", "marginBottom": "10px"} ),
+                    html.Div( id="injection-panel", children=[
+                         html.Label("Select Injection Method:", style={"fontSize": "18px", "color": "#e0e0e0", "display":"block"}),
+                         dcc.Dropdown( id="injection-method-dropdown", options=[{"label": method, "value": method} for method in injection_methods], value="None", placeholder="Select a method",
+                                       style={"width": "300px", "margin": "5px auto", "border": "0.05rem solid black"} ),
+                        
+                         html.Div([
+                             html.Label("Select Columns for Injection:", style={"fontSize": "18px", "color": "#e0e0e0"}),
+                             dcc.Dropdown(
+                                 id="injection-column-dropdown",
+                                 options=[], # Populated by callback based on dataset
+                                 value=[],
+                                 placeholder="Select Columns",
+                                 multi=True,
+                                 style={"width": "300px", "margin": "5px auto"}
+                             )
+                         ], style={"marginTop": "15px"}),
+                         html.Div([
                     html.Label("Select Time for Timestamp (seconds since epoch):", style={"fontSize": "18px", "color": "#ffffff"}),
                     dcc.Input(
                         id="timestamp-input",
@@ -88,7 +171,6 @@ def layout(handler):
                             value=1,
                             style={"width": "200px", "marginTop": "10px"}
                         )
-
                     ], style={"marginTop": "20px", "textAlign": "center"}),
                     html.Div([
                         html.Label("Enter Anomaly Percentage (%):", style={"fontSize": "18px", "color": "#ffffff"}),
@@ -114,7 +196,7 @@ def layout(handler):
                     html.Div([
                         html.Label("Select Columns from Dataset:", style={"fontSize": "18px", "color": "#ffffff"}),
                         dcc.Dropdown(
-                            id="column-dropdown",
+                            id="injection_column-dropdown",
                             options=[],
                             value=[],
                             placeholder="Select Columns",
@@ -122,8 +204,12 @@ def layout(handler):
                             style={"width": "350px", "marginTop": "10px"}
                         )
                         ], style={"marginTop": "20px", "textAlign": "center"}),
-                    ], id="injection", style={"display": "none"}),
-
+                         # ... (keep timestamp, magnitude, percentage, duration inputs) ...
+                       ], style={"display": "none"} # injection-panel starts hidden
+                    )
+                ], style={"textAlign": "center", "marginBottom": "20px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px"}),
+                    
+                # --- Job Naming ---
                 html.Div([
                     html.Label("Job name: ", style={"fontSize": "22px", "color": "#ffffff"}),
                     dcc.Input(
@@ -135,6 +221,7 @@ def layout(handler):
                             )
                 ], style={"display": "block", "marginTop": "15px", "textAlign": "center"}),
 
+                # --- Mode Selection (Batch/Stream) ---
                 html.Div([
                     html.Label("", style={}),
                     dcc.RadioItems(
@@ -150,6 +237,7 @@ def layout(handler):
                     )
                 ], style={"textAlign": "center", "marginTop": "20px"}),
 
+                # --- Speedup Input (Conditional) ---
                 html.Div([
                     html.Label("Select Speedup for Stream (Default: 1):", style={"fontSize": "22px", "color": "#ffffff"}),
                     dcc.Input(
@@ -161,6 +249,7 @@ def layout(handler):
                     )
                 ], style={"marginTop": "20px", "textAlign": "center"}),
                 
+                # --- Start Button ---
                 html.Div([
                     html.Button("Start Job", id="start-job-btn", style={
                         "marginTop": "20px",
@@ -175,6 +264,7 @@ def layout(handler):
                     })
                 ], style={"textAlign": "center", "marginTop": "30px"}), 
 
+                # --- Popups and Intervals ---
                 html.Div(
                     id="popup",
                     children="Job has started!",
@@ -204,7 +294,7 @@ def layout(handler):
                 
 
 
-                # Active Datasets Section
+            # --- Active Jobs ---
             html.Div(
                 id="active-jobs-section",
                 children=[

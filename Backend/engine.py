@@ -1,5 +1,6 @@
 import socket
 import json
+import sys
 import threading
 from time import sleep
 import os
@@ -193,6 +194,7 @@ def __handle_api_call(conn, data: dict) -> None:
             conn.sendall(bytes(models_json, encoding="utf-8"))
         case "get-xai-methods":
             methods = execute_calls.get_xai_methods()
+            print(f"sending columns: {methods}")
             methods_dict = {
                                 "methods": methods
                             }
@@ -247,6 +249,7 @@ def __handle_api_call(conn, data: dict) -> None:
         case "get-dataset-columns":
             df = pd.read_csv(DATASET_DIRECTORY + data["dataset"])
             columns = df.columns.tolist()
+            print(f"sending columns: {columns}")
             columns_dict = {
                                 "columns": columns
                             }

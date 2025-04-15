@@ -71,7 +71,7 @@ class BackendAPI:
         }
         return self.__send_data(data)
     
-        # Get all available XAI methods
+    # Get all available XAI methods
     def get_xai_methods(self) -> str:
         data = {
             "METHOD": "get-xai-methods"
