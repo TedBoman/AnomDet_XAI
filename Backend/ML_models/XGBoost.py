@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.preprocessing import MinMaxScaler
-from ML_models import model_interface # Assuming this is in your project structure
+from ML_models import model_interface 
 from typing import List, Dict, Optional
 import warnings
 
@@ -32,6 +32,7 @@ class XGBoostModel(model_interface.ModelInterface):
         self.all_feature_names: Optional[List[str]] = None    # Original + Lagged features
         self.time_steps: Optional[int] = None
         self.label_col: Optional[str] = None # Name of the target label column
+        self.sequence_length: Optional[int] = None
 
         # Store base model parameters, allow overrides via kwargs
         self.model_params = {
@@ -79,7 +80,7 @@ class XGBoostModel(model_interface.ModelInterface):
              
         return df_lagged
 
-    def run(self, df: pd.DataFrame, time_steps: int = 5, label_col: str = 'is_anomaly'):
+    def run(self, df: pd.DataFrame, time_steps: int = 5, label_col: str = 'label'):
         """
         Preprocesses data, creates lagged features, trains the XGBoost classifier
         on features and labels.
@@ -101,6 +102,7 @@ class XGBoostModel(model_interface.ModelInterface):
 
         self.time_steps = time_steps
         self.label_col = label_col
+        self.sequence_length = self.time_steps
         self.original_feature_names = df.columns.drop(label_col).tolist()
         if not self.original_feature_names:
             raise ValueError("DataFrame must have at least one feature column besides the label column.")
