@@ -165,6 +165,94 @@ class XGBoostModel(model_interface.ModelInterface):
 
         self.model.fit(X_scaled, y_aligned)
         print("Model training complete.")
+        
+    def get_anomaly_score(self, detection_df: pd.DataFrame) -> np.ndarray:
+        """
+        Calculates anomaly scores for new data using the trained classifier's
+        probability estimates for the anomaly class (class 1).
+
+        Args:
+            detection_df (pd.DataFrame): DataFrame with new data points to check.
+                                         Must have the same original feature columns
+                                         as the training data (excluding the label column).
+                                         Needs sufficient history for lags if time_steps > 0.
+
+        Returns:
+            np.ndarray: A 1D float array with the same length as detection_df.
+                        Contains the predicted probability of the anomaly class (1).
+                        Higher values indicate higher likelihood of anomaly.
+                        Rows where score couldn't be computed (due to lags)
+                        will have NaN.
+        """
+        if self.model is None or self.scaler is None or self.original_feature_names is None or self.all_feature_names is None or self.time_steps is None:
+            raise RuntimeError("Model is not trained or ready. Call run() first.")
+        if not isinstance(detection_df, pd.DataFrame):
+            raise TypeError("Input 'detection_df' must be a pandas DataFrame.")
+
+        if detection_df.empty:
+            return np.array([], dtype=float)
+
+        # Check if required original feature columns exist
+        missing_cols = set(self.original_feature_names) - set(detection_df.columns)
+        if missing_cols:
+            raise ValueError(f"Detection DataFrame is missing required feature columns: {missing_cols}")
+            
+        # Select only the original feature columns for processing
+        X_detect_orig = detection_df[self.original_feature_names]
+        original_indices = detection_df.index # Keep track before lagging
+
+        print(f"Calculating anomaly scores for {len(detection_df)} samples...")
+
+        # 1. Feature Engineering (Consistent with run/detect)
+        X_detect_processed = self._create_lagged_features(X_detect_orig, self.time_steps)
+
+        if X_detect_processed.empty:
+             warnings.warn("No data remained for scoring after creating lagged features and dropping NaNs.", RuntimeWarning)
+             # Return NaNs for the original input length
+             return np.full(len(detection_df), np.nan, dtype=float)
+
+        processed_indices = X_detect_processed.index # Indices that survived lagging
+
+        # 2. Scaling (Use fitted scaler)
+        try:
+            # Ensure columns match exactly those used in training (original + lagged)
+            X_detect_scaled = self.scaler.transform(X_detect_processed[self.all_feature_names])
+        except ValueError as e:
+             raise ValueError(f"Failed to scale detection data. Check columns. Expected: {self.all_feature_names}. Error: {e}") from e
+        except Exception as e:
+             raise RuntimeError(f"An unexpected error occurred during scaling detection data: {e}") from e
+
+        # 3. Prediction of Probabilities
+        print(f"Predicting anomaly probabilities for {len(X_detect_scaled)} processed samples...")
+        try:
+            # Use predict_proba to get [P(class_0), P(class_1)] for each sample
+            probabilities = self.model.predict_proba(X_detect_scaled) 
+        except Exception as e:
+            raise RuntimeError(f"Model probability prediction failed. Input shape: {X_detect_scaled.shape}. Error: {e}") from e
+
+        # Extract the probability of the anomaly class (class 1, which is the second column)
+        # probabilities array shape is (n_samples, n_classes), we want column index 1
+        anomaly_scores_processed = probabilities[:, 1]
+
+        # 4. Align scores back to the original DataFrame index
+        results_series = pd.Series(anomaly_scores_processed, index=processed_indices)
+        # Reindex to original DataFrame length, fill non-computable rows with NaN
+        final_scores = results_series.reindex(original_indices, fill_value=np.nan).values
+
+        num_processed = len(processed_indices) 
+        num_nan = np.isnan(final_scores).sum() # Count NaNs
+
+        print(f"Score calculation complete. Generated scores for {num_processed} processable samples.")
+        if num_nan > 0:
+             print(f"  ({num_nan} samples could not be scored due to insufficient history for lags, assigned NaN score).")
+             
+        if len(final_scores) != len(detection_df):
+             # Fallback, though reindex should handle this
+             warnings.warn(f"Output score length mismatch ({len(final_scores)}) vs input ({len(detection_df)}).", RuntimeWarning)
+             # Return scores matching processed length, or handle differently
+             return anomaly_scores_processed 
+
+        return final_scores # Return float array matching original detection_df length (with NaNs possible)
 
 
     def detect(self, detection_df: pd.DataFrame) -> np.ndarray:
