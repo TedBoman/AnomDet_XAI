@@ -199,7 +199,10 @@ def run_batch(
         # Define feature columns based on the slicing used for the model
         # This assumes df columns are like: [id?, timestamp, feature1, feature2, ..., label, inj_anomaly, something_else?]
         # iloc[:, 1:-3] selects columns starting from the second up to the fourth-to-last
-        feature_columns = df.columns[1:-3].tolist()
+        if model == 'XGBoost':                          
+            feature_columns = df.columns[1:-2].tolist()
+        else:
+            feature_columns = df.columns[1:-3].tolist()
         print(f"Selected Feature Columns: {feature_columns}")
 
         training_features_df = training_data[feature_columns]
@@ -216,7 +219,10 @@ def run_batch(
         model_instance = get_model(model) # Get the model object
 
         start_time = time.perf_counter()
-        model_instance.run(all_features_df, epochs=2) # Train on the selected feature columns
+        if model == 'XGBoost':                          #REMOVE ONCE FRONTEND IS FIXED!!!!!!
+            model_instance.run(all_features_df)
+        else:
+            model_instance.run(all_features_df, epochs=2) # Train on the selected feature columns
         end_time = time.perf_counter()
         print(f"Training took {end_time-start_time}s")
         print("Model training complete.")
@@ -237,8 +243,8 @@ def run_batch(
              interpretation = 'higher_is_anomaly'
         elif model == 'svm': # SVMModel
              interpretation = 'lower_is_anomaly'
-        elif model == 'XG-boost':
-            raise NotImplementedError("XG-boost is NOT implemented!")
+        elif model == 'XGBoost':
+            interpretation = 'higher_is_anomaly'
         elif model == 'decision_tree':
             raise NotImplementedError("decision_tree is NOT implemented!")
         else:

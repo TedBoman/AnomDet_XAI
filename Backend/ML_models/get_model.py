@@ -1,7 +1,7 @@
 from ML_models import isolation_forest
 from ML_models import lstm 
 from ML_models import svm
-
+from ML_models import XGBoost
 def get_model(model):
     match model:
         case "lstm":
@@ -15,5 +15,9 @@ def get_model(model):
         case "svm":
             svm_instance = svm.SVMModel()
             return svm_instance
+        
+        case "XGBoost":
+            XGBoost_instance = XGBoost.XGBoostModel()
+            return XGBoost_instance
             
     
