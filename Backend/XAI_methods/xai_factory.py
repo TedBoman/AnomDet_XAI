@@ -43,7 +43,7 @@ def xai_factory(
 
     # Use match statement (Python 3.10+) or if/elif
     match method_key:
-        case "shap":
+        case "ShapExplainer":
             print(f"Attempting to instantiate ShapExplainer...")
             try:
                 # Pass the received arguments TO the ShapExplainer constructor
@@ -65,7 +65,7 @@ def xai_factory(
                  print(f"Error instantiating ShapExplainer: {e}")
                  raise RuntimeError(f"Failed to instantiate ShapExplainer for method '{method_key}'") from e
 
-        case "lime":
+        case "LimeExplainer":
             print(f"Attempting to instantiate ShapExplainer...")
             try:
                 # Pass the received arguments TO the LimeExplainer constructor

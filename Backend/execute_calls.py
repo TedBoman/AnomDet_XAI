@@ -34,7 +34,7 @@ import utils as ut
 
 MODEL_DIRECTORY = "./ML_models"
 INJECTION_METHOD_DIRECTORY = "./Simulator/AnomalyInjector/InjectionMethods"
-XAI_METHOD_DIRECTORY = "./XAI_methods/methods"
+XAI_METHOD_DIRECTORY = "/XAI_methods/methods"
 DATASET_DIRECTORY = "./Datasets"
 
 def get_anomaly_rows(
@@ -151,7 +151,16 @@ def evaluate_classification(df: pd.DataFrame) -> dict:
     }
 
 # Starts processing of dataset in one batch
-def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict=None, debug=False, xai_method=None) -> None:
+def run_batch(
+    db_conn_params: Dict,
+    model: str,                          # Model name string (e.g., 'lstm', 'svm')
+    path: str,                           # Path to dataset file
+    name: str,                           # Job name (e.g., "job_batch_myjob")
+    inj_params: Optional[List[Dict[str, Any]]] = None, 
+    debug: bool = False,
+    label_column: Optional[str] = None, 
+    xai_params: Optional[Dict[str, Any]] = None
+) -> None:    
     print("Starting Batch-job!")
     sys.stdout.flush()
     
@@ -613,23 +622,22 @@ def get_models() -> list:
     models.remove("__init__")
     models.remove("setup")
     models.remove("get_model")
+    models.remove("model_wrapper")
     
     return models
 
 # Returns a list of XAI mthods implemented in XAI_METHOD_DIRECTORY
 def get_xai_methods() -> list:
-    models = []
+    methods = []
     for path in os.listdir(XAI_METHOD_DIRECTORY):
-        file_path = XAI_METHOD_DIRECTORY + "/" + path
-        if os.path.isfile(file_path):
-            model_name = path.split(".")[0]
-            models.append(model_name)
+        if os.path.isfile(os.path.join(XAI_METHOD_DIRECTORY, path)):
+            method_name = path.split(".")[0]
+            methods.append(method_name)
 
     # Removing the __init__, setup files and the .env file
-    models.remove("")
-    models.remove("__init__")
+    methods.remove("__init__")
 
-    return models
+    return methods
 
 # Returns a list of injection methods implemented in INJECTION_METHOD_DIRECTORY
 def get_injection_methods() -> list:
