@@ -15,7 +15,6 @@ class ModelWrapperForXAI:
     def __init__(self,
                  actual_model_instance: Any,
                  feature_names: List[str],
-                 # NEW Parameter: How to interpret the score?
                  score_interpretation: Literal['lower_is_anomaly', 'higher_is_anomaly'] = 'higher_is_anomaly'
                  ):
         """
@@ -104,7 +103,7 @@ class ModelWrapperForXAI:
 
         # --- Convert scores to P(anomaly) based on interpretation ---
         # You NEED to tune the 'scale_factor'. Start with 1.0 maybe, or std dev of scores?
-        scale_factor = 1.0 # Adjust this based on typical score ranges!
+        scale_factor = 0.1 # Adjust this based on typical score ranges!
         if self._score_interpretation == 'higher_is_anomaly': # e.g., LSTM AE error
             scaled_scores = (scores_clean - threshold) / scale_factor
             prob_anomaly = self._sigmoid(scaled_scores)

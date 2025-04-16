@@ -5,11 +5,11 @@ import threading
 from time import sleep
 import os
 import execute_calls
-import pandas as pd
 from timescaledb_api import TimescaleDBAPI
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 import requests
+from Simulator.FileFormats.read_csv import read_csv
 
 load_dotenv()
 BACKEND_HOST = os.getenv('BACKEND_HOST')
@@ -169,7 +169,7 @@ def __handle_api_call(conn, data: dict) -> None:
                     xai_params    # Pass xai_params variable
                 )
             )            
-            
+
             new_thread.daemon = True
             new_thread.start()
             detection_thread = threading.Thread(target=execute_calls.single_point_detection, args=(backend_data["db_api"], new_thread, model, name, dataset_path))
@@ -276,8 +276,8 @@ def __handle_api_call(conn, data: dict) -> None:
             columns_json = json.dumps(columns_dict)
             conn.sendall(bytes(columns_json, encoding="utf-8"))
         case "get-dataset-columns":
-            df = pd.read_csv(DATASET_DIRECTORY + data["dataset"])
-            columns = df.columns.tolist()
+            file_reader = read_csv(DATASET_DIRECTORY + data["dataset"])
+            columns = file_reader.get_columns()
             print(f"sending columns: {columns}")
             columns_dict = {
                                 "columns": columns

@@ -23,7 +23,7 @@ class LSTMModel(model_interface.ModelInterface):
         print("LSTMModel Initialized (sequence_length will be set during run).")
 
     # Preprocesses, trains and fits the model
-    def run(self, df, time_steps=10, epochs=10): # Changed default time_steps
+    def run(self, df, time_steps=10, epochs=2): # Changed default time_steps
         """
         Preprocesses data, builds, trains, and fits the LSTM autoencoder model.
 

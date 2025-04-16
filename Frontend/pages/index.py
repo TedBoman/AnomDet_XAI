@@ -93,7 +93,7 @@ def layout(handler):
                         id="detection-model-dropdown",
                         options=[{"label": model, "value": model} for model in models],
                         placeholder="Select a detection model",
-                        style={"width": "350px", "margin": "auto", "border": "0.05rem solid black"}
+                        style={"width": "350px", "fontSize": "18px", "margin": "auto", "border": "0.05rem solid black"}
                     )
                 ], style={"textAlign": "center", "marginTop": "30px"}),
 
