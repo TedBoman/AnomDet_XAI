@@ -99,9 +99,10 @@ def __handle_api_call(conn, data: dict) -> None:
             dataset_path = DATASET_DIRECTORY + data["dataset"]
             name = data["name"]
             debug = data["debug"]
-            #xai_method = data["xai-method"] if data["xai-method"] else None
+            label_column = data.get("label_column", None)
 
             inj_params = data.get("inj_params", None)
+            xai_params = data.get("xai_params", None)
 
             db_conn_params = {
                 "user": DATABASE["USER"],
@@ -111,7 +112,19 @@ def __handle_api_call(conn, data: dict) -> None:
                 "database": DATABASE["DATABASE"]
             }
             
-            new_thread = threading.Thread(target=execute_calls.run_batch, args=(db_conn_params, model, dataset_path, name, inj_params, debug, None))
+            new_thread = threading.Thread(
+            target=execute_calls.run_batch,
+                args=(
+                    db_conn_params,
+                    model,
+                    dataset_path,
+                    name,
+                    inj_params,
+                    debug,
+                    label_column,
+                    xai_params
+                )
+            )
             new_thread.daemon = True
             new_thread.start()
 
@@ -129,8 +142,10 @@ def __handle_api_call(conn, data: dict) -> None:
             name = data["name"]
             speedup = data["speedup"]
             debug = data["debug"]
-            
+            label_column = data.get("label_column", None)
+
             inj_params = data.get("inj_params", None)
+            xai_params = data.get("xai_params", None)
             
             db_conn_params = {
                 "user": DATABASE["USER"],
@@ -140,7 +155,21 @@ def __handle_api_call(conn, data: dict) -> None:
                 "database": DATABASE["DATABASE"]
             }
 
-            new_thread = threading.Thread(target=execute_calls.run_stream, args=(db_conn_params, model, dataset_path, name, speedup, inj_params, debug))
+            stream_thread = threading.Thread( # Renamed variable for clarity
+                target=execute_calls.run_stream,
+                args=(
+                    db_conn_params,
+                    model,
+                    dataset_path,
+                    name,
+                    speedup,
+                    inj_params,
+                    debug,
+                    label_column, # Pass label_column variable
+                    xai_params    # Pass xai_params variable
+                )
+            )            
+            
             new_thread.daemon = True
             new_thread.start()
             detection_thread = threading.Thread(target=execute_calls.single_point_detection, args=(backend_data["db_api"], new_thread, model, name, dataset_path))

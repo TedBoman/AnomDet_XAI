@@ -151,7 +151,16 @@ def evaluate_classification(df: pd.DataFrame) -> dict:
     }
 
 # Starts processing of dataset in one batch
-def run_batch(db_conn_params, model: str, path: str, name: str, inj_params: dict=None, debug=False, xai_method=None) -> None:
+def run_batch(
+    db_conn_params: Dict,
+    model: str,                          # Model name string (e.g., 'lstm', 'svm')
+    path: str,                           # Path to dataset file
+    name: str,                           # Job name (e.g., "job_batch_myjob")
+    inj_params: Optional[List[Dict[str, Any]]] = None, 
+    debug: bool = False,
+    label_column: Optional[str] = None, 
+    xai_params: Optional[Dict[str, Any]] = None
+) -> None:    
     print("Starting Batch-job!")
     sys.stdout.flush()
     

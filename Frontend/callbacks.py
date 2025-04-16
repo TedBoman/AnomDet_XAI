@@ -91,7 +91,7 @@ def get_index_callbacks(app):
     @app.callback(
         Output("xai-settings-panel", "children"),
         Input("xai-method-dropdown", "value"),
-        prevent_initial_call=True
+        
     )
     def update_xai_settings_panel(selected_xai_method):
         if not selected_xai_method or selected_xai_method == "none":
@@ -100,7 +100,7 @@ def get_index_callbacks(app):
         settings_children = [html.H5(f"Settings for {selected_xai_method.upper()}:", style={'color':'#ffffff', 'marginTop':'15px'})]
 
         # --- Use Pattern-Matching IDs ---
-        if selected_xai_method == "shap":
+        if selected_xai_method == "ShapExplainer":
             settings_children.extend([
                 html.Div([
                     html.Label("Num Samples (nsamples):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
@@ -125,7 +125,7 @@ def get_index_callbacks(app):
                     )
                 ], style={'marginBottom':'8px'})
             ])
-        elif selected_xai_method == "lime":
+        elif selected_xai_method == "LimeExplainer":
             settings_children.extend([
                 html.Div([
                     html.Label("Num Features to Explain:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
