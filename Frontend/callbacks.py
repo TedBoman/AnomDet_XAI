@@ -88,7 +88,6 @@ def get_index_callbacks(app):
     @app.callback(
         Output("xai-settings-panel", "children"),
         Input("xai-method-dropdown", "value"),
-        
     )
     def update_xai_settings_panel(selected_xai_method):
         if not selected_xai_method or selected_xai_method == "none":
@@ -137,7 +136,7 @@ def get_index_callbacks(app):
                     dcc.Input(
                         # PATTERN MATCHING ID: type, method, param
                         id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'n_explain_max'},
-                        type="number", value=10, min=10, step=10, style={'width':'80px'}
+                        type="number", value=10, min=1, step=1, style={'width':'80px'}
                     )
                 ], style={'marginBottom':'8px'}),
                 html.Div([

@@ -198,7 +198,7 @@ class LimeExplainer(ExplainerMethodAPI):
         instance_1d_flat = instances_to_explain.reshape(-1) # Reshape (1, seq, feat) -> (seq*feat,)
 
         # Extract LIME explain_instance specific arguments from kwargs
-        num_features = kwargs.get('num_features', 10) # LIME default is 5, use 10?
+        num_features = kwargs.get('num_features', 10)
         num_samples = kwargs.get('num_samples', 5000) # LIME default
         labels = kwargs.get('labels', (1,) if self.mode == 'classification' else None) # Default to explain class 1 if classification? Or let LIME decide? Let LIME decide default.
         top_labels = kwargs.get('top_labels', None) # Let LIME default handle this unless specified

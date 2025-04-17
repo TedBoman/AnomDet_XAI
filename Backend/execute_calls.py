@@ -185,7 +185,7 @@ def run_batch(
     else:
         batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name, debug=debug)
     sim_engine = se()
-    result = sim_engine.main(db_conn_params, batch_job)
+    result = sim_engine.main(db_conn_params, batch_job, None, label_column) # TODO: Change the None to timestamp column name when added
     end_time = time.perf_counter()
     print(f"Batch import took {end_time-start_time}s")
 
@@ -484,33 +484,14 @@ def run_batch(
                         # 4. Define Plot Handlers Dictionary (mapping names to functions)
                         plot_handlers = { "ShapExplainer": x.process_and_plot_shap, "LimeExplainer": x.process_and_plot_lime }
 
-                        # 5. Define XAI Config (Runtime parameters) - Moved from previous example
-                        xai_config = {
-                            "shap": {
-                                "nsamples": 100, # Default SHAP samples
-                                "k_summary": 50, # Default K for background summary (used at init)
-                                "l1_reg_k_features": 20 # Default K for num_features heuristic
-                            },
-                            "lime": {
-                                "num_features": 15, # Default LIME features to show
-                                "num_samples": 1000 # Default LIME perturbations
-                            }
-                        }
-                        # --- Override defaults with settings from xai_params if provided ---
-                        if xai_params and isinstance(xai_params, dict) and 'settings' in xai_params:
-                            for method, settings_from_ui in xai_params['settings'].items():
-                                if method in xai_config:
-                                    xai_config[method].update(settings_from_ui) # Update defaults with UI settings
-                        # ---
-
-                        # 6. Loop Through XAI Methods defined in xai_methods_to_run list
+                        # 5. Loop Through XAI Methods defined in xai_methods_to_run list
                         for method_name in xai_methods_to_run: # Iterate over the LIST of method names
                             print(f"\n===== Running Method: {method_name.upper()} =====")
                             try:
                                 explainer_object = ts_explainer._get_or_initialize_explainer(method_name)
 
                                 # Get base config for this method, provide empty dict if not found
-                                method_config = xai_config.get(method_name, {}).copy()
+                                method_config = settings
                                 print(f"Using configuration for {method_name}: {method_config}")
 
                                 # --- Method Specific Logic ---
@@ -537,7 +518,6 @@ def run_batch(
                                     end_explain_time = time.perf_counter()
                                     print(f"SHAP explanation took {end_explain_time - start_explain_time:.2f}s")
 
-                                    # Call SHAP handler ONCE
                                     handler_func = plot_handlers.get(method_name)
                                     if handler_func:
                                         print(f"Calling plot handler for SHAP...")
@@ -553,9 +533,11 @@ def run_batch(
                                 elif method_name == "LimeExplainer":
                                     print(f"Configuring LIME for {len(instances_to_explain_np)} instance(s)...")
                                     # Prepare LIME runtime kwargs from config
+                                    num_features = method_config.get('num_features', 15)
+                                    num_samples = method_config.get('num_samples', 1000)
                                     lime_runtime_kwargs = {
-                                        'num_features': method_config.get('num_features', 15),
-                                        'num_samples': method_config.get('num_samples', 1000)
+                                        'num_features': num_features,
+                                        'num_samples': num_samples
                                         # Add other LIME explain_instance kwargs (like top_labels) if configured
                                     }
                                     print(f"LIME Runtime Params: {lime_runtime_kwargs}")
@@ -571,7 +553,7 @@ def run_batch(
                                             # Explain this single instance slice
                                             lime_explanation_object = ts_explainer.explain(
                                                 instances_to_explain=current_instance_np,
-                                                method_name='limeexplainer', # Method name is "lime"
+                                                method_name='LimeExplainer', # Method name is "lime"
                                                 **lime_runtime_kwargs # Pass LIME specific args
                                             )
                                             end_lime_time = time.perf_counter()

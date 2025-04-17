@@ -43,7 +43,7 @@ class XGBoostModel(model_interface.ModelInterface):
         self.model_params = {
             'n_estimators': n_estimators, 'learning_rate': learning_rate,
             'max_depth': max_depth, 'objective': 'binary:logistic',
-            'eval_metric': 'logloss', 'use_label_encoder': False,
+            'eval_metric': 'logloss',
             'random_state': random_state, 'n_jobs': -1
         }
         self.model_params.update(kwargs)
