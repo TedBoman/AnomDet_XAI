@@ -1,9 +1,6 @@
 from dash import Dash, dcc, html, Input, Output, State, ALL, MATCH, callback, callback_context, no_update
 import json
 from get_handler import get_handler
-#from bokeh.plotting import figure
-#from bokeh.embed import file_html
-#from bokeh.resources import CDN
 import os
 
 def get_index_callbacks(app):
