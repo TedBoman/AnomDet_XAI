@@ -130,7 +130,7 @@ class Simulator:
         db_instance.insert_data(table_name, df)
         dl.debug_print("Inserted row.")
 
-    def start_simulation(self, conn_params, anomaly_settings=None, table_name=None, timestamp_index=0, label_index=None):
+    def start_simulation(self, conn_params, anomaly_settings=None, table_name=None, timestamp_col_name=None, label_col_name=None):
         """
         Reads the data file, preprocesses anomaly settings, and inserts data
         into the database row by row, with optional anomaly injection.
@@ -147,11 +147,13 @@ class Simulator:
             dl.debug_print("Canceling job")
             return
         
-        full_df.columns.values[timestamp_index] = "timestamp"
+        #full_df = full_df.rename(columns={timestamp_col_name: 'timestamp'}) # Uncomment when passing timestamp column
+        full_df.columns.values[0] = "timestamp"
 
+        label_index = len(full_df.columns) - 1
         if label_index != None:
             full_df.columns.values[label_index] = "label"
-        
+
         columns = list(full_df.columns.values)
                 
         table_name = self.create_table(conn_params, Path(self.file_path).stem if table_name is None else table_name, columns)

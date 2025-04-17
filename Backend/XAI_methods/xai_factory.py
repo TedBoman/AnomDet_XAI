@@ -41,7 +41,6 @@ def xai_factory(
     method_key = method_name.lower()
     print(f"get_explainer factory called for: '{method_key}'")
 
-    # Use match statement (Python 3.10+) or if/elif
     match method_key:
         case "shapexplainer":
             print(f"Attempting to instantiate ShapExplainer...")

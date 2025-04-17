@@ -15,7 +15,7 @@ from Simulator.DBAPI.debug_utils import DebugLogger as dl
 DEFAULT_PATH = './Datasets/'
 
 class SimulatorEngine:
-    def process_file(self, file_path, conn_params, simulation_type, anomaly_settings, start_time, speedup: int = 1, table_name = None, timestamp_index=0, label_index=None):
+    def process_file(self, file_path, conn_params, simulation_type, anomaly_settings, start_time, speedup: int = 1, table_name = None, timestamp_col_name=None, label_col_name=None):
         """Processes a single file based on the specified use case."""
         dl.debug_print("Starting to process file!")
         match simulation_type:
@@ -25,7 +25,7 @@ class SimulatorEngine:
                 try:
                     file_extension = Path(file_path).suffix
                     sim = Simulator(file_path, file_extension, start_time, x_speedup=speedup)
-                    return sim.start_simulation(conn_params, anomaly_settings, table_name)
+                    return sim.start_simulation(conn_params, anomaly_settings, table_name, timestamp_col_name, label_col_name)
                 except Exception as e:
                     dl.print_exception(f"Error: {e}")
                     return 0
@@ -35,12 +35,12 @@ class SimulatorEngine:
                 try:
                     file_extension = Path(file_path).suffix
                     sim = BatchImporter(file_path, file_extension, start_time, 5)
-                    return sim.start_simulation(conn_params, anomaly_settings, table_name)
+                    return sim.start_simulation(conn_params, anomaly_settings, table_name, timestamp_col_name, label_col_name)
                 except Exception as e:
                     dl.print_exception(f"Error: {e}")
                     return 0
 
-    def main(self, db_conn_params, job):
+    def main(self, db_conn_params, job, timestamp_col_name=None, label_col_name=None):
         # Set debug mode once for all files
         dl.set_debug(job.debug)  # or False to disable debug prints
         print(job.table_name)
