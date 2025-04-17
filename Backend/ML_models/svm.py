@@ -12,7 +12,7 @@ from sklearn.svm import OneClassSVM
 from sklearn.preprocessing import StandardScaler, MinMaxScaler # Add MinMaxScaler if used by AE
 from tensorflow.keras.models import Model # Use tensorflow.keras
 from tensorflow.keras.layers import Input, Dense # Use tensorflow.keras
-from typing import Union, List, Any
+from typing import Optional, Union, List, Any
 import warnings
 
 class SVMModel(model_interface.ModelInterface):

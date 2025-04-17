@@ -245,14 +245,9 @@ def run_batch(
         print("Testing features shape:", testing_features_df.shape)
         print("All features shape:", all_features_df.shape)
         if training_features_df.empty:
-             print("Error: Training features DataFrame is empty after column selection.")
-             return
+            print("Error: Training features DataFrame is empty after column selection.")
+            return
         # --- End Feature Selection ---
-
-        print("Training features shape:", training_features_df.shape)
-        print("Testing features shape:", testing_features_df.shape)
-        print("All features shape:", all_features_df.shape)
-        # --- End Data Splitting ---
 
         # --- Anomaly Row Extraction (using label_column parameter) ---
         anomaly_feature_df = pd.DataFrame(columns=feature_columns) # Initialize empty DF with correct columns

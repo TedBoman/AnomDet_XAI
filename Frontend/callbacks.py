@@ -37,7 +37,7 @@ def get_index_callbacks(app):
     
     # --- Callback to populate columns for Injection Dropdown AND Label Dropdown ---
     @app.callback(
-        Output("injection_column-dropdown", "options"),
+        Output("injection-column-dropdown", "options"),
         Output("label-column-dropdown", "options"),
         Output("label-column-dropdown", "value"),
         Input("dataset-dropdown", "value"),
@@ -103,7 +103,7 @@ def get_index_callbacks(app):
                     dcc.Input(
                         # PATTERN MATCHING ID: type, method, param
                         id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'n_explain_max'},
-                        type="number", value=100, min=10, step=10, style={'width':'80px'}
+                        type="number", value=100, min=10, step=1, style={'width':'80px'}
                     )
                 ], style={'marginBottom':'8px'}),
                 html.Div([
@@ -111,14 +111,14 @@ def get_index_callbacks(app):
                     dcc.Input(
                         # PATTERN MATCHING ID: type, method, param
                         id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'nsamples'},
-                        type="number", value=100, min=10, step=10, style={'width':'80px'}
+                        type="number", value=100, min=10, step=1, style={'width':'80px'}
                     )
                 ], style={'marginBottom':'8px'}),
                 html.Div([
                     html.Label("K for Background Summary (k_summary):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
                     dcc.Input(
                         id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'k_summary'}, # Pattern ID
-                        type="number", value=50, min=1, step=5, style={'width':'80px'}
+                        type="number", value=50, min=1, step=1, style={'width':'80px'}
                     )
                 ], style={'marginBottom':'8px'}),
                 html.Div([
@@ -150,7 +150,7 @@ def get_index_callbacks(app):
                     html.Label("Num Samples (Perturbations):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
                     dcc.Input(
                         id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'num_samples'}, # Pattern ID
-                        type="number", value=1000, min=100, step=100, style={'width':'80px'}
+                        type="number", value=1000, min=100, step=1, style={'width':'80px'}
                     )
                 ], style={'marginBottom':'8px'})
             ])
