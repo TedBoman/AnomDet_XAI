@@ -9,11 +9,12 @@ from socket import socket
 from timescaledb_api import TimescaleDBAPI
 from datetime import datetime, timezone
 from typing import Any, Union
+import multiprocessing as mp
+import threading
 
 # Third-Party
-import threading
 from pathlib import Path
-import multiprocessing as mp
+
 import pandas as pd
 from typing import Union, List, Optional, Dict
 
@@ -458,7 +459,7 @@ def run_batch(
 
                         # 3. Prepare Instances for Explanation
                         # Choose data: anomalies if available, otherwise fallback to test sample
-                        data_source_for_explanation = anomaly_feature_df if not anomaly_feature_df.empty else testing_features_df
+                        data_source_for_explanation = testing_features_df if not testing_features_df.empty else anomaly_feature_df
                         source_name = "anomalies" if not anomaly_feature_df.empty else "test_data_sample"
                         print(f"Preparing instances to explain from: {source_name}")
 

@@ -102,6 +102,14 @@ def get_index_callbacks(app):
         # --- Use Pattern-Matching IDs ---
         if selected_xai_method == "ShapExplainer":
             settings_children.extend([
+                 html.Div([
+                    html.Label("Indicies to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                    dcc.Input(
+                        # PATTERN MATCHING ID: type, method, param
+                        id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'n_explain_max'},
+                        type="number", value=100, min=10, step=10, style={'width':'80px'}
+                    )
+                ], style={'marginBottom':'8px'}),
                 html.Div([
                     html.Label("Num Samples (nsamples):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
                     dcc.Input(
@@ -127,6 +135,14 @@ def get_index_callbacks(app):
             ])
         elif selected_xai_method == "LimeExplainer":
             settings_children.extend([
+                html.Div([
+                    html.Label("Indicies to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                    dcc.Input(
+                        # PATTERN MATCHING ID: type, method, param
+                        id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'n_explain_max'},
+                        type="number", value=10, min=10, step=10, style={'width':'80px'}
+                    )
+                ], style={'marginBottom':'8px'}),
                 html.Div([
                     html.Label("Num Features to Explain:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
                     dcc.Input(

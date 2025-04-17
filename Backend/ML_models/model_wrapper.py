@@ -103,7 +103,7 @@ class ModelWrapperForXAI:
 
         # --- Convert scores to P(anomaly) based on interpretation ---
         # You NEED to tune the 'scale_factor'. Start with 1.0 maybe, or std dev of scores?
-        scale_factor = 0.1 # Adjust this based on typical score ranges!
+        scale_factor = 1 # Adjust this based on typical score ranges!
         if self._score_interpretation == 'higher_is_anomaly': # e.g., LSTM AE error
             scaled_scores = (scores_clean - threshold) / scale_factor
             prob_anomaly = self._sigmoid(scaled_scores)
