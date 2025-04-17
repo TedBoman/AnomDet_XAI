@@ -102,25 +102,33 @@ def get_index_callbacks(app):
         # --- Use Pattern-Matching IDs ---
         if selected_xai_method == "ShapExplainer":
             settings_children.extend([
+                 html.Div([
+                    html.Label("Indicies to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                    dcc.Input(
+                        # PATTERN MATCHING ID: type, method, param
+                        id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'n_explain_max'},
+                        type="number", value=100, min=10, step=10, style={'width':'80px'}
+                    )
+                ], style={'marginBottom':'8px'}),
                 html.Div([
                     html.Label("Num Samples (nsamples):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
                     dcc.Input(
                         # PATTERN MATCHING ID: type, method, param
-                        id={'type': 'xai-setting', 'method': 'shap', 'param': 'nsamples'},
+                        id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'nsamples'},
                         type="number", value=100, min=10, step=10, style={'width':'80px'}
                     )
                 ], style={'marginBottom':'8px'}),
                 html.Div([
                     html.Label("K for Background Summary (k_summary):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
                     dcc.Input(
-                        id={'type': 'xai-setting', 'method': 'shap', 'param': 'k_summary'}, # Pattern ID
+                        id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'k_summary'}, # Pattern ID
                         type="number", value=50, min=1, step=5, style={'width':'80px'}
                     )
                 ], style={'marginBottom':'8px'}),
                 html.Div([
                     html.Label("K for L1 Reg Features (l1_reg_k):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
                     dcc.Input(
-                        id={'type': 'xai-setting', 'method': 'shap', 'param': 'l1_reg_k'}, # Pattern ID
+                        id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'l1_reg_k'}, # Pattern ID
                         type="number", value=20, min=1, step=1, style={'width':'80px'}
                     )
                 ], style={'marginBottom':'8px'})
@@ -128,16 +136,24 @@ def get_index_callbacks(app):
         elif selected_xai_method == "LimeExplainer":
             settings_children.extend([
                 html.Div([
+                    html.Label("Indicies to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                    dcc.Input(
+                        # PATTERN MATCHING ID: type, method, param
+                        id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'n_explain_max'},
+                        type="number", value=10, min=10, step=10, style={'width':'80px'}
+                    )
+                ], style={'marginBottom':'8px'}),
+                html.Div([
                     html.Label("Num Features to Explain:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
                     dcc.Input(
-                        id={'type': 'xai-setting', 'method': 'lime', 'param': 'num_features'}, # Pattern ID
+                        id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'num_features'}, # Pattern ID
                         type="number", value=15, min=1, step=1, style={'width':'80px'}
                     )
                 ], style={'marginBottom':'8px'}),
                 html.Div([
                     html.Label("Num Samples (Perturbations):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
                     dcc.Input(
-                        id={'type': 'xai-setting', 'method': 'lime', 'param': 'num_samples'}, # Pattern ID
+                        id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'num_samples'}, # Pattern ID
                         type="number", value=1000, min=100, step=100, style={'width':'80px'}
                     )
                 ], style={'marginBottom':'8px'})
@@ -309,12 +325,12 @@ def get_index_callbacks(app):
             # --- End Injection Info ---
 
             # --- Process XAI Info ---
-        use_xai = "use_xai" in xai_check_val
-        xai_params = None
-        if use_xai:
-            if not selected_xai_method or selected_xai_method == "none":
-                style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
-                return style_copy, False, "Please select an XAI method if 'Use Explainability' is checked."
+            use_xai = "use_xai" in xai_check_val
+            xai_params = None
+            if use_xai:
+                if not selected_xai_method or selected_xai_method == "none":
+                    style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
+                    return style_copy, False, "Please select an XAI method if 'Use Explainability' is checked."
 
             # --- Parse Pattern-Matching State results ---
             # Only parse settings for the currently selected method that are rendered
@@ -343,7 +359,7 @@ def get_index_callbacks(app):
 
             # --- Construct final xai_params ---
             # NOTE: Rename l1_reg_k to l1_reg_k_features if backend expects that specific name
-            if selected_xai_method == "shap" and "l1_reg_k" in xai_settings:
+            if selected_xai_method == "ShapExplainer" and "l1_reg_k" in xai_settings:
                 xai_settings["l1_reg_k_features"] = xai_settings.pop("l1_reg_k") # Rename key for backend
 
             xai_params = {

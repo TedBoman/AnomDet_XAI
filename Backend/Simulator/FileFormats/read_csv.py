@@ -13,3 +13,11 @@ class read_csv:
         full_df = pd.read_csv(self.file_path)
 
         return full_df
+    
+    def get_columns(self):
+        # Read only the header row by specifying nrows=0
+        df_header = pd.read_csv(self.file_path, nrows=0)
+
+        # Get the column names as a list
+        column_names = df_header.columns.tolist()
+        return column_names

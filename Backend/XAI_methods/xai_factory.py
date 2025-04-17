@@ -43,7 +43,7 @@ def xai_factory(
 
     # Use match statement (Python 3.10+) or if/elif
     match method_key:
-        case "ShapExplainer":
+        case "shapexplainer":
             print(f"Attempting to instantiate ShapExplainer...")
             try:
                 # Pass the received arguments TO the ShapExplainer constructor
@@ -65,7 +65,7 @@ def xai_factory(
                  print(f"Error instantiating ShapExplainer: {e}")
                  raise RuntimeError(f"Failed to instantiate ShapExplainer for method '{method_key}'") from e
 
-        case "LimeExplainer":
+        case "limeexplainer":
             print(f"Attempting to instantiate ShapExplainer...")
             try:
                 # Pass the received arguments TO the LimeExplainer constructor
@@ -86,5 +86,5 @@ def xai_factory(
 
         case _:
             # Handle unsupported method names
-            supported = ["shap"] # Add 'lime' etc. when implemented
+            supported = ["shapexplainer", "limeexplainer"] # Add 'lime' etc. when implemented
             raise ValueError(f"Unsupported explanation method requested: '{method_key}'. Supported: {supported}")

@@ -119,5 +119,4 @@ class FrontendHandler:
             return []
         response = self.api.get_dataset_columns(dataset)
         columns = json.loads(response)
-        columns["columns"].pop()
         return columns["columns"]
