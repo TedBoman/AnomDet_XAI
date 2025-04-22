@@ -108,11 +108,11 @@ def split_data(data):
     total_rows = len(data)
 
     # Calculate split indices
-    train_end = int(total_rows * 0.99) # 99% for training
+    train_end = int(total_rows * 0.70) # 70% for training
 
     # Split the data
     training_data = data.iloc[:train_end]
-    testing_data = data.iloc[train_end:] # Remaining 1% is testing
+    testing_data = data.iloc[train_end:] # Remaining 30% is testing
 
     return training_data, testing_data
 
