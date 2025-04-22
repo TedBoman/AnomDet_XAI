@@ -2,6 +2,7 @@ from ML_models import isolation_forest
 from ML_models import lstm 
 from ML_models import svm
 from ML_models import XGBoost
+from ML_models import decision_tree
 def get_model(model):
     match model:
         case "lstm":
@@ -19,5 +20,9 @@ def get_model(model):
         case "XGBoost":
             XGBoost_instance = XGBoost.XGBoostModel()
             return XGBoost_instance
+        
+        case "decision_tree":
+            DT_instance = decision_tree.DecisionTreeModel()
+            return DT_instance
             
     

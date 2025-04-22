@@ -1,5 +1,3 @@
-# In xai_utils.py (or wherever ModelWrapperForXAI is defined)
-
 import pandas as pd
 import numpy as np
 from typing import Any, List, Union, Literal # Import Literal
