@@ -52,9 +52,48 @@ class DiceExplainerWrapper(ExplainerMethodAPI):
         # --- Extract DiCE explain() arguments ---
         total_CFs = kwargs.get('total_CFs')
         desired_class = kwargs.get('desired_class', "opposite")
-        # Pass other valid args for generate_counterfactuals like 'features_to_vary'
-        other_dice_kwargs = {k: v for k, v in kwargs.items() if k not in ['total_CFs', 'desired_class']}
+        # Get the list of BASE feature names intended to be varied
+        features_to_vary_base = kwargs.get('features_to_vary', []) # Expects a list from settings
 
+        # --- START: Transform base feature names to flattened feature names ---
+        features_to_vary_final: Union[List[str], str]
+        if isinstance(features_to_vary_base, list) and features_to_vary_base:
+            print(f"Transforming base features_to_vary list: {features_to_vary_base}")
+            features_to_vary_flat_set = set()
+            sequence_length = self._original_sequence_shape[0] # Get sequence length from stored shape
+
+            for base_feat in features_to_vary_base:
+                # Generate all flattened names for this base feature across time steps
+                for i in range(sequence_length - 1, -1, -1): # Match naming convention t-N..t-0
+                    flat_name = f"{base_feat}_t-{i}"
+                    # IMPORTANT: Check if the generated flat name actually exists in the list known to the wrapper
+                    if flat_name in self.flat_feature_names:
+                        features_to_vary_flat_set.add(flat_name)
+                    else:
+                        # This warning helps catch typos or mismatches in base feature names vs known flat names
+                        print(f"Warning: Generated flat name '{flat_name}' for base feature '{base_feat}' not found in known flat features.")
+
+            if not features_to_vary_flat_set:
+                 print("Warning: Transformation resulted in empty set of flattened features to vary. DiCE might default to varying all or fail.")
+                 features_to_vary_final = [] # Pass empty list
+            else:
+                 features_to_vary_final = sorted(list(features_to_vary_flat_set)) # Convert set to sorted list
+                 print(f"Transformed to {len(features_to_vary_final)} flattened features_to_vary (first 10): {features_to_vary_final[:10]}...")
+
+        elif isinstance(features_to_vary_base, str) and features_to_vary_base.lower() == 'all':
+             features_to_vary_final = 'all' # Pass 'all' string directly if specified
+             print("Using 'all' features_to_vary.")
+        else: # Default case: Empty list passed or unexpected type
+             print("No specific features_to_vary provided or list is empty. Passing empty list to DiCE (may default to 'all').")
+             features_to_vary_final = [] # Pass empty list to DiCE
+
+        # --- END: Transform features_to_vary ---
+
+        # Collect other kwargs, EXCLUDING the original 'features_to_vary' key if it existed
+        other_dice_kwargs = {k: v for k, v in kwargs.items() if k not in ['total_CFs', 'desired_class', 'features_to_vary']}
+        # Add the CORRECTLY FORMATTED features_to_vary to the kwargs going to DiCE
+        other_dice_kwargs['features_to_vary'] = features_to_vary_final
+        
         if total_CFs is None: raise ValueError("explain() requires 'total_CFs' (int) in kwargs for DiCE.")
         try: total_CFs = int(total_CFs); assert total_CFs >= 1
         except: raise ValueError("'total_CFs' must be a positive integer.")

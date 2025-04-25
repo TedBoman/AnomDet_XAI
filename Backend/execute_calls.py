@@ -540,7 +540,7 @@ def run_batch(
                                         # Call DiCE Handler
                                         handler_func = plot_handlers.get(method_name)
                                         if handler_func:
-                                            handler_func(results=xai_results, explainer_object=ts_explainer, instances_explained=instances_explained_np_lables, feature_names=feature_columns, sequence_length=sequence_length, output_dir=output_dir, mode='classification', job_name=name, original_df=instances_explained_np_lables)
+                                            handler_func(results=xai_results, explainer_object=explainer_object, instances_explained=instances_explained_np_lables, feature_names=feature_columns, sequence_length=sequence_length, output_dir=output_dir, mode='classification', job_name=name)
                                         else: print("No plot handler for DiCE")
 
                                     elif method_name == "ShapExplainer":

@@ -200,7 +200,6 @@ def process_and_plot_dice(
     output_dir: str,
     mode: str, # Should be classification
     job_name: str = "job",
-    # original_df: pd.Series=None, # Removed - we get original from instances_explained
     **kwargs):
     """
     Processes DiCE Explanation object. Saves a CSV for each instance containing
@@ -233,66 +232,122 @@ def process_and_plot_dice(
 
         # --- Loop through each instance ---
         for i, cf_example in enumerate(cf_examples_list):
-             print(f"  Processing instance {i}...")
+            print(f"  Processing instance {i}...")
 
-             # --- Get Counterfactuals DataFrame ---
-             cfs_df = None
-             if hasattr(cf_example, 'final_cfs_df') and cf_example.final_cfs_df is not None:
-                  cfs_df = cf_example.final_cfs_df.copy() # Use copy to avoid modifying original
-             # Add elif for sparse if needed
+            # --- Get Counterfactuals DataFrame ---
+            cfs_df = None
+            if hasattr(cf_example, 'final_cfs_df') and cf_example.final_cfs_df is not None:
+                cfs_df = cf_example.final_cfs_df.copy() # Use copy to avoid modifying original
+            # Add elif for sparse if needed
 
-             if cfs_df is None or cfs_df.empty:
-                  print(f"    No counterfactuals DataFrame found or empty for instance {i}. Skipping CSV save.")
-                  continue
-             if not isinstance(cfs_df, pd.DataFrame):
-                  print(f"    Warning: Expected pandas DataFrame for counterfactuals, got {type(cfs_df)}. Skipping CSV save for instance {i}.")
-                  continue
+            if cfs_df is None or cfs_df.empty:
+                print(f"    No counterfactuals DataFrame found or empty for instance {i}. Skipping CSV save.")
+                continue
+            if not isinstance(cfs_df, pd.DataFrame):
+                print(f"    Warning: Expected pandas DataFrame for counterfactuals, got {type(cfs_df)}. Skipping CSV save for instance {i}.")
+                continue
 
-             # Add 'type' column to counterfactuals
-             cfs_df['type'] = 'counterfactual'
-             flat_feature_names = cfs_df.columns.values
+            # Add 'type' column to counterfactuals
+            cfs_df['type'] = 'counterfactual'
 
-             # --- Prepare Original Instance Row ---
-             try:
-                  original_instance_3d = instances_explained[i]
-                  # Flatten the original instance
-                  original_flat_np = original_instance_3d.flatten()
+            # --- Prepare Original Instance Row ---
+            try:
+                # Get necessary info from explainer object
+                expected_flat_feature_names = explainer_object.flat_feature_names
+                outcome_name = explainer_object.outcome_name
+                if expected_flat_feature_names is None or outcome_name is None:
+                    raise ValueError("Explainer object attributes 'flat_feature_names' or 'outcome_name' are None.")
 
-                  # Create a pandas Series for the original instance
-                  # Ensure index matches the flattened feature names from the explainer
-                  original_series = pd.Series(original_flat_np, index=flat_feature_names)
+                # Get and validate original instance data
+                original_instance_3d = instances_explained[i]
+                original_flat_np = original_instance_3d.flatten()
 
-                  # Add the type identifier
-                  original_series['type'] = 'original'
+                # Logging (keep for debugging if needed)
+                print(f"      Instance {i}: Original flat length (values): {len(original_flat_np)}")
+                print(f"      Instance {i}: Expected flat feature names length (index): {len(expected_flat_feature_names)}")
+                # print(f"      Instance {i}: Counterfactual DF columns: {cfs_df.columns.tolist()}") # Reduced logging slightly
 
-                  # Convert Series to a DataFrame row, ensure columns match CFs
-                  original_df_row = original_series.to_frame().T
-                  # Reorder columns to match cfs_df potentially, ensure 'type' is present
-                  original_df_row = original_df_row.astype(cfs_df.dtypes) # Match types
+                # Check for length mismatch BEFORE creating Series
+                if len(original_flat_np) != len(expected_flat_feature_names):
+                    raise ValueError(f"Length mismatch: Flattened original data ({len(original_flat_np)}) vs "
+                                     f"expected flat feature names ({len(expected_flat_feature_names)}).")
+
+                # Create Series using the DEFINITIVE feature names list
+                original_series = pd.Series(original_flat_np, index=expected_flat_feature_names)
+
+                # Add 'type' and placeholder 'outcome' columns
+                original_series['type'] = 'original'
+                if outcome_name not in original_series.index:
+                    # Use pd.NA for missing integer/boolean if using nullable types
+                    original_series[outcome_name] = pd.NA
+                else:
+                     # If outcome column somehow existed from features, ensure it can hold NA
+                     if pd.api.types.is_integer_dtype(cfs_df[outcome_name].dtype):
+                          original_series[outcome_name] = pd.NA # Overwrite with NA
 
 
-             except IndexError:
-                  print(f"    Error: Cannot get original instance for index {i} from instances_explained (shape {instances_explained.shape}).")
-                  continue
-             except Exception as e_orig:
-                  print(f"    Error processing original instance {i}: {e_orig}")
-                  continue
+                # Convert to DataFrame row
+                original_df_row = original_series.to_frame().T
 
-             # --- Combine Original and Counterfactuals ---
-             # Make 'type' the first column for clarity
-             cols_cf = ['type'] + [col for col in cfs_df.columns if col != 'type']
-             cfs_df = cfs_df[cols_cf]
+                # --- Align columns and types with cfs_df using Nullable Dtypes ---
+                target_cols = cfs_df.columns.tolist()
+                target_dtypes_nullable = {}
 
-             # Ensure original row has same columns in same order before concatenating
-             original_df_row = original_df_row[cols_cf] # Match column order
+                for col in target_cols:
+                    if col not in original_df_row.columns:
+                        print(f"      Warning: Adding missing column '{col}' to original instance row (with NA/NaN).")
+                        original_df_row[col] = pd.NA # Use pd.NA for consistency
 
-             combined_df = pd.concat([original_df_row, cfs_df], ignore_index=True)
+                    # Determine the target dtype from cfs_df
+                    target_dtype = cfs_df[col].dtype
 
-             # --- Save Combined CSV ---
-             filename = f"{job_name}_instance_{i}_original_and_counterfactuals.csv"
-             filepath = os.path.join(output_dir, filename)
-             combined_df.to_csv(filepath, index=False)
-             print(f"    Saved original and counterfactuals for instance {i} to: {filepath}")
+                    # Use pandas nullable types if applicable
+                    if pd.api.types.is_integer_dtype(target_dtype) and not pd.api.types.is_extension_array_dtype(target_dtype):
+                        target_dtypes_nullable[col] = pd.Int64Dtype() # Use nullable Int64
+                    elif pd.api.types.is_bool_dtype(target_dtype) and not pd.api.types.is_extension_array_dtype(target_dtype):
+                         target_dtypes_nullable[col] = pd.BooleanDtype() # Use nullable Boolean
+                    else:
+                        target_dtypes_nullable[col] = target_dtype # Keep original dtype (float, object, etc.)
+
+                # Apply the potentially modified dtypes using the prepared dictionary
+                # Ensure columns are present before applying astype
+                original_df_row = original_df_row[target_cols].astype(target_dtypes_nullable)
+                # Also ensure cfs_df uses nullable types for consistency if needed (optional)
+                # cfs_df = cfs_df.astype(target_dtypes_nullable)
+
+
+            except IndexError:
+                print(f"      Error: Cannot get original instance for index {i} from instances_explained (shape {instances_explained.shape}).")
+                continue
+            except Exception as e_orig:
+                print(f"      Error processing original instance {i}: {e_orig}")
+                traceback.print_exc()
+                continue
+
+            # --- Combine Original and Counterfactuals ---
+            # Make 'type' the first column for clarity in BOTH dataframes before concat
+            cols_cf = ['type'] + [col for col in cfs_df.columns if col != 'type']
+            cfs_df = cfs_df[cols_cf]
+            # Reorder original_df_row again to ensure it matches the final cfs_df order
+            original_df_row = original_df_row[cols_cf]
+
+            combined_df = pd.concat([original_df_row, cfs_df], ignore_index=True)
+
+            # --- Combine Original and Counterfactuals ---
+            # Make 'type' the first column for clarity
+            cols_cf = ['type'] + [col for col in cfs_df.columns if col != 'type']
+            cfs_df = cfs_df[cols_cf]
+
+            # Ensure original row has same columns in same order before concatenating
+            original_df_row = original_df_row[cols_cf] # Match column order
+
+            combined_df = pd.concat([original_df_row, cfs_df], ignore_index=True)
+
+            # --- Save Combined CSV ---
+            filename = f"{job_name}_instance_{i}_original_and_counterfactuals.csv"
+            filepath = os.path.join(output_dir, filename)
+            combined_df.to_csv(filepath, index=False)
+            print(f"    Saved original and counterfactuals for instance {i} to: {filepath}")
 
     except AttributeError as e:
          print(f"Failed accessing attributes: {e}")
