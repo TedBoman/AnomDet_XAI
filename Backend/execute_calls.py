@@ -108,7 +108,7 @@ def split_data(data):
     total_rows = len(data)
 
     # Calculate split indices
-    train_end = int(total_rows * 0.99) # 99% for training
+    train_end = int(total_rows * 0.70) # 99% for training
 
     # Split the data
     training_data = data.iloc[:train_end]
@@ -238,8 +238,13 @@ def run_batch(
 
         # Select features (handle potential missing columns defensively)
         training_features_df = training_data[[col for col in training_columns if col in training_data.columns]]
+        training_df_with_labels = training_data
         testing_features_df = testing_data[[col for col in feature_columns if col in testing_data.columns]]
+        testing_df_with_labels = testing_data
         all_features_df = df[[col for col in feature_columns if col in df.columns]]
+
+        # Define which base features are continuous (example: assume all for now)
+        continuous_features_list = feature_columns # Adjust if you have categorical base features
 
         print("Training features shape:", training_features_df.shape)
         print("Testing features shape:", testing_features_df.shape)
@@ -298,7 +303,7 @@ def run_batch(
 
         # --- Create Wrapper (Conditional - only if XAI is running) ---
         model_wrapper = None
-        if xai_params and isinstance(xai_params, dict): # Check if XAI is requested
+        if xai_params and isinstance(xai_params, list): # Check if XAI is requested
             interpretation = 'higher_is_anomaly' # Default
             model_type_str = model.lower() # Use the input string for type check
             if 'svm' in model_type_str: interpretation = 'lower_is_anomaly'
@@ -401,198 +406,246 @@ def run_batch(
         print(evaluation_results)
         # --- End Anomaly Update ---
             
-            
         # ============================================
         # --- MODULAR XAI INTEGRATION ---
         # ============================================
-        if xai_params and isinstance(xai_params, dict) and model_wrapper is not None:
-            method_name = xai_params.get("method")
-            settings = xai_params.get("settings", {})
+        if xai_params and isinstance(xai_params, list) and model_wrapper is not None:
+            print(f"Processing {len(xai_params)} XAI method(s)...") # Log how many methods
             max_bg_samples = 500
+            
+            # Loop through each configuration dictionary in the list
+            for xai_config in xai_params:
+                method_name = xai_config.get("method")
+                settings = xai_config.get("settings", {})
+                
+                output_dir = "/output" # Ensure this path is accessible/writable in Docker
 
-            output_dir = "/output" # Ensure this path is accessible/writable in Docker
-
-            if not method_name or method_name == "none":
-                print("XAI method not specified in parameters. Skipping XAI.")
-            elif TimeSeriesExplainer is None or ut.dataframe_to_sequences is None:
-                 print("XAI components not available (import failed). Skipping XAI.")
-            else:
-                xai_methods_to_run = [method_name] # Explain only the selected method
-                output_dir = "/output"
-                os.makedirs(output_dir, exist_ok=True)
-
-                # Check prerequisites
-                if (TimeSeriesExplainer is not None and
-                        ut.dataframe_to_sequences is not None and
-                        sequence_length is not None and
-                        model_wrapper is not None and
-                        # Make sure plot handlers are imported
-                        x.process_and_plot_shap is not None):
-
-                    print("\n--- Starting XAI Initialization & Execution ---")
-                    try:
-                        # 1. Prepare Common Background Data
-                        print(f"Preparing background data...")
-                        background_data_np = ut.dataframe_to_sequences(
-                            df=training_features_df, sequence_length=sequence_length,
-                            feature_cols=feature_columns
-                        )
-                        if len(background_data_np) > max_bg_samples:
-                            print(f"Sampling background data down to {max_bg_samples} instances.")
-                            indices = np.random.choice(len(background_data_np), max_bg_samples, replace=False)
-                            background_data_np = background_data_np[indices]
-
-                        if background_data_np.size == 0:
-                            print("Warning: Background data generation resulted in empty array. Skipping XAI.")
-                            raise ValueError("Empty background data") # Stop XAI if background fails
-
-                        # 2. Initialize TimeSeriesExplainer
-                        ts_explainer = TimeSeriesExplainer(
-                            model=model_wrapper, background_data=background_data_np,
-                            feature_names=feature_columns, mode='classification'
-                        )
-
-                        # 3. Prepare Instances for Explanation
-                        # Choose data: anomalies if available, otherwise fallback to test sample
-                        data_source_for_explanation = testing_features_df if not testing_features_df.empty else anomaly_feature_df
-                        source_name = "anomalies" if not anomaly_feature_df.empty else "test_data_sample"
-                        print(f"Preparing instances to explain from: {source_name}")
-
-                        instances_to_explain_np = ut.dataframe_to_sequences(
-                            df=data_source_for_explanation, sequence_length=sequence_length,
-                            feature_cols=feature_columns
-                        )
-
-                        # Limit number of explanations for performance
-                        n_explain_max = settings.get("n_explain_max", 10) # Example: get max explain from settings
-                        if len(instances_to_explain_np) > n_explain_max:
-                            instances_to_explain_np = instances_to_explain_np[:n_explain_max]
-                        if instances_to_explain_np.size == 0: raise ValueError("No instances to explain")
-
-                        if instances_to_explain_np.size == 0:
-                            print(f"Warning: Could not generate sequences from {source_name} data. Skipping XAI explanations.")
-                            raise ValueError(f"No sequences generated from {source_name}") # Stop XAI if no instances
-
-                        print(f"Prepared {instances_to_explain_np.shape[0]} instances for explanation.")
-
-
-                        # 4. Define Plot Handlers Dictionary (mapping names to functions)
-                        plot_handlers = { "ShapExplainer": x.process_and_plot_shap, "LimeExplainer": x.process_and_plot_lime }
-
-                        # 5. Loop Through XAI Methods defined in xai_methods_to_run list
-                        for method_name in xai_methods_to_run: # Iterate over the LIST of method names
-                            print(f"\n===== Running Method: {method_name.upper()} =====")
-                            try:
-                                explainer_object = ts_explainer._get_or_initialize_explainer(method_name)
-
-                                # Get base config for this method, provide empty dict if not found
-                                method_config = settings
-                                print(f"Using configuration for {method_name}: {method_config}")
-
-                                # --- Method Specific Logic ---
-                                if method_name == "ShapExplainer":
-                                    # Prepare SHAP runtime kwargs
-                                    n_flat_features = sequence_length * len(feature_columns)
-                                    n_samples_shap = method_config.get('nsamples', 50) # Use config or default
-                                    k_features = method_config.get('l1_reg_k_features', 20)
-                                    l1_reg_shap = f'num_features({k_features})' if n_samples_shap < n_flat_features else 'auto'
-                                    shap_runtime_kwargs = {
-                                        'nsamples': n_samples_shap,
-                                        'l1_reg': l1_reg_shap
-                                        # Add other SHAP explain kwargs if needed from method_config
-                                    }
-                                    print(f"SHAP Runtime Params: {shap_runtime_kwargs}")
-
-                                    # Explain ALL selected instances in one batch for SHAP
-                                    start_explain_time = time.perf_counter()
-                                    xai_results = ts_explainer.explain(
-                                        instances_to_explain=instances_to_explain_np,
-                                        method_name=method_name, # Should be "shap"
-                                        **shap_runtime_kwargs # Pass SHAP specific args
-                                    )
-                                    end_explain_time = time.perf_counter()
-                                    print(f"SHAP explanation took {end_explain_time - start_explain_time:.2f}s")
-
-                                    handler_func = plot_handlers.get(method_name)
-                                    if handler_func:
-                                        print(f"Calling plot handler for SHAP...")
-                                        handler_args = { # Prepare args dict
-                                            "results": xai_results, "explainer_object": explainer_object,
-                                            "instances_explained": instances_to_explain_np,
-                                            "feature_names": feature_columns, "sequence_length": sequence_length,
-                                            "output_dir": output_dir, "mode": ts_explainer.mode, "job_name": name
-                                        }
-                                        handler_func(**handler_args) # Unpack dict
-                                    else: print(f"No plot handler defined for SHAP.")
-
-                                elif method_name == "LimeExplainer":
-                                    print(f"Configuring LIME for {len(instances_to_explain_np)} instance(s)...")
-                                    # Prepare LIME runtime kwargs from config
-                                    num_features = method_config.get('num_features', 15)
-                                    num_samples = method_config.get('num_samples', 1000)
-                                    lime_runtime_kwargs = {
-                                        'num_features': num_features,
-                                        'num_samples': num_samples
-                                        # Add other LIME explain_instance kwargs (like top_labels) if configured
-                                    }
-                                    print(f"LIME Runtime Params: {lime_runtime_kwargs}")
-
-                                    # INNER LOOP FOR LIME INSTANCES
-                                    for instance_idx in range(len(instances_to_explain_np)):
-                                        print(f"--- Explaining Instance {instance_idx} with LIME ---")
-                                        current_instance_np = instances_to_explain_np[instance_idx : instance_idx + 1]
-                                        if current_instance_np.size == 0: continue
-
-                                        try:
-                                            start_lime_time = time.perf_counter()
-                                            # Explain this single instance slice
-                                            lime_explanation_object = ts_explainer.explain(
-                                                instances_to_explain=current_instance_np,
-                                                method_name='LimeExplainer', # Method name is "lime"
-                                                **lime_runtime_kwargs # Pass LIME specific args
-                                            )
-                                            end_lime_time = time.perf_counter()
-                                            print(f"LIME explanation for instance {instance_idx} took {end_lime_time - start_lime_time:.2f}s")
-
-                                            # Call the LIME handler
-                                            handler_func = plot_handlers.get(method_name)
-                                            if handler_func:
-                                                print(f"Calling plot handler for LIME instance {instance_idx}...")
-                                                handler_args = { # Prepare args dict
-                                                    "results": lime_explanation_object, "explainer_object": explainer_object,
-                                                    "instances_explained": current_instance_np,
-                                                    "feature_names": feature_columns, "sequence_length": sequence_length,
-                                                    "output_dir": output_dir, "mode": ts_explainer.mode,
-                                                    "instance_index": instance_idx, "job_name": name
-                                                }
-                                                handler_func(**handler_args) # Unpack dict
-                                            else: print(f"No plot handler defined for LIME.")
-
-                                        except Exception as lime_instance_err:
-                                            print(f"ERROR during LIME explanation/plotting for instance {instance_idx}: {lime_instance_err}")
-
-                                    print(f"--- Finished LIME Explanations ---")
-                                    # END INNER LOOP FOR LIME
-
-                                else:
-                                    print(f"Skipping unknown or unhandled XAI method: {method_name}")
-
-                            except Exception as explain_err:
-                                print(f"ERROR during explanation/plotting setup for method '{method_name}': {explain_err}")
-
-                        # End main XAI method loop
-
-                    except Exception as xai_init_err:
-                        print(f"ERROR during XAI initialization or data preparation: {xai_init_err}")
-                        import traceback
-                        traceback.print_exc()
+                if not method_name or method_name == "none":
+                    print("XAI method not specified in parameters. Skipping XAI.")
+                elif TimeSeriesExplainer is None or ut.dataframe_to_sequences is None:
+                    print("XAI components not available (import failed). Skipping XAI.")
                 else:
-                    skip_reasons = []
-                    # ... (collect skip reasons) ...
-                    print(f"Skipping XAI step. Prerequisites not met. Reasons: {', '.join(skip_reasons)}")
-                # ============================================
-                # --- END MODULAR XAI INTEGRATION ---
-                # ============================================
+                    xai_methods_to_run = [method_name] # Explain only the selected method
+                    output_dir = "/output"
+                    os.makedirs(output_dir, exist_ok=True)
+
+                    # Check prerequisites
+                    if (TimeSeriesExplainer is not None and
+                            ut.dataframe_to_sequences is not None and
+                            sequence_length is not None and
+                            model_wrapper is not None and
+                            # Make sure plot handlers are imported
+                            x.process_and_plot_shap is not None):
+
+                        print("\n--- Starting XAI Initialization & Execution ---")
+                        try:
+                            # 1. Prepare Common Background Data
+                            print(f"Preparing background data...")
+                            background_data_np = ut.dataframe_to_sequences(
+                                df=training_features_df, sequence_length=sequence_length,
+                                feature_cols=feature_columns
+                            )
+                            if len(background_data_np) > max_bg_samples:
+                                print(f"Sampling background data down to {max_bg_samples} instances.")
+                                indices = np.random.choice(len(background_data_np), max_bg_samples, replace=False)
+                                background_data_np = background_data_np[indices]
+
+                            if background_data_np.size == 0:
+                                print("Warning: Background data generation resulted in empty array. Skipping XAI.")
+                                raise ValueError("Empty background data") # Stop XAI if background fails
+
+                            # 2. Initialize TimeSeriesExplainer
+                            try:
+                                ts_explainer = TimeSeriesExplainer(
+                                    model=model_wrapper, # The wrapper (e.g., ModelWrapperForXAI)
+                                    background_data=background_data_np, # 3D Features for background
+                                    feature_names=feature_columns,      # Base feature names
+                                    mode='classification',
+                                    # --- Pass DiCE specific context as kwargs ---
+                                    training_df_for_dice=training_df_with_labels,
+                                    outcome_name_for_dice=actual_label_col,
+                                    continuous_features_for_dice=continuous_features_list
+                                )
+                            except Exception as e:
+                                print(f"Failed to initialize TimeSeriesExplainer: {e}")
+                                # Handle error appropriately, maybe skip XAI
+                                ts_explainer = None
+
+                            # 3. Prepare Instances for Explanation
+                            # Choose data: anomalies if available, otherwise fallback to test sample
+                            data_source_for_explanation = testing_features_df if not testing_features_df.empty else anomaly_feature_df
+                            source_name = "anomalies" if not anomaly_feature_df.empty else "test_data_sample"
+                            print(f"Preparing instances to explain from: {source_name}")
+
+                            instances_to_explain_np = ut.dataframe_to_sequences(
+                                df=data_source_for_explanation, sequence_length=sequence_length,
+                                feature_cols=feature_columns
+                            )
+
+                            instances_explained_np_lables = ut.dataframe_to_sequences(
+                                df=testing_df_with_labels, sequence_length=sequence_length,
+                                feature_cols=feature_columns
+                            )
+
+                            # Limit number of explanations for performance
+                            n_explain_max = settings.get("n_explain_max", 10) # Example: get max explain from settings
+                            if len(instances_to_explain_np) > n_explain_max:
+                                instances_to_explain_np = instances_to_explain_np[:n_explain_max]
+                                instances_explained_np_lables = instances_explained_np_lables[:n_explain_max]
+                            if instances_to_explain_np.size == 0: raise ValueError("No instances to explain")
+
+                            if instances_to_explain_np.size == 0:
+                                print(f"Warning: Could not generate sequences from {source_name} data. Skipping XAI explanations.")
+                                raise ValueError(f"No sequences generated from {source_name}") # Stop XAI if no instances
+
+                            print(f"Prepared {instances_to_explain_np.shape[0]} instances for explanation.")
+
+
+                            # 4. Define Plot Handlers Dictionary (mapping names to functions)
+                            plot_handlers = { "ShapExplainer": x.process_and_plot_shap, 
+                                            "LimeExplainer": x.process_and_plot_lime,
+                                            "DiceExplainer": x.process_and_plot_dice }
+
+                            # 5. Loop Through XAI Methods defined in xai_methods_to_run list
+                            for method_name in xai_methods_to_run: # Iterate over the LIST of method names
+                                print(f"\n===== Running Method: {method_name.upper()} =====")
+                                try:
+                                    explainer_object = ts_explainer._get_or_initialize_explainer(method_name)
+
+                                    # Get base config for this method, provide empty dict if not found
+                                    method_config = settings
+                                    print(f"Using configuration for {method_name}: {method_config}")
+
+                                    # --- Method Specific Logic ---
+                                    if method_name == "DiceExplainer":
+                                        # Prepare DiCE runtime args
+                                        dice_runtime_kwargs = {
+                                            'total_CFs': method_config.get('total_CFs', 4),
+                                            'desired_class': method_config.get('desired_class', 'opposite'),
+                                            'features_to_vary': method_config.get('features_to_vary', []),
+                                            # Add other things if specified in frontend
+                                        }
+                                        print(f"DiCE Runtime Params: {dice_runtime_kwargs}")
+                                        current_instances_np = instances_to_explain_np # DiCE explain handles batch
+
+                                        start_explain_time = time.perf_counter()
+                                        xai_results = ts_explainer.explain(
+                                            instances_to_explain=current_instances_np,
+                                            method_name=method_name, # "DiceExplainer"
+                                            **dice_runtime_kwargs
+                                        )
+                                        end_explain_time = time.perf_counter()
+                                        print(f"DICE explanation took {end_explain_time - start_explain_time:.2f}s")
+
+                                        # Call DiCE Handler
+                                        handler_func = plot_handlers.get(method_name)
+                                        if handler_func:
+                                            handler_func(results=xai_results, explainer_object=ts_explainer, instances_explained=instances_explained_np_lables, feature_names=feature_columns, sequence_length=sequence_length, output_dir=output_dir, mode='classification', job_name=name, original_df=instances_explained_np_lables)
+                                        else: print("No plot handler for DiCE")
+
+                                    elif method_name == "ShapExplainer":
+                                        # Prepare SHAP runtime kwargs
+                                        n_flat_features = sequence_length * len(feature_columns)
+                                        n_samples_shap = method_config.get('nsamples', 50) # Use config or default
+                                        k_features = method_config.get('l1_reg_k_features', 20)
+                                        l1_reg_shap = f'num_features({k_features})' if n_samples_shap < n_flat_features else 'auto'
+                                        shap_runtime_kwargs = {
+                                            'nsamples': n_samples_shap,
+                                            'l1_reg': l1_reg_shap
+                                            # Add other SHAP explain kwargs if needed from method_config
+                                        }
+                                        print(f"SHAP Runtime Params: {shap_runtime_kwargs}")
+
+                                        # Explain ALL selected instances in one batch for SHAP
+                                        start_explain_time = time.perf_counter()
+                                        xai_results = ts_explainer.explain(
+                                            instances_to_explain=instances_to_explain_np,
+                                            method_name=method_name, # Should be "shap"
+                                            **shap_runtime_kwargs # Pass SHAP specific args
+                                        )
+                                        end_explain_time = time.perf_counter()
+                                        print(f"SHAP explanation took {end_explain_time - start_explain_time:.2f}s")
+
+                                        handler_func = plot_handlers.get(method_name)
+                                        if handler_func:
+                                            print(f"Calling plot handler for SHAP...")
+                                            handler_args = { # Prepare args dict
+                                                "results": xai_results, "explainer_object": explainer_object,
+                                                "instances_explained": instances_to_explain_np,
+                                                "feature_names": feature_columns, "sequence_length": sequence_length,
+                                                "output_dir": output_dir, "mode": ts_explainer.mode, "job_name": name
+                                            }
+                                            handler_func(**handler_args) # Unpack dict
+                                        else: print(f"No plot handler defined for SHAP.")
+
+                                    elif method_name == "LimeExplainer":
+                                        print(f"Configuring LIME for {len(instances_to_explain_np)} instance(s)...")
+                                        # Prepare LIME runtime kwargs from config
+                                        num_features = method_config.get('num_features', 15)
+                                        num_samples = method_config.get('num_samples', 1000)
+                                        lime_runtime_kwargs = {
+                                            'num_features': num_features,
+                                            'num_samples': num_samples
+                                            # Add other LIME explain_instance kwargs (like top_labels) if configured
+                                        }
+                                        print(f"LIME Runtime Params: {lime_runtime_kwargs}")
+
+                                        # INNER LOOP FOR LIME INSTANCES
+                                        for instance_idx in range(len(instances_to_explain_np)):
+                                            print(f"--- Explaining Instance {instance_idx} with LIME ---")
+                                            current_instance_np = instances_to_explain_np[instance_idx : instance_idx + 1]
+                                            if current_instance_np.size == 0: continue
+
+                                            try:
+                                                start_lime_time = time.perf_counter()
+                                                # Explain this single instance slice
+                                                lime_explanation_object = ts_explainer.explain(
+                                                    instances_to_explain=current_instance_np,
+                                                    method_name='LimeExplainer', # Method name is "lime"
+                                                    **lime_runtime_kwargs # Pass LIME specific args
+                                                )
+                                                end_lime_time = time.perf_counter()
+                                                print(f"LIME explanation for instance {instance_idx} took {end_lime_time - start_lime_time:.2f}s")
+
+                                                # Call the LIME handler
+                                                handler_func = plot_handlers.get(method_name)
+                                                if handler_func:
+                                                    print(f"Calling plot handler for LIME instance {instance_idx}...")
+                                                    handler_args = { # Prepare args dict
+                                                        "results": lime_explanation_object, "explainer_object": explainer_object,
+                                                        "instances_explained": current_instance_np,
+                                                        "feature_names": feature_columns, "sequence_length": sequence_length,
+                                                        "output_dir": output_dir, "mode": ts_explainer.mode,
+                                                        "instance_index": instance_idx, "job_name": name
+                                                    }
+                                                    handler_func(**handler_args) # Unpack dict
+                                                else: print(f"No plot handler defined for LIME.")
+
+                                            except Exception as lime_instance_err:
+                                                print(f"ERROR during LIME explanation/plotting for instance {instance_idx}: {lime_instance_err}")
+
+                                        print(f"--- Finished LIME Explanations ---")
+                                        # END INNER LOOP FOR LIME
+
+                                    else:
+                                        print(f"Skipping unknown or unhandled XAI method: {method_name}")
+
+                                except Exception as explain_err:
+                                    print(f"ERROR during explanation/plotting setup for method '{method_name}': {explain_err}")
+
+                            # End main XAI method loop
+
+                        except Exception as xai_init_err:
+                            print(f"ERROR during XAI initialization or data preparation: {xai_init_err}")
+                            import traceback
+                            traceback.print_exc()
+                    else:
+                        skip_reasons = []
+                        # ... (collect skip reasons) ...
+                        print(f"Skipping XAI step. Prerequisites not met. Reasons: {', '.join(skip_reasons)}")
+                    # ============================================
+                    # --- END MODULAR XAI INTEGRATION ---
+                    # ============================================
         else:
             print("No xai method is chosen. Skipping explanations")
 
@@ -686,6 +739,7 @@ def get_xai_methods() -> list:
 
     # Removing the __init__, setup files and the .env file
     methods.remove("__init__")
+    methods.remove("dice_builder")
 
     return methods
 

@@ -1,3 +1,4 @@
+import traceback
 from dash import Dash, dcc, html, Input, Output, State, ALL, MATCH, callback, callback_context, no_update
 import json
 from get_handler import get_handler
@@ -88,75 +89,148 @@ def get_index_callbacks(app):
     @app.callback(
         Output("xai-settings-panel", "children"),
         Input("xai-method-dropdown", "value"),
+        State("dataset-dropdown", "value"),
     )
-    def update_xai_settings_panel(selected_xai_method):
-        if not selected_xai_method or selected_xai_method == "none":
+    def update_xai_settings_panel(selected_xai_methods, selected_dataset):
+        if not selected_xai_methods:
             return [] # Return empty if no method selected
+        
+        active_methods = [m for m in selected_xai_methods if m != 'none']
+        if not active_methods:
+             return []
 
-        settings_children = [html.H5(f"Settings for {selected_xai_method.upper()}:", style={'color':'#ffffff', 'marginTop':'15px'})]
+        all_settings_children = [] # Initialize list to hold all settings components
+        
+        # --- Loop through each selected method ---
+        for i, selected_xai_method in enumerate(active_methods):
+            # Add a separator between methods if more than one is selected
+            if i > 0:
+                all_settings_children.append(html.Hr(style={'borderColor': '#555', 'margin': '20px 0'}))
 
-        # --- Use Pattern-Matching IDs ---
-        if selected_xai_method == "ShapExplainer":
-            settings_children.extend([
-                 html.Div([
-                    html.Label("Indicies to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                    dcc.Input(
-                        # PATTERN MATCHING ID: type, method, param
-                        id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'n_explain_max'},
-                        type="number", value=100, min=10, step=1, style={'width':'80px'}
-                    )
-                ], style={'marginBottom':'8px'}),
-                html.Div([
-                    html.Label("Num Samples (nsamples):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                    dcc.Input(
-                        # PATTERN MATCHING ID: type, method, param
-                        id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'nsamples'},
-                        type="number", value=100, min=10, step=1, style={'width':'80px'}
-                    )
-                ], style={'marginBottom':'8px'}),
-                html.Div([
-                    html.Label("K for Background Summary (k_summary):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                    dcc.Input(
-                        id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'k_summary'}, # Pattern ID
-                        type="number", value=50, min=1, step=1, style={'width':'80px'}
-                    )
-                ], style={'marginBottom':'8px'}),
-                html.Div([
-                    html.Label("K for L1 Reg Features (l1_reg_k):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                    dcc.Input(
-                        id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'l1_reg_k'}, # Pattern ID
-                        type="number", value=20, min=1, step=1, style={'width':'80px'}
-                    )
-                ], style={'marginBottom':'8px'})
-            ])
-        elif selected_xai_method == "LimeExplainer":
-            settings_children.extend([
-                html.Div([
-                    html.Label("Indicies to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                    dcc.Input(
-                        # PATTERN MATCHING ID: type, method, param
-                        id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'n_explain_max'},
-                        type="number", value=10, min=1, step=1, style={'width':'80px'}
-                    )
-                ], style={'marginBottom':'8px'}),
-                html.Div([
-                    html.Label("Num Features to Explain:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                    dcc.Input(
-                        id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'num_features'}, # Pattern ID
-                        type="number", value=15, min=1, step=1, style={'width':'80px'}
-                    )
-                ], style={'marginBottom':'8px'}),
-                html.Div([
-                    html.Label("Num Samples (Perturbations):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                    dcc.Input(
-                        id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'num_samples'}, # Pattern ID
-                        type="number", value=1000, min=100, step=1, style={'width':'80px'}
-                    )
-                ], style={'marginBottom':'8px'})
-            ])
-        # Add elif for other methods
+            # Add heading for the current method
+            method_settings = [html.H5(f"Settings for {selected_xai_method.upper()}:", style={'color':'#ffffff', 'marginTop':'15px', 'marginBottom': '10px'})]
 
-        return settings_children
+            # --- Use Pattern-Matching IDs ---
+            if selected_xai_method == "ShapExplainer":
+                method_settings.extend([
+                    html.Div([
+                        html.Label("Indices to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'n_explain_max'}, type="number", value=100, min=10, step=1, style={'width':'80px'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("Num Samples (nsamples):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'nsamples'}, type="number", value=100, min=10, step=1, style={'width':'80px'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("K for Background Summary (k_summary):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'k_summary'}, type="number", value=50, min=1, step=1, style={'width':'80px'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("K for L1 Reg Features (l1_reg_k):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'l1_reg_k'}, type="number", value=20, min=1, step=1, style={'width':'80px'})
+                    ], style={'marginBottom':'8px'})
+                ])
+            elif selected_xai_method == "LimeExplainer":
+                method_settings.extend([
+                    html.Div([
+                        html.Label("Indices to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'n_explain_max'}, type="number", value=10, min=1, step=1, style={'width':'80px'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("Num Features to Explain:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'num_features'}, type="number", value=15, min=1, step=1, style={'width':'80px'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("Num Samples (Perturbations):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'num_samples'}, type="number", value=1000, min=100, step=100, style={'width':'80px'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("Kernel Width (kernel_width):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'kernel_width'}, type="number", placeholder="LIME default", min=0.01, step=0.1, style={'width':'110px'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("Feature Selection:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Dropdown(id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'feature_selection'}, options=[{'label': 'Auto', 'value': 'auto'},{'label': 'Highest Weights', 'value': 'highest_weights'},{'label': 'Forward Selection', 'value': 'forward_selection'},{'label': 'Lasso Path', 'value': 'lasso_path'},{'label': 'None', 'value': 'none'}], value='auto', clearable=False, style={'width': '180px', 'display': 'inline-block', 'color': '#333'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("Discretize Continuous:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Dropdown(id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'discretize_continuous'}, options=[{'label': 'True', 'value': True}, {'label': 'False', 'value': False}], value=True, clearable=False, style={'width': '100px', 'display': 'inline-block', 'color': '#333'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("Sample Around Instance:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Dropdown(id={'type': 'xai-setting', 'method': 'LimeExplainer', 'param': 'sample_around_instance'}, options=[{'label': 'True', 'value': True}, {'label': 'False', 'value': False}], value=True, clearable=False, style={'width': '100px', 'display': 'inline-block', 'color': '#333'})
+                    ], style={'marginBottom':'8px'})
+                ])
+            elif selected_xai_method == "DiceExplainer":
+                dice_specific_settings = [
+                    html.Div([
+                         html.Label("Indices to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                         dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'n_explain_max'}, type="number", value=10, min=1, step=1, style={'width':'80px'})
+                     ], style={'marginBottom':'8px'}),
+                     html.Div([
+                         html.Label("Num Counterfactuals (total_CFs):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                         dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'total_CFs'}, type="number", value=5, min=1, step=1, style={'width':'80px'})
+                     ], style={'marginBottom':'8px'}),
+                     html.Div([
+                         html.Label("Desired Class (desired_class):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                         dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'desired_class'}, type="text", value="opposite", style={'width':'80px'})
+                     ], style={'marginBottom':'8px'}),
+
+                    # --- Dynamic Features to Vary Dropdown ---
+                    html.Div([
+                        html.Label("Features to vary (features_to_vary):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Dropdown(
+                            # Use a specific index in MATCH perhaps? Or just ensure unique IDs if needed elsewhere
+                            # For pattern matching state collection, the dict id is sufficient
+                            id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'features_to_vary'},
+                            options=[], # To be populated below
+                            value=[],
+                            multi=True,
+                            placeholder="Select features (leave empty to vary all)",
+                            style={'width': '90%', 'maxWidth':'500px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'}
+                        )
+                    ], id=f'dice-features-vary-div-{selected_xai_method}', # Make ID unique if needed elsewhere
+                       style={'marginBottom':'8px'}), # Unique ID might not be needed if only accessed via pattern matching
+
+                    html.Div([
+                          html.Label("Backend (ML model framework):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                          dcc.Dropdown(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'backend'}, options=[{'label': 'SciKit-Learn', 'value': 'sklearn'},{'label': 'Tensorflow 1', 'value': 'TF1'},{'label': 'Tensorflow 2', 'value': 'TF2'},{'label': 'PyTorch', 'value': 'pytorch'}], value='sklearn', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
+                     ], style={'marginBottom':'8px'}),
+                     html.Div([
+                          html.Label("DiCE Method (dice_method):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                          dcc.Dropdown(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'dice_method'}, options=[{'label': 'Random', 'value': 'random'},{'label': 'Genetic', 'value': 'genetic'},{'label': 'KD-Tree', 'value': 'kdtree'}], value='genetic', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
+                     ], style={'marginBottom':'8px'})
+                ]
+
+                # --- Populate the features_to_vary dropdown options ---
+                column_options = []
+                if selected_dataset:
+                    handler = get_handler()
+                    try:
+                        columns = handler.handle_get_dataset_columns(selected_dataset)
+                        if isinstance(columns, list):
+                            column_options = [{"label": col, "value": col} for col in columns]
+                        else:
+                            print(f"Warning: Handler did not return list for columns: {columns}")
+                    except Exception as e:
+                        print(f"!!! ERROR fetching columns for DiceExplainer: {e}")
+                        traceback.print_exc()
+
+                # Find the dropdown within dice_specific_settings and assign options
+                # This assumes the dropdown is the second child of the Div with label "Features to vary..."
+                for component in dice_specific_settings:
+                     if isinstance(component, html.Div) and component.children and isinstance(component.children[0], html.Label):
+                          if component.children[0].children == "Features to vary (features_to_vary):":
+                               if len(component.children) > 1 and isinstance(component.children[1], dcc.Dropdown):
+                                    component.children[1].options = column_options
+                                    break
+
+                method_settings.extend(dice_specific_settings)
+            # Add elif for other methods
+            # Append the generated settings for this method to the main list
+            all_settings_children.extend(method_settings)
+
+        return all_settings_children
 
     # --- Callback to toggle Speedup input based on mode ---
     @app.callback(
@@ -169,12 +243,6 @@ def get_index_callbacks(app):
         return {"display": "none"}
 
     # --- Existing Callbacks for Active Jobs and Confirmation ---
-    # Keep create_active_jobs function
-    # Keep display_confirm callback
-    # Keep manage_and_remove_active_jobs callback
-    # Keep toggle_active_jobs_section callback
-    # (Make sure their IDs still match the layout if anything changed)
-
     @app.callback(
         Output("active-jobs-section", "style"),
         Input("active-jobs-list", "children")
@@ -228,7 +296,6 @@ def get_index_callbacks(app):
         [Output("popup", "style"), Output("popup-interval", "disabled"), Output("popup", "children")],
         [Input("start-job-btn", "n_clicks"), Input("popup-interval", "n_intervals")],
         [
-            # Keep Existing States
             State("dataset-dropdown", "value"), State("detection-model-dropdown", "value"),
             State("mode-selection", "value"), State("name-input", "value"),
             State("injection-method-dropdown", "value"), State("timestamp-input", "value"),
@@ -238,13 +305,11 @@ def get_index_callbacks(app):
             State("popup", "style"),
             # Labeled States
             State("labeled-check", "value"), State("label-column-dropdown", "value"),
-            # XAI Checkbox/Dropdown States
-            State("xai-check", "value"), State("xai-method-dropdown", "value"),
-
-            # --- NEW: Pattern-Matching State for ALL XAI settings ---
-            # Get the 'value' property of all components matching the pattern
+            # --- XAI States (MODIFIED) ---
+            State("xai-check", "value"),
+            State("xai-method-dropdown", "value"), # Receives a LIST now
+            # --- Pattern-Matching State for ALL XAI settings ---
             State({'type': 'xai-setting', 'method': ALL, 'param': ALL}, 'value'),
-            # Get the corresponding 'id' dictionary for each value
             State({'type': 'xai-setting', 'method': ALL, 'param': ALL}, 'id'),
         ]
     )
@@ -254,10 +319,11 @@ def get_index_callbacks(app):
             selected_injection_method, timestamp, magnitude, percentage, duration,
             injection_columns, inj_check, speedup, style,
             labeled_check_val, selected_label_col,
-            xai_check_val, selected_xai_method,
-            # --- NEW ARGS for pattern-matching states ---
-            xai_settings_values, # List of values from matching components
-            xai_settings_ids     # List of ID dictionaries from matching components
+            # --- ARGS for pattern-matching states ---
+            xai_check_val,
+            selected_xai_methods,
+            xai_settings_values,
+            xai_settings_ids
             ):
         handler = get_handler()
         children = "Job submission processed."
@@ -322,47 +388,75 @@ def get_index_callbacks(app):
 
             # --- Process XAI Info ---
             use_xai = "use_xai" in xai_check_val
-            xai_params = None
-            if use_xai:
-                if not selected_xai_method or selected_xai_method == "none":
-                    style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
-                    return style_copy, False, "Please select an XAI method if 'Use Explainability' is checked."
+        xai_params_list = None # Changed from xai_params to list
 
-            # --- Parse Pattern-Matching State results ---
-            # Only parse settings for the currently selected method that are rendered
-            xai_settings = {}
+        if use_xai:
+            active_methods = [m for m in selected_xai_methods if m != 'none'] if selected_xai_methods else []
+            if not active_methods:
+                style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
+                return style_copy, False, "Please select at least one XAI method if 'Use Explainability' is checked."
+
+            # --- Parse ALL Pattern-Matching State results into a structured dict ---
+            # all_parsed_settings = { 'ShapExplainer': {'param1': val1, ...}, 'DiceExplainer': {'paramA': valA,...} }
+            all_parsed_settings = {}
             print(f"DEBUG: Received XAI settings IDs: {xai_settings_ids}")
             print(f"DEBUG: Received XAI settings Values: {xai_settings_values}")
 
             for id_dict, value in zip(xai_settings_ids, xai_settings_values):
-                # Check if the setting belongs to the currently selected method
-                if id_dict['method'] == selected_xai_method:
-                    param_name = id_dict['param']
-                    # Provide defaults if input value is None (e.g., user cleared the input)
-                    if value is None:
-                        print(f"Warning: XAI setting '{param_name}' for method '{selected_xai_method}' has None value. Using default.")
-                        # Assign defaults based on param name - keep these consistent!
-                        if param_name == 'nsamples': value = 100
-                        elif param_name == 'k_summary': value = 50
-                        elif param_name == 'l1_reg_k': value = 20 # Match ID used
-                        elif param_name == 'num_features': value = 15
-                        elif param_name == 'num_samples': value = 1000
-                        else: value = None # Or raise error for unknown param without default
+                method_name = id_dict['method']
+                param_name = id_dict['param']
 
-                    xai_settings[param_name] = value
+                # Only process settings for methods that are actually selected
+                if method_name not in active_methods:
+                    continue # Skip settings for methods not currently selected
 
-            print(f"DEBUG: Parsed XAI settings for '{selected_xai_method}': {xai_settings}")
+                # Initialize dict for the method if it doesn't exist
+                if method_name not in all_parsed_settings:
+                    all_parsed_settings[method_name] = {}
 
-            # --- Construct final xai_params ---
-            # NOTE: Rename l1_reg_k to l1_reg_k_features if backend expects that specific name
-            if selected_xai_method == "ShapExplainer" and "l1_reg_k" in xai_settings:
-                xai_settings["l1_reg_k_features"] = xai_settings.pop("l1_reg_k") # Rename key for backend
+                # Handle None values if necessary (user cleared input)
+                # (Add specific default logic here if needed, similar to previous single-method version)
+                if value is None and param_name not in ['features_to_vary', 'kernel_width']: # Allow None/empty for these
+                     print(f"Warning: XAI setting '{param_name}' for method '{method_name}' has None value. Check defaults.")
+                     # Example default assignment:
+                     # if method_name == 'LimeExplainer' and param_name == 'num_samples': value = 1000
 
-            xai_params = {
-                "method": selected_xai_method,
-                "settings": xai_settings # Contains parsed settings for the selected method
-            }
-            print(f"DEBUG: Constructed xai_params: {xai_params}")
+                # Special handling / Type conversion if needed
+                if param_name == 'features_to_vary' and value == []:
+                    print(f"DEBUG: features_to_vary for {method_name} is empty list. Backend might default to 'all'.")
+
+                # Store the value
+                all_parsed_settings[method_name][param_name] = value
+
+            print(f"DEBUG: Parsed all XAI settings: {all_parsed_settings}")
+
+            # --- Construct the final list of XAI params for the backend ---
+            xai_params_list = []
+            for method_name in active_methods:
+                if method_name in all_parsed_settings:
+                    current_settings = all_parsed_settings[method_name]
+
+                    # Perform any key renaming needed for the backend *for this specific method*
+                    if method_name == "ShapExplainer" and "l1_reg_k" in current_settings:
+                        current_settings["l1_reg_k_features"] = current_settings.pop("l1_reg_k")
+
+                    xai_params_list.append({
+                        "method": method_name,
+                        "settings": current_settings
+                    })
+                else:
+                    # This case might happen if a method was selected but somehow its settings weren't rendered/parsed
+                    print(f"Warning: No settings found/parsed for selected method: {method_name}")
+                    # Decide how to handle: skip, add with empty settings, or error out?
+                    # Example: Add with empty settings
+                    # xai_params_list.append({"method": method_name, "settings": {}})
+
+
+            if not xai_params_list: # If loop finished but list is empty (e.g., due to warnings/skips)
+                 print("Error: Could not construct XAI parameters for selected methods.")
+                 # Handle error appropriately
+
+            print(f"DEBUG: Constructed xai_params_list for backend: {xai_params_list}")
         # --- End XAI Info ---
 
         # --- Call Backend Handler ---
@@ -371,11 +465,11 @@ def get_index_callbacks(app):
             if selected_mode == "batch":
                 response = handler.handle_run_batch(
                     selected_dataset, selected_detection_model, job_name,
-                    label_column=label_col_to_pass, xai_params=xai_params, inj_params=inj_params_list)
+                    label_column=label_col_to_pass, xai_params=xai_params_list, inj_params=inj_params_list)
             else: # stream
                 response = handler.handle_run_stream(
                     selected_dataset, selected_detection_model, job_name, speedup,
-                    label_column=label_col_to_pass, xai_params=xai_params, inj_params=inj_params_list)
+                    label_column=label_col_to_pass, xai_params=xai_params_list, inj_params=inj_params_list)
 
             if response == "success":
                 style_copy.update({"backgroundColor": "#4CAF50", "display": "block"})

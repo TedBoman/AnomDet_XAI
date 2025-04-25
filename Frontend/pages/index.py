@@ -117,6 +117,7 @@ def layout(handler):
                                     options=[{"label": method, "value": method} for method in xai_methods],
                                     value="none", # Default to None
                                     placeholder="Select XAI method",
+                                    multi=True,
                                     clearable=False,
                                     style={"width": "300px", "margin": "5px auto"}
                                 ),

@@ -5,6 +5,7 @@ import numpy as np
 # Import the specific explainer CLASSES
 from XAI_methods.methods.ShapExplainer import ShapExplainer
 from XAI_methods.methods.LimeExplainer import LimeExplainer
+from XAI_methods.methods.dice_builder import build_dice_explainer
 
 # Import the base API if you use type hints or checks
 try:
@@ -65,7 +66,7 @@ def xai_factory(
                  raise RuntimeError(f"Failed to instantiate ShapExplainer for method '{method_key}'") from e
 
         case "limeexplainer":
-            print(f"Attempting to instantiate ShapExplainer...")
+            print(f"Attempting to instantiate LimeExplainer...")
             try:
                 # Pass the received arguments TO the LimeExplainer constructor
                 explainer_instance = LimeExplainer(
@@ -82,6 +83,25 @@ def xai_factory(
             except Exception as e:
                 print(f"Error instantiating LimeExplainer: {e}")
                 raise RuntimeError(f"Failed to instantiate LimeExplainer for method '{method_key}'") from e
+
+        case "diceexplainer":
+            print(f"Attempting to instantiate DiceExplainer...")
+            try:
+                # Pass the received arguments TO the LimeExplainer constructor
+                explainer_instance = build_dice_explainer(
+                    model=ml_model,
+                    background_data=background_data,
+                    **kwargs
+                )
+                # Quick check (optional): Verify it matches the expected API type
+                if not isinstance(explainer_instance, ExplainerMethodAPI):
+                     warnings.warn(f"Instantiated object for '{method_key}' may not fully implement ExplainerMethodAPI.", RuntimeWarning)
+
+                return explainer_instance
+            
+            except Exception as e:
+                print(f"Error instantiating DiceExplainer: {e}")
+                raise RuntimeError(f"Failed to instantiate DiceExplainer for method '{method_key}'") from e
 
         case _:
             # Handle unsupported method names

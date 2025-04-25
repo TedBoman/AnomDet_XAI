@@ -24,15 +24,30 @@ class TimescaleDBAPI(DBInterface):
     def create_table(self, table_name: str, columns: list[str]) -> None:
         length = len(columns)
         
-        # The first column is of type TIMESTAMPTZ NOT NULL and the rest are
-        columns[0] = f'\"{columns[0]}\" TIMESTAMPTZ NOT NULL'
-        for i in range(1, length):
-            columns[i] = f'\"{columns[i]}\" NUMERIC'
-        columns = columns + ["is_anomaly BOOLEAN"] + ["injected_anomaly BOOLEAN"]
-
         try: 
             conn = psycopg2.connect(self.connection_string) # Connect to the database
             cursor = conn.cursor()
+
+            # Check if table exists
+            check_exists_query = """
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = %s
+                );
+            """
+            cursor.execute(check_exists_query, (table_name,))
+            table_exists = cursor.fetchone()[0]
+
+            if table_exists:
+                print(f"Info: Table '{table_name}' already exists.")
+                conn.close() # Close connection before returning
+                return None # Return None if table exists
+            
+            # The first column is of type TIMESTAMPTZ NOT NULL and the rest are
+            columns[0] = f'\"{columns[0]}\" TIMESTAMPTZ NOT NULL'
+            for i in range(1, length):
+                columns[i] = f'\"{columns[i]}\" NUMERIC'
+            columns = columns + ["is_anomaly BOOLEAN"] + ["injected_anomaly BOOLEAN"]
             
             query_create_table = f'CREATE TABLE "{table_name}" ({",".join(columns)});'
             cursor.execute(query_create_table)
@@ -42,6 +57,8 @@ class TimescaleDBAPI(DBInterface):
             cursor.execute(query_create_hypertable)
 
             conn.commit()
+
+            return table_name
                 
         except Exception as error:
             print("Error: %s" % error)

@@ -49,9 +49,6 @@ class XGBoostModel(model_interface.ModelInterface):
         self.model_params.update(kwargs)
         print(f"XGBoostModel Initialized with base params: {self.model_params}")
 
-
-    # REMOVED: _create_lagged_features (no longer used)
-
     def _prepare_data_for_model(
         self, X: Union[pd.DataFrame, np.ndarray],
         y: Optional[Union[pd.Series, np.ndarray]] = None,
@@ -118,7 +115,6 @@ class XGBoostModel(model_interface.ModelInterface):
                 return X_processed_scaled, None, self.processed_feature_names # No labels
 
         elif isinstance(X, np.ndarray):
-            # print("Processing 3D NumPy input...") # Less verbose
             self.input_type = 'numpy'
             if X.ndim != 3: raise ValueError(f"NumPy X must be 3D, got {X.ndim}")
             n_samples, seq_len, n_feat = X.shape

@@ -1,5 +1,3 @@
-# In xai_utils.py (or wherever ModelWrapperForXAI is defined)
-
 import pandas as pd
 import numpy as np
 from typing import Any, List, Union, Literal # Import Literal
@@ -28,6 +26,7 @@ class ModelWrapperForXAI:
         """
         self._model = actual_model_instance
         self._feature_names = feature_names
+        self._num_classes = 2
         self._score_interpretation = score_interpretation
 
         # --- Checks ---
@@ -86,12 +85,24 @@ class ModelWrapperForXAI:
         x_clipped = np.clip(x, -700, 700)
         return 1 / (1 + np.exp(-x_clipped))
 
-    def predict_proba(self, X_np_3d: np.ndarray) -> np.ndarray:
+    def predict_proba(self, X_np_input: np.ndarray) -> np.ndarray:
         """ Calls internal 'get_anomaly_score', converts scores to probabilities [P(normal), P(anomaly)]. """
+        # If input shape is already probability-like (samples, 2) or not the expected 3D shape,
+        # handle it gracefully. This suggests DiCE might be calling this directly with internal data.
+        expected_ndim = 3 # Expecting (samples, seq_len, features)
+        expected_features = len(self._feature_names)
+        if X_np_input.ndim != expected_ndim or X_np_input.shape[-1] != expected_features:
+            warnings.warn(f"Predict_proba received unexpected input shape {X_np_input.shape}. Expected 3D with {expected_features} features. Returning neutral probabilities.", RuntimeWarning)
+            # Return neutral probabilities [0.5, 0.5] for the number of samples received
+            num_samples = X_np_input.shape[0] if X_np_input.ndim >= 1 else 1
+            return np.full((num_samples, 2), 0.5)
+        
+        X_np_3d = X_np_input # Rename for clarity if needed, or just use X_np_input
+        
         scores_1d = self._call_internal_method(X_np_3d, 'get_anomaly_score')
 
         scores_clean = np.array(scores_1d, dtype=float)
-        print(f"DEBUG LIME predict_proba: Raw scores min/max/mean: {np.nanmin(scores_clean):.4f} / {np.nanmax(scores_clean):.4f} / {np.nanmean(scores_clean):.4f}")
+        print(f"DEBUG predict_proba: Raw scores min/max/mean: {np.nanmin(scores_clean):.4f} / {np.nanmax(scores_clean):.4f} / {np.nanmean(scores_clean):.4f}")
         nan_mask = np.isnan(scores_clean)
         if np.any(nan_mask):
             warnings.warn("NaNs in scores. Probabilities will be [0.5, 0.5].", RuntimeWarning)
@@ -115,7 +126,7 @@ class ModelWrapperForXAI:
 
         prob_normal = 1.0 - prob_anomaly
         probabilities = np.vstack([prob_normal, prob_anomaly]).T
-        print(f"DEBUG LIME predict_proba: Probabilities shape: {probabilities.shape}")
+        print(f"DEBUG predict_proba: Probabilities shape: {probabilities.shape}")
 
         if not np.allclose(np.sum(probabilities[~nan_mask], axis=1), 1.0):
             warnings.warn("Probabilities do not sum to 1.", RuntimeWarning)

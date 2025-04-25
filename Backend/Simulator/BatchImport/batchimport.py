@@ -59,38 +59,32 @@ class BatchImporter:
 
     def create_table(self, conn_params, tb_name, columns):
         """
-        Creates a table in the timeseries database. If the table already exists, 
-        it creates a new table with a numbered suffix.
+        Ensures a table exists in the timeseries database using the DatabaseAPI.
 
-        Args: 
-            conn_params: The parameters needed to connect to the database.
-            tb_name: The base name of the table.
+        Args:
+            tb_name: The desired base name of the table.
             columns: The columns for the table.
 
         Returns:
-            str: The actual name of the table created (might include a suffix).
+            str: The actual name of the table if newly created.
+            int: 1 if the table already exists.
+            None: If an error occurred during the process or DB connection failed.
         """
         db_instance = self.init_db(conn_params)
         if not db_instance:
             return None
 
-        i = 1
-        new_table_name = tb_name
-        while True:
-            try:
-                db_instance.create_table(new_table_name, columns)
-                return new_table_name
-            except psycopg2.errors.DuplicateTable:  # Catch the specific exception
-                i += 1
-                new_table_name = f"{tb_name}_{i}"
-            except (psycopg2.errors.OperationalError, 
-                    psycopg2.errors.ProgrammingError) as e:
-                # Handle or log other database-related errors
-                dl.print_exception(f"Database error creating table: {e}")
-                raise  # Or re-raise if you want to stop execution
-            except Exception as e:  # Catch other unexpected errors
-                dl.print_exception(f"Unexpected error creating table: {e}")
-                raise
+        result = db_instance.create_table(tb_name, list(columns))
+
+        if result == None:
+            # Table already exists, let the calling function know
+            return None
+        elif isinstance(result, str):
+            # Table was created successfully, return the name
+            return result
+        else: # result is None (error)
+            print(f"Error reported by API during creation of table '{tb_name}'.")
+            return None
 
     def process_chunk(self, conn_params, table_name, chunk):
         """
@@ -196,6 +190,8 @@ class BatchImporter:
         columns = list(full_df.columns.values)
         
         table_name = self.create_table(conn_params, Path(self.file_path).stem if table_name is None else table_name, columns)
+        if table_name == None:
+            return 1
 
         # Drop rows with invalid timestamps
         full_df = full_df.dropna(subset=[full_df.columns[0]])

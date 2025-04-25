@@ -1,6 +1,8 @@
 # File: xai_visualizations.py
 
+import traceback
 import shap
+import dice_ml
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -22,9 +24,8 @@ def process_and_plot_shap(
     mode: str,                          # 'classification' or 'regression'
     class_index_to_plot: int = 0,       # Default class to plot for classification
     max_display_features: int = 20,     
-    
     # Max features for plots like bar/waterfall
-    job_name='none'
+    job_name='none',
     ):
     """Processes SHAP results (already reshaped) and generates standard plots."""
     print(f"--- Processing and Plotting SHAP Results (Class Index: {class_index_to_plot if mode=='classification' else 'N/A'}) ---")
@@ -32,6 +33,8 @@ def process_and_plot_shap(
     if results is None:
         print("SHAP results are None. Skipping plotting.")
         return
+    
+    output_dir = output_dir+'/SHAP'
 
     # --- Prepare Data for Standard SHAP Plots ---
     n_instances_explained = instances_explained.shape[0]
@@ -166,6 +169,8 @@ def process_and_plot_lime(
      if results is None:
          print("LIME results object is None. Skipping.")
          return
+     
+     output_dir = output_dir+'/LIME'
 
      # LIME Explanation object usually comes from explaining one instance
      lime_explanation = results
@@ -185,5 +190,117 @@ def process_and_plot_lime(
          print(f"Failed to process/save LIME results for instance {instance_index}: {e}")
 
      print("--- Finished LIME Plotting ---")
+
+def process_and_plot_dice(
+    results: Any, # Expect dice_ml.explanation.Explanation or similar structure
+    explainer_object: Any, # The DiceExplainerWrapper instance (MUST have flat_feature_names, outcome_name)
+    instances_explained: np.ndarray, # 3D numpy array (instance_idx, seq_len, features)
+    feature_names: List[str], # Base feature names (used for dimension check)
+    sequence_length: int, # Used for dimension check
+    output_dir: str,
+    mode: str, # Should be classification
+    job_name: str = "job",
+    # original_df: pd.Series=None, # Removed - we get original from instances_explained
+    **kwargs):
+    """
+    Processes DiCE Explanation object. Saves a CSV for each instance containing
+    the original instance as the first row and counterfactuals as subsequent rows.
+    Adds a 'type' column for identification.
+    """
+    print(f"--- Processing and Saving DiCE Counterfactuals with Original ---")
+
+    output_dir = output_dir+'/DiCE'
+
+    os.makedirs(output_dir, exist_ok=True) # Ensure output directory exists
+
+    try:
+        # --- Access CF results list ---
+        if hasattr(results, 'cf_examples_list'):
+             cf_examples_list = results.cf_examples_list
+        elif isinstance(results, list):
+             cf_examples_list = results
+        elif hasattr(results, 'final_cfs_df'): # Handle single instance result
+             cf_examples_list = [results]
+        else:
+             print("Error: Could not find counterfactual list/data in 'results' object.")
+             return
+
+        if not cf_examples_list:
+             print("No counterfactual examples found in the results.")
+             return
+
+        print(f"Found explanation results for {len(cf_examples_list)} instance(s).")
+
+        # --- Loop through each instance ---
+        for i, cf_example in enumerate(cf_examples_list):
+             print(f"  Processing instance {i}...")
+
+             # --- Get Counterfactuals DataFrame ---
+             cfs_df = None
+             if hasattr(cf_example, 'final_cfs_df') and cf_example.final_cfs_df is not None:
+                  cfs_df = cf_example.final_cfs_df.copy() # Use copy to avoid modifying original
+             # Add elif for sparse if needed
+
+             if cfs_df is None or cfs_df.empty:
+                  print(f"    No counterfactuals DataFrame found or empty for instance {i}. Skipping CSV save.")
+                  continue
+             if not isinstance(cfs_df, pd.DataFrame):
+                  print(f"    Warning: Expected pandas DataFrame for counterfactuals, got {type(cfs_df)}. Skipping CSV save for instance {i}.")
+                  continue
+
+             # Add 'type' column to counterfactuals
+             cfs_df['type'] = 'counterfactual'
+             flat_feature_names = cfs_df.columns.values
+
+             # --- Prepare Original Instance Row ---
+             try:
+                  original_instance_3d = instances_explained[i]
+                  # Flatten the original instance
+                  original_flat_np = original_instance_3d.flatten()
+
+                  # Create a pandas Series for the original instance
+                  # Ensure index matches the flattened feature names from the explainer
+                  original_series = pd.Series(original_flat_np, index=flat_feature_names)
+
+                  # Add the type identifier
+                  original_series['type'] = 'original'
+
+                  # Convert Series to a DataFrame row, ensure columns match CFs
+                  original_df_row = original_series.to_frame().T
+                  # Reorder columns to match cfs_df potentially, ensure 'type' is present
+                  original_df_row = original_df_row.astype(cfs_df.dtypes) # Match types
+
+
+             except IndexError:
+                  print(f"    Error: Cannot get original instance for index {i} from instances_explained (shape {instances_explained.shape}).")
+                  continue
+             except Exception as e_orig:
+                  print(f"    Error processing original instance {i}: {e_orig}")
+                  continue
+
+             # --- Combine Original and Counterfactuals ---
+             # Make 'type' the first column for clarity
+             cols_cf = ['type'] + [col for col in cfs_df.columns if col != 'type']
+             cfs_df = cfs_df[cols_cf]
+
+             # Ensure original row has same columns in same order before concatenating
+             original_df_row = original_df_row[cols_cf] # Match column order
+
+             combined_df = pd.concat([original_df_row, cfs_df], ignore_index=True)
+
+             # --- Save Combined CSV ---
+             filename = f"{job_name}_instance_{i}_original_and_counterfactuals.csv"
+             filepath = os.path.join(output_dir, filename)
+             combined_df.to_csv(filepath, index=False)
+             print(f"    Saved original and counterfactuals for instance {i} to: {filepath}")
+
+    except AttributeError as e:
+         print(f"Failed accessing attributes: {e}")
+         traceback.print_exc()
+    except Exception as e:
+         print(f"Failed processing/saving results: {e}")
+         traceback.print_exc()
+
+    print("--- Finished DiCE Counterfactual Saving (with Original) ---")
 
 # --- Add handlers for other XAI methods as needed ---
