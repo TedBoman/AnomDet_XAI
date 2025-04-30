@@ -279,16 +279,13 @@ def layout(handler):
                     n_intervals=0,
                     disabled=True 
                     ),
-                
-                
-
 
             # --- Active Jobs ---
             html.Div(
                 id="active-jobs-section",
                 children=[
                     html.H3("Currently Running Jobs:", style={"color": "#ffffff", "textAlign": "center"}),
-                    html.Div(children=active_jobs_children[0], id="active-jobs-list", style={
+                    html.Div(children=active_jobs_children, id="active-jobs-list", style={
                         "textAlign": "center", "color": "#ffffff", "marginTop": "4px",
                         "width": "25rem", "margin": "10px auto", "padding": "10px", "border": "4px solid #464", "borderRadius": "5px"
                     }),

@@ -26,7 +26,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
 
     def __init__(self, 
                  criterion='gini', 
-                 max_depth=10000,         #whatever you do, do not set to "none"
+                 max_depth=10000,         # Whatever you do, do not set to "none"
                  min_samples_split=2, 
                  min_samples_leaf=1, 
                  random_state=42, 

@@ -42,35 +42,10 @@ services:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     depends_on:
       - timescaledb
-      - grafana
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${XAI_PLOT_OUTPUT_PATH}:/output
-    restart: always
-
-  grafana:
-    image: grafana/grafana-enterprise:latest
-    container_name: Grafana
-    ports:
-      - "${GRAFANA_PORT}:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_DATABASE_TYPE: postgres
-      GF_DATABASE_HOST: ${DATABASE_HOST}
-      GF_DATABASE_PORT: ${DATABASE_PORT}
-      GF_DATABASE_USER: ${DATABASE_USER}
-      GF_DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      GF_DATABASE_NAME: ${DATABASE_NAME}
-    volumes:
-      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources
-      - ./grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards
-      - ./grafana-dashboards:/var/lib/grafana/dashboards
-    depends_on:
-      - timescaledb
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     restart: always
   
 volumes:
