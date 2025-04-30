@@ -8,7 +8,7 @@ from ML_models import model_interface
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, LSTM, RepeatVector, TimeDistributed, Dense
-from typing import Union, List # Make sure to import Union
+from typing import Optional, Union, List # Make sure to import Union
 import warnings # Import warnings
 
 class LSTMModel(model_interface.ModelInterface):
@@ -185,7 +185,7 @@ class LSTMModel(model_interface.ModelInterface):
         return X
 
 
-    # --- NEW Method to get anomaly score ---
+    # --- Method to get anomaly score ---
     def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """
         Calculates reconstruction error for input data using the trained autoencoder.

@@ -12,7 +12,7 @@ from sklearn.svm import OneClassSVM
 from sklearn.preprocessing import StandardScaler, MinMaxScaler # Add MinMaxScaler if used by AE
 from tensorflow.keras.models import Model # Use tensorflow.keras
 from tensorflow.keras.layers import Input, Dense # Use tensorflow.keras
-from typing import Union, List, Any
+from typing import Optional, Union, List, Any
 import warnings
 
 class SVMModel(model_interface.ModelInterface):
@@ -108,16 +108,6 @@ class SVMModel(model_interface.ModelInterface):
         encoded_data = self.encoder.predict(data_scaled)
         #print(f"Encoded data shape: {encoded_data.shape}")
         return encoded_data
-
-
-    def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
-        """ Calculates SVM decision function scores (lower = more anomalous). Expects 2D input. """
-        #print("Calculating anomaly scores...")
-        encoded_data = self._preprocess_and_encode(detection_data)
-        scores = self.svm_model.decision_function(encoded_data)
-        #print(f"Calculated {len(scores)} scores.")
-        return scores # Returns 1D array
-
 
     def detect(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """ Detects anomalies based on threshold. Expects 2D input. """

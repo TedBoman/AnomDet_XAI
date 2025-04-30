@@ -9,13 +9,6 @@ class ExplainerMethodAPI(abc.ABC):
     """
 
     @abc.abstractmethod
-    def __init__(self, model: Any, background_data: np.ndarray, **params: Any):
-        """
-        Initialize the specific explainer.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
     def explain(self, instances_to_explain: np.ndarray, **kwargs: Any) -> Any:
         """
         Execute the explanation process for the given instances.

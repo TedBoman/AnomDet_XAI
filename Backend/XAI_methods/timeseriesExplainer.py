@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from typing import List, Any, Dict, Optional
 from XAI_methods.xai_factory import xai_factory
 from XAI_methods.explainer_method_api import ExplainerMethodAPI
@@ -13,19 +14,35 @@ class TimeSeriesExplainer:
     actual explanation tasks.
     """
 
-    def __init__(self, model: Any, background_data: np.ndarray, feature_names: List[str], mode: str = 'regression'):
+    def __init__(self, model: Any, background_data: np.ndarray, 
+                background_outcomes: np.ndarray, 
+                feature_names: List[str], 
+                mode: str = 'regression',
+                # --- Optional args for specific explainers like DiCE ---
+                training_df_for_dice: Optional[pd.DataFrame] = None,
+                outcome_name_for_dice: Optional[str] = None,
+                continuous_features_for_dice: Optional[List[str]] = None,
+                shap_method: str = None,
+                **kwargs # Keep kwargs for future flexibility
+                ):
         """
         Initializes the TimeSeriesExplainer manager.
 
         Args:
-            model: The trained machine learning model instance.
-            background_data: Representative data sample (e.g., windowed sequences
-                             in the format the model expects).
-            feature_names: List of feature names corresponding to the last dimension
-                           of the input data.
-            mode: Prediction mode ('regression' or 'classification'). Affects how
-                  some explainers might behave or interpret results.
+            model: Trained model instance or wrapper.
+            background_data: 3D NumPy array (samples, seq_len, features) of background features.
+            feature_names: List of base feature names.
+            mode: 'regression' or 'classification'.
+            training_df_for_dice (pd.DataFrame, optional): A representative DataFrame
+                (samples, features + outcome) needed ONLY for DiCE initialization.
+                Features should be the original ones BEFORE windowing/flattening.
+            outcome_name_for_dice (str, optional): Name of the outcome column in
+                training_df_for_dice. Needed ONLY for DiCE.
+            continuous_features_for_dice (List[str], optional): List of BASE feature names
+                that are continuous. Needed ONLY for DiCE. Defaults to all features if None.
+            **kwargs: Other potential arguments.
         """
+
         if not hasattr(model, 'predict'):
              raise TypeError("Model must have a 'predict' method.")
         if mode == 'classification' and not hasattr(model, 'predict_proba'):
@@ -34,10 +51,23 @@ class TimeSeriesExplainer:
         self._model = model
         # Optional: Add validation for background_data shape/type
         self._background_data = background_data
+        self._sequence_length = background_data.shape[1]
+        self._n_features = background_data.shape[2]
+        self.shap_method = shap_method
+        self._background_outcomes = background_outcomes
+
         self._feature_names = feature_names
         if mode not in ['regression', 'classification']:
             raise ValueError("Mode must be 'regression' or 'classification'")
         self._mode = mode
+
+        # --- Store DiCE-specific context if provided ---
+        self._training_df_for_dice = training_df_for_dice
+        self._outcome_name_for_dice = outcome_name_for_dice
+        # Default to all features being continuous if not specified for DiCE
+        self._continuous_features_for_dice = continuous_features_for_dice if continuous_features_for_dice is not None else feature_names
+        print(f"TimeSeriesExplainer Init: DiCE context received - training_df: {'Yes' if self._training_df_for_dice is not None else 'No'}, outcome: {self._outcome_name_for_dice}")
+        # ---
 
         # Cache to store initialized explainer objects returned by get_method
         self._explainer_cache: Dict[str, ExplainerMethodAPI] = {}
@@ -62,18 +92,41 @@ class TimeSeriesExplainer:
         it by calling the external `get_method` factory function.
         """
         method_key = method_name.lower()
+        explainer_params_for_factory = {
+            'mode': self._mode,
+            'feature_names': self._feature_names,
+            'sequence_length': self._sequence_length
+            # Add other common params if needed
+        }
+
+        # Add DiCE specific params with CORRECT names
+        if method_key == "diceexplainer":
+            # *** YOU NEED TO ENSURE self._background_outcomes exists first ***
+            # (e.g., by adding it as an __init__ parameter and passing it from execute_calls.py)
+            if not hasattr(self, '_background_outcomes') or self._background_outcomes is None:
+                raise ValueError("TimeSeriesExplainer is missing '_background_outcomes' needed for DiceExplainer.")
+            if not self._outcome_name_for_dice: # Check if the original suffixed name was provided
+                raise ValueError("TimeSeriesExplainer is missing '_outcome_name_for_dice' needed for DiceExplainer.")
+            if not self._continuous_features_for_dice: # Check if the original suffixed name was provided
+                raise ValueError("TimeSeriesExplainer is missing '_continuous_features_for_dice' needed for DiceExplainer.")
+
+            explainer_params_for_factory.update({
+                'background_outcomes': self._background_outcomes, # Pass the actual NumPy array
+                'outcome_name': self._outcome_name_for_dice, # Use the stored name, but with the key 'outcome_name'
+                'continuous_feature_names': self._continuous_features_for_dice # Use the stored list, but with the key 'continuous_feature_names'
+                # Add other DiCE init params if needed, e.g. 'backend': 'TF2'
+            })
+
         if method_key not in self._explainer_cache:
             print(f"Initializing explainer for '{method_key}' via get_method...")
             try:
                 # Call the external factory, passing all necessary context
                 # get_method should handle which params are needed for which method
-                explainer_object = xai_factory( # Call the corrected factory function
+                explainer_object = xai_factory(
                     method_name=method_key,
-                    ml_model=self._model,             # Pass the stored model
-                    background_data=self._background_data, # Pass the stored background data
-                    # Pass other necessary parameters as keyword arguments
-                    mode=self._mode,
-                    feature_names=self._feature_names # LIME might need this
+                    ml_model=self._model,
+                    background_data=self._background_data, # 3D Features
+                    **explainer_params_for_factory # Pass the constructed dictionary
                 )
                 self._explainer_cache[method_key] = explainer_object
                 print(f"Initialized and cached explainer for '{method_key}'. Type: {type(explainer_object).__name__}")

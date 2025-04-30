@@ -117,8 +117,9 @@ def layout(handler):
                                     options=[{"label": method, "value": method} for method in xai_methods],
                                     value="none", # Default to None
                                     placeholder="Select XAI method",
+                                    multi=True,
                                     clearable=False,
-                                    style={"width": "300px", "margin": "5px auto", "border": "0.05rem solid black"}
+                                    style={"width": "300px", "margin": "5px auto"}
                                 ),
                              ], style={"marginTop": "10px"}),
                             # Div for Dynamic XAI Settings
@@ -140,17 +141,17 @@ def layout(handler):
                     html.Div( id="injection-panel", children=[
                          html.Label("Select Injection Method:", style={"fontSize": "18px", "color": "#e0e0e0", "display":"block"}),
                          dcc.Dropdown( id="injection-method-dropdown", options=[{"label": method, "value": method} for method in injection_methods], value="None", placeholder="Select a method",
-                                       style={"width": "300px", "margin": "5px auto", "border": "0.05rem solid black"} ),
+                                       style={"width": "300px", "margin": "5px auto"} ),
                         
                          html.Div([
-                             html.Label("Select Columns for Injection:", style={"fontSize": "18px", "color": "#e0e0e0"}),
-                             dcc.Dropdown(
-                                 id="injection-column-dropdown",
-                                 options=[], # Populated by callback based on dataset
-                                 value=[],
-                                 placeholder="Select Columns",
-                                 multi=True,
-                                 style={"width": "300px", "margin": "5px auto"}
+                            html.Label("Select Columns from Dataset:", style={"fontSize": "18px", "color": "#ffffff"}),
+                            dcc.Dropdown(
+                                id="injection-column-dropdown",
+                                options=[],
+                                value=[],
+                                placeholder="Select Columns",
+                                multi=True,
+                                style={"width": "300px", "margin": "5px auto"}
                              )
                          ], style={"marginTop": "15px"}),
                          html.Div([
@@ -192,19 +193,7 @@ def layout(handler):
                             placeholder="Duration ('30s', '1H', '30min', '2D', '1h30m')",
                             style={"width": "200px", "marginTop": "10px"}
                         )
-                        ], style={"marginTop": "20px", "textAlign": "center"}),
-                    html.Div([
-                        html.Label("Select Columns from Dataset:", style={"fontSize": "18px", "color": "#ffffff"}),
-                        dcc.Dropdown(
-                            id="injection_column-dropdown",
-                            options=[],
-                            value=[],
-                            placeholder="Select Columns",
-                            multi=True,
-                            style={"width": "350px", "marginTop": "10px"}
-                        )
-                        ], style={"marginTop": "20px", "textAlign": "center"}),
-                         # ... (keep timestamp, magnitude, percentage, duration inputs) ...
+                        ], style={"marginTop": "20px", "textAlign": "center"})
                        ], style={"display": "none"} # injection-panel starts hidden
                     )
                 ], style={"textAlign": "center", "marginBottom": "20px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px"}),
