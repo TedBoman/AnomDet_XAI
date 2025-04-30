@@ -370,7 +370,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
 
 
     # --- METHOD FOR XAI (SHAP/LIME) ---
-    def predict_proba_xai(self, X_xai: np.ndarray) -> np.ndarray:
+    def predict_proba(self, X_xai: np.ndarray) -> np.ndarray:
         """
         Prediction function for XAI methods (SHAP/LIME).
         Accepts input in the *original* format expected during training and
