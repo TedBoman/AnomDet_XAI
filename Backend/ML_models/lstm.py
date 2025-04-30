@@ -8,70 +8,118 @@ from ML_models import model_interface
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, LSTM, RepeatVector, TimeDistributed, Dense
+from tensorflow.keras.optimizers import Adam # Import Adam optimizer
 from typing import Optional, Union, List # Make sure to import Union
 import warnings # Import warnings
 
 class LSTMModel(model_interface.ModelInterface):
 
     # Initializes the model and internal state
-    def __init__(self):
-        self.model = None
-        self.scaler = None
-        self.threshold = None
-        # Initialize sequence_length, will be set during run()
-        self.sequence_length = None
-        print("LSTMModel Initialized (sequence_length will be set during run).")
-
-    # Preprocesses, trains and fits the model
-    def run(self, df, time_steps=10, epochs=2): # Changed default time_steps
+    def __init__(self, **kwargs):
         """
-        Preprocesses data, builds, trains, and fits the LSTM autoencoder model.
+        Initializes the LSTM Autoencoder model state and stores configuration.
+
+        Expected kwargs (examples):
+            units (int): Number of units in LSTM layers (default: 64).
+            activation (str): Activation function for LSTM layers (default: 'relu').
+            optimizer (str or tf.keras.optimizers.Optimizer): Optimizer to use (default: 'adam').
+            learning_rate (float): Learning rate for the optimizer (default: 0.001).
+            loss (str or tf.keras.losses.Loss): Loss function (default: 'mse').
+            # Training specific params also stored here
+            epochs (int): Default number of training epochs (default: 10).
+            batch_size (int): Default training batch size (default: 256).
+            time_steps (int): Default sequence length (lookback window) (default: 10).
+        """
+        self.model: Optional[Model] = None
+        self.scaler: Optional[MinMaxScaler] = None
+        self.threshold: Optional[float] = None
+        self.sequence_length: Optional[int] = None # Will be set during run or from params
+
+        # --- Store configuration from kwargs ---
+        self.config = {
+            'units': kwargs.get('units', 64),
+            'activation': kwargs.get('activation', 'relu'),
+            'optimizer_name': kwargs.get('optimizer', 'adam'), # Store name or object
+            'learning_rate': kwargs.get('learning_rate', 0.001),
+            'loss': kwargs.get('loss', 'mse'),
+            'epochs': kwargs.get('epochs', 10), # Store training param
+            'batch_size': kwargs.get('batch_size', 256), # Store training param
+            'time_steps': kwargs.get('time_steps', 10) # Store sequence length param
+        }
+        # Set initial sequence length if provided
+        self.sequence_length = self.config['time_steps']
+
+        print(f"LSTMModel Initialized with config: {self.config}")
+        # --- End MODIFIED __init__ ---
+
+
+    # --- MODIFIED run Method ---
+    def run(self, df: pd.DataFrame): # Remove time_steps, epochs from signature
+        """
+        Preprocesses data, builds, trains, and fits the LSTM autoencoder model
+        using parameters stored during __init__.
 
         Args:
             df (pd.DataFrame): Input DataFrame containing features for training.
-                               Assumes columns are features.
-            time_steps (int): The sequence length (lookback window) to use for
-                              creating training sequences. Defaults to 10.
         """
         if not isinstance(df, pd.DataFrame):
              raise TypeError("Input 'df' must be a pandas DataFrame.")
-        if time_steps <= 0:
-             raise ValueError("time_steps must be positive.")
 
-        print(f"Running LSTMModel training with time_steps={time_steps}...")
-        # --- Store the sequence length ---
-        self.sequence_length = time_steps
+        # --- Use parameters from self.config ---
+        time_steps = self.config['time_steps']
+        epochs = self.config['epochs']
+        batch_size = self.config['batch_size']
+        units = self.config['units']
+        activation = self.config['activation']
+        optimizer_name = self.config['optimizer_name']
+        learning_rate = self.config['learning_rate']
+        loss_function = self.config['loss']
+        dropout_rate = self.config.get('dropout', 0.0) # Get from stored config
+        rec_dropout_rate = self.config.get('recurrent_dropout', 0.0) # Get from stored config
         # ---
+
+        if time_steps <= 0:
+             raise ValueError("Configured 'time_steps' must be positive.")
+        self.sequence_length = time_steps # Ensure instance variable is set
+
+        print(f"Running LSTMModel training with time_steps={self.sequence_length}, epochs={epochs}, batch_size={batch_size}...")
 
         features = df.shape[1]
         if features == 0:
              raise ValueError("Input DataFrame has no columns (features).")
 
-        # --- Define Keras Model (Corrected Input Shape) ---
-        # Input shape should be (sequence_length, features)
+        # --- Define Keras Model using config ---
         inputs = Input(shape=(self.sequence_length, features))
-        # Encoder LSTM - processes the sequence
-        encoded = LSTM(64, activation='relu', return_sequences=False)(inputs)
-
-        # Repeat the encoded vector for each time step for the decoder input
+        encoded = LSTM(units, activation=activation, return_sequences=False,
+                       dropout=dropout_rate, recurrent_dropout=rec_dropout_rate)(inputs) # Add params
         decoded = RepeatVector(self.sequence_length)(encoded)
-        # Decoder LSTM - reconstructs the sequence
-        decoded = LSTM(64, activation='relu', return_sequences=True)(decoded)
-        # Output layer for each time step
-        outputs = TimeDistributed(Dense(features))(decoded) # Output features should match input features
+        decoded = LSTM(units, activation=activation, return_sequences=True,
+                       dropout=dropout_rate, recurrent_dropout=rec_dropout_rate)(decoded) # Add params
+        outputs = TimeDistributed(Dense(features))(decoded)
 
         autoencoder = Model(inputs, outputs)
-        autoencoder.compile(optimizer='adam', loss='mse')
+
+        # Configure optimizer
+        if isinstance(optimizer_name, str):
+            if optimizer_name.lower() == 'adam':
+                optimizer = Adam(learning_rate=learning_rate) # Use configured LR
+            else:
+                # Add other optimizers if needed, or default to Adam
+                warnings.warn(f"Optimizer '{optimizer_name}' not fully configured, defaulting to Adam with LR={learning_rate}.", UserWarning)
+                optimizer = Adam(learning_rate=learning_rate)
+        else: # Assume it's an optimizer instance
+            optimizer = optimizer_name
+
+        autoencoder.compile(optimizer=optimizer, loss=loss_function) # Use config
         self.model = autoencoder
         print("LSTM Autoencoder Model Compiled:")
-        self.model.summary() # Print model summary
+        self.model.summary()
         # --- End Model Definition ---
 
         # --- Data Preprocessing ---
         self.scaler = MinMaxScaler()
         data_normalized = self.scaler.fit_transform(df)
 
-        # Create sequences using the stored sequence_length
         print(f"Creating sequences with length {self.sequence_length}...")
         X = self.__create_sequences(data_normalized, self.sequence_length)
         if X.size == 0:
@@ -80,26 +128,24 @@ class LSTMModel(model_interface.ModelInterface):
         # --- End Data Preprocessing ---
 
         # --- Training ---
-        # Simple split for threshold calculation (adjust if needed)
         train_size = int(len(X) * 0.8)
-        if train_size == 0 and len(X) > 0: train_size = 1 # Ensure at least one sample if possible
+        if train_size == 0 and len(X) > 0: train_size = 1
         X_train = X[:train_size]
-        X_test_threshold = X[train_size:] # Use test split for threshold
+        X_test_threshold = X[train_size:]
 
         if X_train.size == 0:
              warnings.warn("Training split is empty, model cannot be trained.", RuntimeWarning)
-             # Handle this case: maybe raise error or set dummy threshold?
-             self.threshold = np.inf # Set a default threshold if no training occurs
-             return # Cannot proceed with training
+             self.threshold = np.inf
+             return
 
         print(f"Fitting model on {X_train.shape[0]} training sequences...")
         self.model.fit(
-            X_train, X_train, # Autoencoder learns to reconstruct input
-            epochs=epochs, # Consider making epochs configurable
-            batch_size=256, # Consider making batch_size configurable
-            validation_split=0.2, # Use part of X_train for validation during training
+            X_train, X_train,
+            epochs=epochs,       # Use config
+            batch_size=batch_size, # Use config
+            validation_split=0.2,
             verbose=1,
-            shuffle=True # Shuffle training data each epoch
+            shuffle=True
         )
         print("Model fitting complete.")
         # --- End Training ---
@@ -109,18 +155,16 @@ class LSTMModel(model_interface.ModelInterface):
              print(f"Calculating threshold on {X_test_threshold.shape[0]} test sequences...")
              reconstructed = self.model.predict(X_test_threshold)
              reconstruction_error = np.mean(np.square(X_test_threshold - reconstructed), axis=(1, 2))
-             # Use a percentile of the reconstruction error on test data as threshold
-             self.threshold = np.percentile(reconstruction_error, 95) # Example: 95th percentile
+             self.threshold = np.percentile(reconstruction_error, 95)
              print(f"Anomaly threshold set to: {self.threshold:.6f}")
         else:
              warnings.warn("Test split for threshold calculation is empty. Threshold may be unreliable.", RuntimeWarning)
-             # Fallback: use threshold from training reconstruction error (less ideal)
              if X_train.size > 0:
                  reconstructed_train = self.model.predict(X_train)
                  reconstruction_error_train = np.mean(np.square(X_train - reconstructed_train), axis=(1, 2))
                  self.threshold = np.percentile(reconstruction_error_train, 95)
                  print(f"Anomaly threshold set from training data: {self.threshold:.6f}")
-             else: # Should have been caught earlier
+             else:
                   self.threshold = np.inf
                   print("Error: Cannot set threshold - no data available.")
 

@@ -12,6 +12,7 @@ from sklearn.svm import OneClassSVM
 from sklearn.preprocessing import StandardScaler, MinMaxScaler # Add MinMaxScaler if used by AE
 from tensorflow.keras.models import Model # Use tensorflow.keras
 from tensorflow.keras.layers import Input, Dense # Use tensorflow.keras
+from tensorflow.keras.optimizers import Adam # Import Adam optimizer
 from typing import Optional, Union, List, Any
 import warnings
 
@@ -25,33 +26,102 @@ class SVMModel(model_interface.ModelInterface):
     # It will be DIFFERENT from the sequence_length used by the XAI framework.
     sequence_length = 1 # Indicates it processes samples individually
 
-    def __init__(self, encoding_dim: int = 10, svm_nu: float = 0.1, svm_kernel: str = 'rbf', svm_gamma: str = 'scale'):
-        self.svm_model = OneClassSVM(kernel=svm_kernel, gamma=svm_gamma, nu=svm_nu)
-        self.scaler = StandardScaler() # Or MinMaxScaler(feature_range=(0, 1)) if AE uses sigmoid
+    def __init__(self, **kwargs):
+        """
+        Initializes the Autoencoder + OneClassSVM model state and stores configuration.
+
+        Expected kwargs (examples):
+            encoding_dim (int): Dimensionality of the autoencoder's latent space (default: 10).
+            ae_activation (str): Activation function for AE hidden layer (default: 'relu').
+            ae_output_activation (str): Activation for AE output layer (default: 'linear').
+            optimizer (str): Optimizer name for AE training (default: 'adam').
+            learning_rate (float): Learning rate for AE optimizer (default: 0.001).
+            loss (str): Loss function for AE training (default: 'mse').
+            svm_nu (float): An upper bound on the fraction of training errors and a lower bound
+                            of the fraction of support vectors (SVM parameter, default: 0.1).
+            svm_kernel (str): Kernel type for OneClassSVM (default: 'rbf').
+            svm_gamma (str or float): Kernel coefficient for 'rbf', 'poly', 'sigmoid' (default: 'scale').
+            # Training specific params also stored here
+            epochs (int): Default number of AE training epochs (default: 10).
+            batch_size (int): Default AE training batch size (default: 32).
+        """
+        self.scaler = StandardScaler() # Using StandardScaler
         self.encoder: Optional[Model] = None
         self.autoencoder: Optional[Model] = None
+        self.svm_model: Optional[OneClassSVM] = None # Initialize later
         self.threshold: Optional[float] = None
         self.n_features: Optional[int] = None
-        self.encoding_dim = encoding_dim
-        print(f"SVMModel Initialized (Encoding Dim: {encoding_dim}, SVM nu: {svm_nu}).")
+
+        # --- Store configuration from kwargs ---
+        self.config = {
+            'encoding_dim': kwargs.get('encoding_dim', 10),
+            'ae_activation': kwargs.get('ae_activation', 'relu'),
+            'ae_output_activation': kwargs.get('ae_output_activation', 'linear'), # Linear for StandardScaler
+            'optimizer_name': kwargs.get('optimizer', 'adam'),
+            'learning_rate': kwargs.get('learning_rate', 0.001),
+            'loss': kwargs.get('loss', 'mse'),
+            'svm_nu': kwargs.get('svm_nu', 0.1),
+            'svm_kernel': kwargs.get('svm_kernel', 'rbf'),
+            'svm_gamma': kwargs.get('svm_gamma', 'scale'),
+            'epochs': kwargs.get('epochs', 10),
+            'batch_size': kwargs.get('batch_size', 32)
+        }
+        # ---
+
+        # --- Initialize SVM with parameters from config ---
+        self.svm_model = OneClassSVM(
+            kernel=self.config['svm_kernel'],
+            gamma=self.config['svm_gamma'],
+            nu=self.config['svm_nu']
+        )
+        # ---
+
+        print(f"SVMModel Initialized with config: {self.config}")
 
     def __build_autoencoder(self, input_dim):
-        print(f"Building Autoencoder: input_dim={input_dim}, encoding_dim={self.encoding_dim}")
+        """ Builds AE using parameters stored in self.config """
+        encoding_dim = self.config['encoding_dim']
+        activation = self.config['ae_activation']
+        output_activation = self.config['ae_output_activation']
+        optimizer_name = self.config['optimizer_name']
+        learning_rate = self.config['learning_rate']
+        loss_function = self.config['loss']
+
+        print(f"Building Autoencoder: input_dim={input_dim}, encoding_dim={encoding_dim}, activation={activation}, output_activation={output_activation}")
+
         input_layer = Input(shape=(input_dim,), name='input_layer')
-        encoded = Dense(self.encoding_dim, activation='relu', name='encoder_output')(input_layer)
-        # Use linear output activation if using StandardScaler, sigmoid if MinMaxScaler(0,1)
-        decoded = Dense(input_dim, activation='linear', name='decoder_output')(encoded)
+        encoded = Dense(encoding_dim, activation=activation, name='encoder_output')(input_layer)
+        decoded = Dense(input_dim, activation=output_activation, name='decoder_output')(encoded) # Use config
+
         autoencoder = Model(inputs=input_layer, outputs=decoded, name='autoencoder')
         encoder = Model(inputs=input_layer, outputs=encoded, name='encoder')
-        autoencoder.compile(optimizer='adam', loss='mse')
+
+        # Configure optimizer
+        if isinstance(optimizer_name, str):
+            if optimizer_name.lower() == 'adam':
+                optimizer = Adam(learning_rate=learning_rate)
+            else:
+                warnings.warn(f"Optimizer '{optimizer_name}' not fully configured, defaulting to Adam with LR={learning_rate}.", UserWarning)
+                optimizer = Adam(learning_rate=learning_rate)
+        else: # Assume it's an optimizer instance
+             optimizer = optimizer_name
+
+        autoencoder.compile(optimizer=optimizer, loss=loss_function) # Use config
         print("Autoencoder Architecture:")
-        autoencoder.summary(print_fn=print) # Ensure summary prints
+        autoencoder.summary(print_fn=print)
         return autoencoder, encoder
 
-    def run(self, df: pd.DataFrame, epochs: int = 10, batch_size: int = 32):
+    def run(self, df: pd.DataFrame): # Remove epochs, batch_size from signature
+        """ Trains the Autoencoder and then the OneClassSVM using parameters from __init__. """
         if not isinstance(df, pd.DataFrame): raise TypeError("Input 'df' must be a pandas DataFrame.")
         if df.empty: raise ValueError("Input DataFrame for training is empty.")
-        print(f"Running SVMModel training on data shape: {df.shape}")
+
+        # --- Use parameters from self.config ---
+        epochs = self.config['epochs']
+        batch_size = self.config['batch_size']
+        # ---
+
+        print(f"Running SVMModel training on data shape: {df.shape}, AE epochs={epochs}, batch_size={batch_size}")
         self.n_features = df.shape[1]
         if self.n_features == 0: raise ValueError("Input DataFrame has no feature columns.")
 
@@ -60,12 +130,11 @@ class SVMModel(model_interface.ModelInterface):
         X_train_scaled = self.scaler.fit_transform(df)
         X_train_scaled = X_train_scaled.astype(np.float32)
 
-        # --- Train Autoencoder ---
+        # --- Train Autoencoder (builds model internally using config) ---
         self.autoencoder, self.encoder = self.__build_autoencoder(self.n_features)
         print(f"Fitting Autoencoder for {epochs} epochs...")
-        # Consider adding callbacks like EarlyStopping if needed
         self.autoencoder.fit(X_train_scaled, X_train_scaled,
-                             epochs=epochs, batch_size=batch_size,
+                             epochs=epochs, batch_size=batch_size, # Use config
                              validation_split=0.1, shuffle=True, verbose=1)
         print("Autoencoder fitting complete.")
 
@@ -73,17 +142,22 @@ class SVMModel(model_interface.ModelInterface):
         print("Encoding training data...")
         train_encoded_data = self.encoder.predict(X_train_scaled)
         print(f"Encoded training data shape: {train_encoded_data.shape}")
-        print("Fitting OneClassSVM...")
+
+        # SVM Model was already initialized with params in __init__
+        if self.svm_model is None:
+            raise RuntimeError("SVM model was not initialized correctly.")
+
+        print(f"Fitting OneClassSVM with parameters: {self.svm_model.get_params()}")
         self.svm_model.fit(train_encoded_data)
         print("OneClassSVM fitting complete.")
 
         # --- Set Threshold ---
         print("Calculating anomaly threshold...")
         decision_values_train = self.svm_model.decision_function(train_encoded_data)
-        self.threshold = np.percentile(decision_values_train, 100 * self.svm_model.nu)
-        print(f"Anomaly threshold set to: {self.threshold:.6f}")
+        # Use svm_nu directly from config as it's the expected error rate
+        self.threshold = np.percentile(decision_values_train, 100 * self.config['svm_nu'])
+        print(f"Anomaly threshold set to: {self.threshold:.6f} (based on nu={self.config['svm_nu']})")
         print("--- SVMModel Training Finished ---")
-
 
     def _preprocess_and_encode(self, data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """ Internal helper: Scales (using fitted scaler) and encodes input data. """

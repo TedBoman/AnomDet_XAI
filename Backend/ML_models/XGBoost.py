@@ -26,29 +26,51 @@ class XGBoostModel(model_interface.ModelInterface):
     which handles preprocessing internally based on the training input type.
     """
 
-    def __init__(self, n_estimators=350, learning_rate=0.1, max_depth=6, random_state=42, **kwargs):
+    def __init__(self, **kwargs):
         """
-        Initializes the XGBoost classifier model.
-        """
-        self.model: Optional[xgb.XGBClassifier] = None
-        self.scaler: Optional[MinMaxScaler] = None
-        self.input_type: Optional[str] = None # 'dataframe' or 'numpy'
-        # Feature names AFTER potential processing (lagging removed for DF)
-        self.processed_feature_names: Optional[List[str]] = None
-        # Sequence length (NumPy) or 1 (DataFrame 2D)
-        self.sequence_length: Optional[int] = None
-        # Number of original features before any processing
-        self.n_original_features: Optional[int] = None
-        self.label_col: Optional[str] = None # DataFrame specific
+        Initializes the XGBoost classifier model using parameters from kwargs.
 
+        Expected kwargs (examples):
+            n_estimators (int): Number of boosting rounds (default: 100).
+            learning_rate (float): Step size shrinkage (default: 0.1).
+            max_depth (int): Maximum depth of a tree (default: 6).
+            objective (str): Specifies the learning task (default: 'binary:logistic').
+            eval_metric (str): Evaluation metric for validation data (default: 'logloss').
+            random_state (int): Random number seed (default: 42).
+            n_jobs (int): Number of parallel threads (default: -1).
+            scale_pos_weight (float): Controls balance of positive/negative weights (calculated in run).
+            ... other XGBClassifier parameters ...
+        """
+        self.model: Optional[CalibratedClassifierCV] = None # Stores the calibrated model
+        self.scaler: Optional[MinMaxScaler] = None
+        self.input_type: Optional[str] = None
+        self.processed_feature_names: Optional[List[str]] = None
+        self.sequence_length: Optional[int] = None
+        self.n_original_features: Optional[int] = None
+        self.label_col: Optional[str] = None
+
+        # --- Store configuration from kwargs ---
+        # Base XGBoost parameters (excluding scale_pos_weight, calculated later)
         self.model_params = {
-            'n_estimators': n_estimators, 'learning_rate': learning_rate,
-            'max_depth': max_depth, 'objective': 'binary:logistic',
-            'eval_metric': 'logloss',
-            'random_state': random_state, 'n_jobs': -1
+            'n_estimators': kwargs.get('n_estimators', 100), # Default changed
+            'learning_rate': kwargs.get('learning_rate', 0.1),
+            'max_depth': kwargs.get('max_depth', 6),
+            'objective': kwargs.get('objective', 'binary:logistic'),
+            'eval_metric': kwargs.get('eval_metric', 'logloss'),
+            'random_state': kwargs.get('random_state', 42),
+            'n_jobs': kwargs.get('n_jobs', -1)
+            # Add other relevant base params here if needed
         }
-        self.model_params.update(kwargs)
-        print(f"XGBoostModel Initialized with base params: {self.model_params}")
+        # Add any other valid kwargs intended for XGBClassifier
+        allowed_xgb_params = set(xgb.XGBClassifier().get_params().keys())
+        extra_xgb_params = {k: v for k, v in kwargs.items() if k in allowed_xgb_params and k not in self.model_params and k != 'scale_pos_weight'}
+        self.model_params.update(extra_xgb_params)
+
+        # Store calibration method if provided, default to isotonic
+        self.calibration_method = kwargs.get('calibration_method', 'isotonic') # 'isotonic' or 'sigmoid'
+
+        print(f"XGBoostModel Initialized with base params: {self.model_params}, Calibration: {self.calibration_method}")
+        # Note: scale_pos_weight is calculated and added during run()
 
     def _prepare_data_for_model(
         self, X: Union[pd.DataFrame, np.ndarray],
@@ -168,29 +190,25 @@ class XGBoostModel(model_interface.ModelInterface):
                 # Return the 3D SCALED array
                 return scaled_data_2d, None, self.processed_feature_names # No labels
 
-    # time_steps parameter removed from signature as it's ignored for DataFrames now
     def run(self, X: Union[pd.DataFrame, np.ndarray], y: Optional[np.ndarray] = None, label_col: str = 'label'):
         """
-        Trains the XGBoost classifier.
+        Trains the XGBoost classifier and applies calibration, using parameters set during __init__.
 
         Args:
-            X (Union[pd.DataFrame, np.ndarray]): Input data.
-                - DataFrame: Features + label column. Treated as 2D tabular data (no lagging).
-                - 3D NumPy: Features array (samples, sequence_length, features).
-            y (Optional[np.ndarray]): Target labels (required if X is NumPy array).
-            label_col (str): Name of the target label column (used if X is DataFrame). Defaults to 'label'.
+            X: Input data (DataFrame or 3D NumPy).
+            y: Target labels (required if X is NumPy array).
+            label_col: Name of the target label column (used if X is DataFrame).
         """
         if isinstance(X, pd.DataFrame):
             if y is not None: warnings.warn("Arg 'y' ignored for DataFrame input.", UserWarning)
             print("Running training with DataFrame input (processed as 2D NumPy)...")
-            # Pass None for time_steps as it's ignored
             X_processed_scaled, y_aligned, _ = self._prepare_data_for_model(
-                X, y=None, time_steps=None, label_col=label_col, is_training=True
+                X, y=None, label_col=label_col, is_training=True
             )
         elif isinstance(X, np.ndarray):
-            print("Running training with 3D NumPy input...")
+            print("Running training with 3D NumPy input (flattened for XGBoost)...")
             X_processed_scaled, y_aligned, _ = self._prepare_data_for_model(
-                X, y=y, time_steps=None, label_col=None, is_training=True
+                X, y=y, label_col=None, is_training=True
             )
         else:
              raise TypeError("Input 'X' must be pandas DataFrame or 3D NumPy array.")
@@ -202,56 +220,54 @@ class XGBoostModel(model_interface.ModelInterface):
 
         # Handle Class Imbalance
         n_neg = np.sum(y_aligned == 0); n_pos = np.sum(y_aligned == 1)
-        scale_pos_weight = 1
-        if n_pos == 0: warnings.warn("No positive samples found.", RuntimeWarning)
-        elif n_neg == 0: warnings.warn("No negative samples found.", RuntimeWarning)
-        else: scale_pos_weight = n_neg / n_pos
-        print(f"Calculated scale_pos_weight: {scale_pos_weight:.2f}")
+        scale_pos_weight = 1.0 # Default to float
+        if n_pos == 0: warnings.warn("No positive samples (label=1) found in training data.", RuntimeWarning)
+        elif n_neg == 0: warnings.warn("No negative samples (label=0) found in training data.", RuntimeWarning)
+        else: scale_pos_weight = float(n_neg) / float(n_pos) # Ensure float division
+        print(f"Calculated scale_pos_weight: {scale_pos_weight:.4f}")
+
+        # --- Use base parameters stored during __init__ and add scale_pos_weight ---
         current_model_params = self.model_params.copy()
         current_model_params['scale_pos_weight'] = scale_pos_weight
-        current_model_params['max_delta_step'] = 1
+        # Add max_delta_step if needed for stability with imbalance
+        current_model_params.setdefault('max_delta_step', 1)
 
         # --- Step 1: Train the Base XGBoost Classifier ---
         print(f"Training BASE XGBClassifier with {X_processed_scaled.shape[0]} samples, {X_processed_scaled.shape[1]} features...")
+        print(f"Using effective XGBoost parameters: {current_model_params}")
         base_xgb_model = xgb.XGBClassifier(**current_model_params)
-        base_xgb_model.fit(X_processed_scaled, y_aligned)
+
+        try:
+            base_xgb_model.fit(X_processed_scaled, y_aligned)
+        except Exception as e:
+             raise RuntimeError(f"Base XGBoost fitting failed: {e}") from e
         print("Base model training complete.")
 
-        print("DEBUG: Base XGBoost model predict_proba stats:")
-        base_probs = base_xgb_model.predict_proba(X_processed_scaled)
-        if base_probs.shape[1] > 1: # Check if it has 2 columns
-            print(f"  P(anomaly) min={np.min(base_probs[:, 1]):.4f}, max={np.max(base_probs[:, 1]):.4f}, mean={np.mean(base_probs[:, 1]):.4f}")
-        else: # Handle case if predict_proba returns only one column somehow
-            print(f"  Probs shape: {base_probs.shape}")
-            print(f"  Probs stats: min={np.min(base_probs):.4f}, max={np.max(base_probs):.4f}, mean={np.mean(base_probs):.4f}")
-
+        # Optional: Print base model probability stats for debugging
+        try:
+            base_probs = base_xgb_model.predict_proba(X_processed_scaled)
+            if base_probs.shape[1] > 1:
+                print(f"DEBUG: Base P(anomaly) stats: min={np.min(base_probs[:, 1]):.4f}, max={np.max(base_probs[:, 1]):.4f}, mean={np.mean(base_probs[:, 1]):.4f}")
+        except Exception as prob_e: print(f"Debug predict_proba failed: {prob_e}")
 
         # --- Step 2: Apply Probability Calibration ---
-        print("Applying probability calibration (method='sigmoid')...")
-        # We use cv='prefit' because the base_xgb_model is already trained.
-        # 'sigmoid' corresponds to Platt scaling. 'isotonic' is another option.
-        # NOTE: Ideally, calibration should use a separate validation set,
-        # but fitting on the training set is a common practice if one isn't available.
+        calibration_method = self.calibration_method # Use stored method
+        print(f"Applying probability calibration (method='{calibration_method}')...")
         calibrated_model = CalibratedClassifierCV(
             estimator=base_xgb_model,
-            method='isotonic', # Or 'sigmoid'
-            cv='prefit'       # Crucial: Indicates the base estimator is already fitted
+            method=calibration_method,
+            cv='prefit' # Base estimator is already fitted
         )
 
-        # Fit the calibrator
-        calibrated_model.fit(X_processed_scaled, y_aligned)
+        try:
+            calibrated_model.fit(X_processed_scaled, y_aligned)
+        except Exception as e:
+             raise RuntimeError(f"Probability calibration fitting failed: {e}") from e
         print("Calibration complete.")
 
         # --- Step 3: Store the CALIBRATED Model ---
-        # Now self.model refers to the calibrated version
         self.model = calibrated_model
         print(f"Stored calibrated model of type: {type(self.model)}")
-
-
-    def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
-        """ Calculates anomaly scores (probability of class 1). """
-        pass
-
 
     def detect(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """ Detects anomalies (predicts class 1). """

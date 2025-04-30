@@ -344,7 +344,8 @@ def run_batch(
     inj_params: Optional[List[Dict[str, Any]]] = None, 
     debug: bool = False,
     label_column: Optional[str] = None, 
-    xai_params: Optional[Dict[str, Any]] = None
+    xai_params: Optional[Dict[str, Any]] = None,
+    model_params: Optional[Dict[str, Any]] = None,
 ) -> None:    
     print("Starting Batch-job!")
     sys.stdout.flush()
@@ -467,16 +468,31 @@ def run_batch(
 
         # --- Model Training ---
         try:
-            model_instance = get_model(model)
+            # Prepare parameters for the model, ensuring None is handled
+            effective_model_params = model_params or {}
+            print(f"Attempting to get model '{model}' with parameters: {effective_model_params}")
+
+            # Pass model_params during instantiation via get_model
+            # This assumes get_model and the underlying model classes
+            # accept these parameters as keyword arguments.
+            model_instance = get_model(model, **effective_model_params)
+
             print(f"Training model type: {type(model_instance).__name__}")
             start_time = time.perf_counter()
+
             # Train on TRAINING features DataFrame
-            model_instance.run(training_features_df) # Assuming run takes df, adjust if it needs **kwargs for epochs etc.
+            # If the run method *also* takes specific training-time params (like epochs),
+            # those might still be passed here or could be part of model_params as well.
+            # Assuming basic run just takes data for now based on original code.
+            model_instance.run(training_features_df)
+
             end_time = time.perf_counter()
             print(f"Training took {end_time-start_time:.2f}s")
         except Exception as train_err:
-             print(f"ERROR during model retrieval or training: {train_err}")
-             return # Stop if model cannot be trained
+            print(f"ERROR during model retrieval or training: {train_err}")
+            import traceback
+            traceback.print_exc() # Print full traceback for better debugging
+            return # Stop if model cannot be trained
 
         # --- Sequence Length Determination ---
         sequence_length = getattr(model_instance, 'sequence_length', None)
@@ -927,7 +943,13 @@ def run_batch(
         return 0
 
 # Starts processing of dataset as a stream
-def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, inj_params: dict=None, debug=False) -> None:
+def run_stream(db_conn_params, 
+               model: str, 
+               path: str, 
+               name: str, 
+               speedup: int, 
+               inj_params: dict=None, 
+               debug=False) -> None:
     print("Starting Stream-job!")
     sys.stdout.flush()
 

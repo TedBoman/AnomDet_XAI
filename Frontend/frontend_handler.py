@@ -17,25 +17,25 @@ class FrontendHandler:
             return "name-error"
         return "success"
     
-    def handle_run_batch(self, selected_dataset, selected_model, job_name, inj_params: dict=None, label_column=None, xai_params=None) -> str:
+    def handle_run_batch(self, selected_dataset, selected_model, job_name, inj_params: dict=None, label_column=None, xai_params=None, model_params=None) -> str:
         response = self.check_name(job_name)
 
         if response == "success":
             if inj_params is None:
-                self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=None, label_column=label_column, xai_params=xai_params)
+                self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=None, label_column=label_column, xai_params=xai_params, model_params=None)
             else:
-                self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=[inj_params], label_column=label_column, xai_params=xai_params)
+                self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=[inj_params], label_column=label_column, xai_params=xai_params, model_params=None)
 
         return response
 
-    def handle_run_stream(self, selected_dataset, selected_model, job_name, speedup, inj_params: dict=None, label_column=None, xai_params=None) -> str:
+    def handle_run_stream(self, selected_dataset, selected_model, job_name, speedup, inj_params: dict=None, label_column=None, xai_params=None, model_params=None) -> str:
         response = self.check_name(job_name)
 
         if response == "success":
             if inj_params is None:
-                response = self.api.run_stream(selected_model, selected_dataset, job_name, speedup, inj_params=None, label_column=label_column, xai_params=xai_params)
+                response = self.api.run_stream(selected_model, selected_dataset, job_name, speedup, inj_params=None, label_column=label_column, xai_params=xai_params, model_params=None)
             else:
-                self.api.run_stream(selected_model, selected_dataset, job_name, speedup, inj_params=[inj_params], label_column=label_column, xai_params=xai_params)
+                self.api.run_stream(selected_model, selected_dataset, job_name, speedup, inj_params=[inj_params], label_column=label_column, xai_params=xai_params, model_params=None)
 
         return response
 

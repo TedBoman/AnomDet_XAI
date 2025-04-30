@@ -1,0 +1,45 @@
+/* assets/styles.css */
+
+/* Style for number inputs */
+input[type="number"] {
+    padding: 8px 10px;         /* Add some internal spacing */
+    border: 1px solid #555;    /* Define a border */
+    border-radius: 6px;        /* Add rounded corners */
+    background-color: #f0f0f0; /* Light background */
+    color: #333;              /* Dark text color */
+    font-size: 15px;           /* Adjust font size */
+    box-sizing: border-box;    /* Include padding and border in the element's total width and height */
+    transition: border-color 0.3s ease, box-shadow 0.3s ease; /* Smooth transition on focus */
+    vertical-align: middle;
+    /* Ensure width is handled correctly - maybe remove fixed width here
+       or use max-width */
+    /* width: 150px; /* You might set this inline if widths need to vary */
+  }
+  
+  /* Style for text inputs (add if you have them, e.g., Job Name) */
+  input[type="text"] {
+    padding: 8px 10px;
+    border: 1px solid #555;
+    border-radius: 6px;
+    background-color: #f0f0f0;
+    color: #333;
+    font-size: 15px;
+    box-sizing: border-box;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    /* width: 200px; /* Example: Set inline if needed */
+  }
+  
+  /* Optional: Add a focus style for better UX */
+  input[type="number"]:focus,
+  input[type="text"]:focus,
+  input[type="password"]:focus {
+    border-color: #4CAF50; /* Highlight border on focus */
+    box-shadow: 0 0 5px rgba(76, 175, 80, 0.5); /* Add a subtle glow */
+    outline: none; /* Remove default browser outline */
+  }
+  
+  /* Optional: Style for disabled inputs */
+  input:disabled {
+      background-color: #e0e0e0;
+      cursor: not-allowed;
+  }

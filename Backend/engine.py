@@ -100,11 +100,10 @@ def __handle_api_call(conn, data: dict) -> None:
             name = data["name"]
             debug = data["debug"]
             label_column = data.get("label_column", None)
-            print(label_column)
-            sys.stdout.flush()
 
             inj_params = data.get("inj_params", None)
             xai_params = data.get("xai_params", None)
+            model_params = data.get("model_params", None)
 
             db_conn_params = {
                 "user": DATABASE["USER"],
@@ -124,7 +123,8 @@ def __handle_api_call(conn, data: dict) -> None:
                     inj_params,
                     debug,
                     label_column,
-                    xai_params
+                    xai_params,
+                    model_params,
                 )
             )
             new_thread.daemon = True
@@ -148,6 +148,7 @@ def __handle_api_call(conn, data: dict) -> None:
 
             inj_params = data.get("inj_params", None)
             xai_params = data.get("xai_params", None)
+            model_params = data.get("model_params", None)
             
             db_conn_params = {
                 "user": DATABASE["USER"],
@@ -168,12 +169,13 @@ def __handle_api_call(conn, data: dict) -> None:
                     inj_params,
                     debug,
                     label_column, # Pass label_column variable
-                    xai_params    # Pass xai_params variable
+                    xai_params,    # Pass xai_params variable
+                    model_params
                 )
             )            
 
-            new_thread.daemon = True
-            new_thread.start()
+            stream_thread.daemon = True
+            stream_thread.start()
             detection_thread = threading.Thread(target=execute_calls.single_point_detection, args=(backend_data["db_api"], new_thread, model, name, dataset_path))
             detection_thread.daemon = True
             detection_thread.start()
@@ -181,7 +183,7 @@ def __handle_api_call(conn, data: dict) -> None:
             job = {
                 "name": name,
                 "type": "stream",
-                "thread": new_thread
+                "thread": stream_thread
             }
 
             backend_data["started-jobs"].append(job)
