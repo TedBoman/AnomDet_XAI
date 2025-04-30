@@ -14,11 +14,15 @@ class TimeSeriesExplainer:
     actual explanation tasks.
     """
 
-    def __init__(self, model: Any, background_data: np.ndarray, feature_names: List[str], mode: str = 'regression',
+    def __init__(self, model: Any, background_data: np.ndarray, 
+                background_outcomes: np.ndarray, 
+                feature_names: List[str], 
+                mode: str = 'regression',
                 # --- Optional args for specific explainers like DiCE ---
                 training_df_for_dice: Optional[pd.DataFrame] = None,
                 outcome_name_for_dice: Optional[str] = None,
                 continuous_features_for_dice: Optional[List[str]] = None,
+                shap_method: str = None,
                 **kwargs # Keep kwargs for future flexibility
                 ):
         """
@@ -49,6 +53,8 @@ class TimeSeriesExplainer:
         self._background_data = background_data
         self._sequence_length = background_data.shape[1]
         self._n_features = background_data.shape[2]
+        self.shap_method = shap_method
+        self._background_outcomes = background_outcomes
 
         self._feature_names = feature_names
         if mode not in ['regression', 'classification']:
@@ -86,24 +92,41 @@ class TimeSeriesExplainer:
         it by calling the external `get_method` factory function.
         """
         method_key = method_name.lower()
+        explainer_params_for_factory = {
+            'mode': self._mode,
+            'feature_names': self._feature_names,
+            'sequence_length': self._sequence_length
+            # Add other common params if needed
+        }
+
+        # Add DiCE specific params with CORRECT names
+        if method_key == "diceexplainer":
+            # *** YOU NEED TO ENSURE self._background_outcomes exists first ***
+            # (e.g., by adding it as an __init__ parameter and passing it from execute_calls.py)
+            if not hasattr(self, '_background_outcomes') or self._background_outcomes is None:
+                raise ValueError("TimeSeriesExplainer is missing '_background_outcomes' needed for DiceExplainer.")
+            if not self._outcome_name_for_dice: # Check if the original suffixed name was provided
+                raise ValueError("TimeSeriesExplainer is missing '_outcome_name_for_dice' needed for DiceExplainer.")
+            if not self._continuous_features_for_dice: # Check if the original suffixed name was provided
+                raise ValueError("TimeSeriesExplainer is missing '_continuous_features_for_dice' needed for DiceExplainer.")
+
+            explainer_params_for_factory.update({
+                'background_outcomes': self._background_outcomes, # Pass the actual NumPy array
+                'outcome_name': self._outcome_name_for_dice, # Use the stored name, but with the key 'outcome_name'
+                'continuous_feature_names': self._continuous_features_for_dice # Use the stored list, but with the key 'continuous_feature_names'
+                # Add other DiCE init params if needed, e.g. 'backend': 'TF2'
+            })
+
         if method_key not in self._explainer_cache:
             print(f"Initializing explainer for '{method_key}' via get_method...")
             try:
                 # Call the external factory, passing all necessary context
                 # get_method should handle which params are needed for which method
-                explainer_object = xai_factory( # Call the corrected factory function
+                explainer_object = xai_factory(
                     method_name=method_key,
                     ml_model=self._model,
                     background_data=self._background_data, # 3D Features
-                    # Pass general context
-                    mode=self._mode,
-                    feature_names=self._feature_names,     # Base feature names
-                    sequence_length=self._sequence_length, # XAI sequence length
-                    # --- Pass DiCE-specific context ---
-                    training_df_for_dice=self._training_df_for_dice,
-                    outcome_name_for_dice=self._outcome_name_for_dice,
-                    continuous_features_for_dice=self._continuous_features_for_dice
-                    # ---
+                    **explainer_params_for_factory # Pass the constructed dictionary
                 )
                 self._explainer_cache[method_key] = explainer_object
                 print(f"Initialized and cached explainer for '{method_key}'. Type: {type(explainer_object).__name__}")

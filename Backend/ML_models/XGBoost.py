@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.calibration import CalibratedClassifierCV
 from ML_models import model_interface 
 from typing import List, Dict, Optional, Tuple, Union
 import warnings
@@ -115,8 +116,9 @@ class XGBoostModel(model_interface.ModelInterface):
                 return X_processed_scaled, None, self.processed_feature_names # No labels
 
         elif isinstance(X, np.ndarray):
+            print(f"DEBUG _prepare_data: Processing NumPy input shape {X.shape}") # Add shape print
             self.input_type = 'numpy'
-            if X.ndim != 3: raise ValueError(f"NumPy X must be 3D, got {X.ndim}")
+            if X.ndim != 3: raise ValueError(f"NumPy X must be 3D (samples, seq_len, features), got {X.ndim}D")
             n_samples, seq_len, n_feat = X.shape
             self.sequence_length = seq_len # Store sequence length
             self.n_original_features = n_feat # Store original feature count
@@ -124,35 +126,58 @@ class XGBoostModel(model_interface.ModelInterface):
             if is_training:
                 if y is None: raise ValueError("Labels 'y' required for NumPy training.")
                 if not isinstance(y, np.ndarray) or y.ndim != 1 or len(y) != n_samples:
-                     raise ValueError("Invalid 'y' for NumPy training.")
+                    raise ValueError("Invalid 'y' for NumPy training.")
 
-                # Reshape 3D -> 2D
+                # --- Preserve 3D Structure during Scaling ---
+                # Reshape 3D -> 2D for scaler: (samples, seq_len, features) -> (samples * seq_len, features)
+                X_reshaped_for_scaling = X.reshape(-1, n_feat)
+                print(f"DEBUG _prepare_data: Reshaped 3D to 2D for scaling: {X_reshaped_for_scaling.shape}")
+
+                # Scaling (Fit and Transform)
+                self.scaler = MinMaxScaler()
+                scaled_data_2d = self.scaler.fit_transform(X_reshaped_for_scaling)
+                print(f"DEBUG _prepare_data: Scaled 2D data shape: {scaled_data_2d.shape}")
+
+                # Reshape back to 3D: (samples * seq_len, features) -> (samples, seq_len, features)
+                X_processed_scaled = scaled_data_2d.reshape(n_samples, seq_len, n_feat)
+                print(f"DEBUG _prepare_data: Reshaped scaled data back to 3D: {X_processed_scaled.shape}")
+                # --- End Preserve 3D Structure ---
+
+                # Feature names: You might still need flattened names for compatibility elsewhere (e.g., DiCE)
+                # Or maybe just the original feature names are sufficient if the 3D model uses them?
+                # Let's keep flattened for now, but be aware of this potential mismatch in meaning.
                 n_flattened_features = seq_len * n_feat
-                X_reshaped = X.reshape(n_samples, n_flattened_features)
-                # Generate flattened feature names
                 self.processed_feature_names = [f"feature_{i}_step_{j}" for j in range(seq_len) for i in range(n_feat)]
                 if len(self.processed_feature_names) != n_flattened_features:
                     warnings.warn("Feature name generation mismatch.")
                     self.processed_feature_names = [f"flat_feature_{k}" for k in range(n_flattened_features)]
 
-                # Scaling
-                self.scaler = MinMaxScaler()
-                X_processed_scaled = self.scaler.fit_transform(X_reshaped)
                 y_aligned = y
+                # Return the 3D SCALED array
                 return X_processed_scaled, y_aligned, self.processed_feature_names
 
-            else: # Detection for NumPy (reshape 3D -> 2D)
+            else: # Detection for NumPy (preserve 3D)
                 if self.scaler is None or self.sequence_length is None or self.n_original_features is None or self.processed_feature_names is None:
                     raise RuntimeError("Model (trained on NumPy) not ready.")
                 if seq_len != self.sequence_length: raise ValueError(f"Input seq len {seq_len} != train seq len {self.sequence_length}.")
                 if n_feat != self.n_original_features: raise ValueError(f"Input features {n_feat} != train features {self.n_original_features}.")
 
-                X_reshaped = X.reshape(n_samples, seq_len * n_feat)
-                X_processed_scaled = self.scaler.transform(X_reshaped)
-                return X_processed_scaled, None, self.processed_feature_names # No labels
-        else:
-            raise TypeError("Input must be pandas DataFrame or 3D NumPy array.")
+                # --- Preserve 3D Structure during Scaling ---
+                # Reshape 3D -> 2D for scaler
+                X_reshaped_for_scaling = X.reshape(-1, n_feat)
+                print(f"DEBUG _prepare_data: Reshaped 3D to 2D for scaling: {X_reshaped_for_scaling.shape}")
 
+                # Scaling (Transform only)
+                scaled_data_2d = self.scaler.transform(X_reshaped_for_scaling)
+                print(f"DEBUG _prepare_data: Scaled 2D data shape: {scaled_data_2d.shape}")
+
+                # Reshape back to 3D
+                X_processed_scaled = scaled_data_2d.reshape(n_samples, seq_len, n_feat)
+                print(f"DEBUG _prepare_data: Reshaped scaled data back to 3D: {X_processed_scaled.shape}")
+                # --- End Preserve 3D Structure ---
+
+                # Return the 3D SCALED array
+                return X_processed_scaled, None, self.processed_feature_names # No labels
 
     # time_steps parameter removed from signature as it's ignored for DataFrames now
     def run(self, X: Union[pd.DataFrame, np.ndarray], y: Optional[np.ndarray] = None, label_col: str = 'label'):
@@ -196,16 +221,46 @@ class XGBoostModel(model_interface.ModelInterface):
         current_model_params = self.model_params.copy()
         current_model_params['scale_pos_weight'] = scale_pos_weight
 
-        # Training the Classifier
-        print(f"Training XGBClassifier with {X_processed_scaled.shape[0]} samples, {X_processed_scaled.shape[1]} features...")
-        self.model = xgb.XGBClassifier(**current_model_params)
-        # Fit directly on the 2D NumPy array
-        self.model.fit(X_processed_scaled, y_aligned)
-        print("Model training complete.")
+        # --- Step 1: Train the Base XGBoost Classifier ---
+        print(f"Training BASE XGBClassifier with {X_processed_scaled.shape[0]} samples, {X_processed_scaled.shape[1]} features...")
+        base_xgb_model = xgb.XGBClassifier(**current_model_params)
+        base_xgb_model.fit(X_processed_scaled, y_aligned)
+        print("Base model training complete.")
+
+        print("DEBUG: Base XGBoost model predict_proba stats:")
+        base_probs = base_xgb_model.predict_proba(X_processed_scaled)
+        if base_probs.shape[1] > 1: # Check if it has 2 columns
+            print(f"  P(anomaly) min={np.min(base_probs[:, 1]):.4f}, max={np.max(base_probs[:, 1]):.4f}, mean={np.mean(base_probs[:, 1]):.4f}")
+        else: # Handle case if predict_proba returns only one column somehow
+            print(f"  Probs shape: {base_probs.shape}")
+            print(f"  Probs stats: min={np.min(base_probs):.4f}, max={np.max(base_probs):.4f}, mean={np.mean(base_probs):.4f}")
+
+
+        # --- Step 2: Apply Probability Calibration ---
+        print("Applying probability calibration (method='sigmoid')...")
+        # We use cv='prefit' because the base_xgb_model is already trained.
+        # 'sigmoid' corresponds to Platt scaling. 'isotonic' is another option.
+        # NOTE: Ideally, calibration should use a separate validation set,
+        # but fitting on the training set is a common practice if one isn't available.
+        calibrated_model = CalibratedClassifierCV(
+            estimator=base_xgb_model,
+            method='sigmoid', # Or 'isotonic'
+            cv='prefit'       # Crucial: Indicates the base estimator is already fitted
+        )
+
+        # Fit the calibrator
+        calibrated_model.fit(X_processed_scaled, y_aligned)
+        print("Calibration complete.")
+
+        # --- Step 3: Store the CALIBRATED Model ---
+        # Now self.model refers to the calibrated version
+        self.model = calibrated_model
+        print(f"Stored calibrated model of type: {type(self.model)}")
 
 
     def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """ Calculates anomaly scores (probability of class 1). """
+        print("get anomaly score")
         if self.model is None or self.scaler is None or self.input_type is None or self.processed_feature_names is None:
              raise RuntimeError("Model is not trained or ready.")
 
@@ -223,7 +278,7 @@ class XGBoostModel(model_interface.ModelInterface):
 
         # Predict Probabilities
         try:
-            probabilities = self.model.predict_proba(X_processed_scaled)
+            probabilities = self.predict_proba_xai(X_processed_scaled)
             positive_class_index = np.where(self.model.classes_ == 1)[0]
             if len(positive_class_index) == 0:
                  anomaly_scores = np.zeros(probabilities.shape[0]) if 0 in self.model.classes_ else np.full(probabilities.shape[0], np.nan)
@@ -278,85 +333,65 @@ class XGBoostModel(model_interface.ModelInterface):
              return final_anomalies
 
         return anomalies
-
-
-    # --- METHOD FOR XAI (SHAP/LIME) ---
-    def predict_proba_xai(self, X_xai: np.ndarray) -> np.ndarray:
+    
+    def predict_proba_xai(self, X_input: np.ndarray) -> np.ndarray:
         """
-        Prediction function for XAI methods (SHAP/LIME) supporting internal
-        preprocessing for models trained on EITHER DataFrame (as 2D) OR 3D NumPy arrays.
-
-        Accepts input in the *original* format and performs internal scaling
-        (for DataFrame input) or reshaping + scaling (for 3D NumPy input).
+        Predicts class probabilities, handling internal scaling based on training type.
+        Assumes input X_input is ALREADY in the correct shape expected by _prepare_data_for_model
+        (e.g., 2D for DataFrame-trained, 3D for NumPy-trained).
+        However, the input is expected to be UNSCALED.
 
         Args:
-            X_xai (np.ndarray): Input data in the original format.
-                - If trained on DataFrame: MUST be 2D NumPy (n_instances, n_original_features).
-                - If trained on 3D NumPy: MUST be 3D NumPy (n_instances, seq_len, n_original_features).
+            X_input (np.ndarray): Input data (unscaled) in the shape corresponding
+                                    to the original training data type (2D or 3D).
 
         Returns:
-            np.ndarray: Predicted probabilities with shape (n_instances, n_classes).
-
-        Raises:
-            RuntimeError: If the model is not trained or prerequisites are missing.
-            TypeError: If input type is incorrect for the training mode.
-            ValueError: If input dimensions do not match training data dimensions.
+            np.ndarray: Probability estimates for each class (n_samples, n_classes).
         """
-        if self.model is None or self.scaler is None or self.input_type is None \
-           or self.n_original_features is None: # Use n_original_features for checks
-            raise RuntimeError("Model is not trained or ready for XAI prediction.")
+        print(f"--- predict_proba_xai called with input shape {X_input.shape} ---")
+        if self.model is None or self.scaler is None or self.input_type is None or self.n_original_features is None:
+             raise RuntimeError("Model is not trained or ready for XAI prediction.")
 
-        if not isinstance(X_xai, np.ndarray):
-            raise TypeError("Input X_xai must be a NumPy array.")
-
-        n_instances = X_xai.shape[0]
-        if n_instances == 0:
-             # Determine expected number of classes for empty output shape
-             n_classes = len(self.model.classes_) if hasattr(self.model, 'classes_') and self.model.classes_ is not None else 2
-             return np.empty((0, n_classes))
-
-        X_scaled = None
-
-        # --- Handle based on how the model was trained ---
         if self.input_type == 'dataframe':
-            # Expect 2D NumPy input matching original features
-            if X_xai.ndim != 2:
-                raise ValueError(f"Input X_xai must be 2D (n_instances, n_original_features) for DataFrame-trained model, got {X_xai.ndim}D.")
-            if X_xai.shape[1] != self.n_original_features:
-                raise ValueError(f"Input X_xai has {X_xai.shape[1]} features, expected {self.n_original_features} original features.")
+             if X_input.ndim != 2:
+                 raise ValueError(f"Expected 2D NumPy for DataFrame-trained model, got {X_input.ndim}D")
+             if X_input.shape[1] != self.n_original_features:
+                 raise ValueError(f"Input features {X_input.shape[1]} != trained features {self.n_original_features}")
 
-            # Scale the 2D input
-            try:
-                if not hasattr(self.scaler, 'scale_'): raise RuntimeError("Scaler not fitted.")
-                X_scaled = self.scaler.transform(X_xai)
-            except Exception as e:
-                raise RuntimeError(f"Failed to scale 2D input for XAI. Shape: {X_xai.shape}. Error: {e}") from e
+             # Scale the 2D input
+             X_processed_scaled = self.scaler.transform(X_input)
+             print(f"DEBUG predict_proba_xai DF: Scaled shape {X_processed_scaled.shape}")
 
         elif self.input_type == 'numpy':
-             # Expect 3D NumPy input matching original sequence structure
-            if X_xai.ndim != 3:
-                raise ValueError(f"Input X_xai must be 3D (n_instances, seq_len, features) for NumPy-trained model, got {X_xai.ndim}D.")
+             if X_input.ndim != 3:
+                  raise ValueError(f"Expected 3D NumPy for NumPy-trained model, got {X_input.ndim}D")
+             n_samples, seq_len, n_feat = X_input.shape
+             if seq_len != self.sequence_length: raise ValueError(f"Input seq len {seq_len} != train seq len {self.sequence_length}")
+             if n_feat != self.n_original_features: raise ValueError(f"Input features {n_feat} != train features {self.n_original_features}")
 
-            _, seq_len, n_feat = X_xai.shape
-            if seq_len != self.sequence_length: raise ValueError(f"Input X_xai seq len ({seq_len}) != train seq len ({self.sequence_length}).")
-            if n_feat != self.n_original_features: raise ValueError(f"Input X_xai features ({n_feat}) != train features ({self.n_original_features}).")
-
-            # Reshape 3D -> 2D
-            X_reshaped = X_xai.reshape(n_instances, seq_len * n_feat)
-
-            # Scale the reshaped input
-            try:
-                if not hasattr(self.scaler, 'scale_'): raise RuntimeError("Scaler not fitted.")
-                X_scaled = self.scaler.transform(X_reshaped)
-            except Exception as e:
-                raise RuntimeError(f"Failed to scale reshaped 3D input for XAI. Shape: {X_reshaped.shape}. Error: {e}") from e
+             # Flatten 3D -> 2D for scaling and prediction
+             X_flattened = X_input.reshape(n_samples, -1)
+             print(f"DEBUG predict_proba_xai NP: Flattened shape {X_flattened.shape}")
+             # Scale the flattened input
+             X_processed_scaled = self.scaler.transform(X_flattened)
+             print(f"DEBUG predict_proba_xai NP: Scaled shape {X_processed_scaled.shape}")
         else:
-             raise RuntimeError(f"Unsupported input_type '{self.input_type}' for XAI.")
+             raise RuntimeError(f"Unknown input_type '{self.input_type}' during training.")
 
-        # --- Predict probabilities using the internal model ---
-        try:
-            probabilities = self.model.predict_proba(X_scaled)
-        except Exception as e:
-            raise RuntimeError(f"Internal model prediction failed during XAI call. Scaled input shape: {X_scaled.shape}. Error: {e}") from e
-
+        # Predict probabilities using the internal model
+        probabilities = self.model.predict_proba(X_processed_scaled)
+        print(f"DEBUG predict_proba_xai: Output probabilities shape {probabilities.shape}")
+        # Ensure 2 columns output for binary case, handle potential single-class prediction
+        if probabilities.ndim == 1 or probabilities.shape[1] < 2:
+            probs_reconstructed = np.zeros((probabilities.shape[0], 2))
+            if 0 in self.model.classes_ and 1 in self.model.classes_:
+                idx0 = np.where(self.model.classes_ == 0)[0][0]
+                idx1 = np.where(self.model.classes_ == 1)[0][0]
+                probs_reconstructed[:, idx0] = probabilities[:, idx0] if probabilities.ndim > 1 and idx0 < probabilities.shape[1] else (1-probabilities if probabilities.ndim == 1 else 0.0) # Approximation if single prob given
+                probs_reconstructed[:, idx1] = probabilities[:, idx1] if probabilities.ndim > 1 and idx1 < probabilities.shape[1] else (probabilities if probabilities.ndim == 1 else 0.0)
+                probs_reconstructed /= probs_reconstructed.sum(axis=1, keepdims=True) # Normalize
+            elif 1 in self.model.classes_: probs_reconstructed[:, 1] = 1.0 # Only positive class seen
+            elif 0 in self.model.classes_: probs_reconstructed[:, 0] = 1.0 # Only negative class seen
+            else: probs_reconstructed = np.full((probabilities.shape[0], 2), 0.5) # Fallback
+            return probs_reconstructed
         return probabilities

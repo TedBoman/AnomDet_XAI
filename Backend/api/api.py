@@ -1,6 +1,7 @@
 import os
 import socket
 import json
+import sys
 from time import sleep
 from datetime import datetime
 from typing import Optional, Dict, List, Any # Add necessary imports
@@ -25,6 +26,8 @@ class BackendAPI:
             "name": "job_batch_"+name, # Consider just passing 'name' maybe?
             "debug": debug
         }
+        print(label_column)
+        sys.stdout.flush()
         if inj_params: 
             data["inj_params"] = inj_params
         if label_column is not None:

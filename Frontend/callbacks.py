@@ -1,3 +1,4 @@
+import sys
 import traceback
 from dash import Dash, dcc, html, Input, Output, State, ALL, MATCH, callback, callback_context, no_update
 import json
@@ -128,6 +129,10 @@ def get_index_callbacks(app):
                     html.Div([
                         html.Label("K for L1 Reg Features (l1_reg_k):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
                         dcc.Input(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'l1_reg_k'}, type="number", value=20, min=1, step=1, style={'width':'80px'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("Explainer method:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Dropdown(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'shap_method'}, options=[{'label': 'KernelShap (default)', 'value': 'kernel'},{'label': 'TreeShap', 'value': 'tree'},{'label': 'LinearShap', 'value': 'linear'},{'label': 'PartitionShap', 'value': 'partition'}], value='kernel', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
                     ], style={'marginBottom':'8px'})
                 ])
             elif selected_xai_method == "LimeExplainer":
@@ -461,7 +466,16 @@ def get_index_callbacks(app):
 
         # --- Call Backend Handler ---
         try:
-            # Pass label_col_to_pass and xai_params to your backend handler
+            print(f"Sending job with parameters:")
+            print(f"  Mode: {selected_mode}")
+            print(f"  Dataset: {selected_dataset}")
+            print(f"  Detection Model: {selected_detection_model}")
+            print(f"  Job Name: {job_name}")
+            print(f"  Label Column: {label_col_to_pass}")
+            print(f"  XAI Params: {xai_params_list}")
+            print(f"  Injection Params: {inj_params_list}")
+            sys.stdout.flush()
+
             if selected_mode == "batch":
                 response = handler.handle_run_batch(
                     selected_dataset, selected_detection_model, job_name,

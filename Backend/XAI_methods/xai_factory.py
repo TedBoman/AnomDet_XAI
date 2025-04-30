@@ -5,7 +5,7 @@ import numpy as np
 # Import the specific explainer CLASSES
 from XAI_methods.methods.ShapExplainer import ShapExplainer
 from XAI_methods.methods.LimeExplainer import LimeExplainer
-from XAI_methods.methods.dice_builder import build_dice_explainer
+from XAI_methods.methods.DiceExplainer import DiceExplainer
 
 # Import the base API if you use type hints or checks
 try:
@@ -88,7 +88,7 @@ def xai_factory(
             print(f"Attempting to instantiate DiceExplainer...")
             try:
                 # Pass the received arguments TO the LimeExplainer constructor
-                explainer_instance = build_dice_explainer(
+                explainer_instance = DiceExplainer(
                     model=ml_model,
                     background_data=background_data,
                     **kwargs

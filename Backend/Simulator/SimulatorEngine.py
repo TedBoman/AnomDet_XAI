@@ -25,7 +25,7 @@ class SimulatorEngine:
                 try:
                     file_extension = Path(file_path).suffix
                     sim = Simulator(file_path, file_extension, start_time, x_speedup=speedup)
-                    return sim.start_simulation(conn_params, anomaly_settings, table_name, timestamp_col_name, label_col_name)
+                    return sim.start_simulation(conn_params=conn_params, anomaly_settings=anomaly_settings, table_name=table_name, timestamp_col_name=timestamp_col_name, label_col_name=label_col_name)
                 except Exception as e:
                     dl.print_exception(f"Error: {e}")
                     return 0
@@ -35,7 +35,7 @@ class SimulatorEngine:
                 try:
                     file_extension = Path(file_path).suffix
                     sim = BatchImporter(file_path, file_extension, start_time, 5)
-                    return sim.start_simulation(conn_params, anomaly_settings, table_name, timestamp_col_name, label_col_name)
+                    return sim.start_simulation(conn_params=conn_params, anomaly_settings=anomaly_settings, table_name=table_name, timestamp_col_name=timestamp_col_name, label_col_name=label_col_name)
                 except Exception as e:
                     dl.print_exception(f"Error: {e}")
                     return 0
@@ -61,7 +61,7 @@ class SimulatorEngine:
                     # Access the timestamp attribute of the AnomalySetting object
                     setting.timestamp = pd.to_datetime(setting.timestamp, unit='s')
 
-                return self.process_file(job.filepath, db_conn_params, job.simulation_type, job.anomaly_settings, pd.to_timedelta(0), job.speedup, job.table_name if job.table_name else None)
+                return self.process_file(job.filepath, db_conn_params, job.simulation_type, job.anomaly_settings, pd.to_timedelta(0), job.speedup, job.table_name if job.table_name else None, timestamp_col_name, label_col_name)
             else:
 
-                return self.process_file(job.filepath, db_conn_params, job.simulation_type, job.anomaly_settings, pd.to_timedelta(0), job.speedup, job.table_name if job.table_name else None)
+                return self.process_file(job.filepath, db_conn_params, job.simulation_type, job.anomaly_settings, pd.to_timedelta(0), job.speedup, job.table_name if job.table_name else None, timestamp_col_name, label_col_name)

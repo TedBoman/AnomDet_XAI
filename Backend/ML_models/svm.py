@@ -109,16 +109,6 @@ class SVMModel(model_interface.ModelInterface):
         #print(f"Encoded data shape: {encoded_data.shape}")
         return encoded_data
 
-
-    def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
-        """ Calculates SVM decision function scores (lower = more anomalous). Expects 2D input. """
-        #print("Calculating anomaly scores...")
-        encoded_data = self._preprocess_and_encode(detection_data)
-        scores = self.svm_model.decision_function(encoded_data)
-        #print(f"Calculated {len(scores)} scores.")
-        return scores # Returns 1D array
-
-
     def detect(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """ Detects anomalies based on threshold. Expects 2D input. """
         if self.threshold is None: raise RuntimeError("Threshold not set. Call run() first.")

@@ -34,7 +34,7 @@ def process_and_plot_shap(
         print("SHAP results are None. Skipping plotting.")
         return
     
-    output_dir = output_dir+'/SHAP'
+    output_dir = output_dir+'/'+job_name+'/SHAP'
 
     # --- Prepare Data for Standard SHAP Plots ---
     n_instances_explained = instances_explained.shape[0]
@@ -170,7 +170,7 @@ def process_and_plot_lime(
          print("LIME results object is None. Skipping.")
          return
      
-     output_dir = output_dir+'/LIME'
+     output_dir = output_dir+'/'+job_name+'/LIME'
 
      # LIME Explanation object usually comes from explaining one instance
      lime_explanation = results
@@ -208,7 +208,7 @@ def process_and_plot_dice(
     """
     print(f"--- Processing and Saving DiCE Counterfactuals with Original ---")
 
-    output_dir = output_dir+'/DiCE'
+    output_dir = output_dir+'/'+job_name+'/DiCE'
 
     os.makedirs(output_dir, exist_ok=True) # Ensure output directory exists
 

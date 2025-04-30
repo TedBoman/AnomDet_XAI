@@ -183,9 +183,15 @@ class BatchImporter:
         #full_df = full_df.rename(columns={timestamp_col_name: 'timestamp'}) # Uncomment when passing timestamp column
         full_df.columns.values[0] = "timestamp"
 
-        label_index = len(full_df.columns) - 1
-        if label_index != None:
-            full_df.columns.values[label_index] = "label"
+        print(f"renaming columns '{label_col_name}'")
+        rename_map = {}
+        if label_col_name != 'label':
+            rename_map[label_col_name] = 'label'
+
+        # --- Perform Renaming Operation ---
+        if rename_map: # Only rename if there's anything to rename
+            full_df = full_df.rename(columns=rename_map)
+            dl.debug_print("Label column renaming applied.")
         
         columns = list(full_df.columns.values)
         
