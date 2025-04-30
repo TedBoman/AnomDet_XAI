@@ -41,8 +41,8 @@ def layout(handler):
     layout = html.Div([
 
         # --- AnomDetX Settings panel ---
-        html.Div(
-            [
+        html.Div( 
+            [ 
                 html.H1("AnomDetX", style={
                     "textAlign": "center",
                     "marginBottom": "30px",
@@ -353,6 +353,6 @@ def layout(handler):
         ),
         # --- END Explanation Box ---
 
-    ], style={ "backgroundColor": "#105E90", "padding": "40px", "minHeight": "100vh", "display": "flex", "flex-wrap": "nowrap", "align-items": "center"})
+    ], id="main-settings-container", style={ "backgroundColor": "#105E90", "padding": "40px", "minHeight": "100vh", "display": "flex", "flex-wrap": "nowrap", "align-items": "center"})
 
     return layout

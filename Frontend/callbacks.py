@@ -84,7 +84,7 @@ def get_index_callbacks(app):
                     html.Label("Num Estimators (n_estimators):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'n_estimators'},
                                 type="number", value=100, min=10, step=10, # Default 100
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 html.Div([
                     html.Label("Learning Rate (learning_rate):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
@@ -93,25 +93,25 @@ def get_index_callbacks(app):
                                   value=0.1,
                                   min=0.0,  # Changed min to 0.0
                                   step=0.01,
-                                  style={'width':'150px', 'verticalAlign':'middle'})
+                                  )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 html.Div([
                     html.Label("Max Depth (max_depth):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'max_depth'},
                                 type="number", value=6, min=1, step=1, # Default 6
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 html.Div([
                     html.Label("Min Child Weight (min_child_weight):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'min_child_weight'},
                                 type="number", value=1, min=0, step=1, # Default 1
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 html.Div([
                     html.Label("Gamma (min_split_loss):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'gamma'},
                                 type="number", value=0, min=0, step=0.1, # Default 0
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- Sampling Params ---
@@ -119,25 +119,25 @@ def get_index_callbacks(app):
                     html.Label("Subsample Ratio (subsample):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'subsample'},
                                 type="number", value=1.0, min=0.1, max=1.0, step=0.05, # Default 1.0 
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                     html.Div([
                     html.Label("Col Sample by Tree (colsample_bytree):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'colsample_bytree'},
                                 type="number", value=1.0, min=0.1, max=1.0, step=0.05, # Default 1.0 - 
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                     html.Div([
                     html.Label("Col Sample by Level (colsample_bylevel):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'colsample_bylevel'},
                                 type="number", value=1.0, min=0.1, max=1.0, step=0.05, # Default 1.0
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                     html.Div([
                     html.Label("Col Sample by Node (colsample_bynode):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'colsample_bynode'},
                                 type="number", value=1.0, min=0.1, max=1.0, step=0.05, # Default 1.0
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- Regularization ---
@@ -145,13 +145,13 @@ def get_index_callbacks(app):
                     html.Label("L1 Reg Alpha (reg_alpha):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'reg_alpha'},
                                 type="number", value=0, min=0, step=0.1, # Default 0
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                     html.Div([
                     html.Label("L2 Reg Lambda (reg_lambda):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'reg_lambda'},
                                 type="number", value=1, min=0, step=0.1, # Default 1
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- Other Params ---
@@ -166,7 +166,7 @@ def get_index_callbacks(app):
                     html.Label("Random State (int):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'random_state'},
                                 type="number", placeholder="None", step=1, # Allow None (empty) or int
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 html.Div([
                     html.Label("Probability Calibration Method:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
@@ -186,7 +186,7 @@ def get_index_callbacks(app):
                     html.Label("LSTM Units per Layer (int):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'units'},
                                 type="number", value=64, min=8, step=8, # Default from backend
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 html.Div([
                     html.Label("LSTM Activation:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
@@ -199,13 +199,13 @@ def get_index_callbacks(app):
                         html.Label("Dropout Rate (float 0-1):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                         dcc.Input(id={**setting_id_base, 'param': 'dropout'},
                                 type="number", value=0.0, min=0.0, max=1.0, step=0.05, # Default 0.0 as backend doesn't use it yet
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                     ], style={'marginBottom':'8px', 'textAlign':'left'}),
                     html.Div([
                         html.Label("Recurrent Dropout (float 0-1):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                         dcc.Input(id={**setting_id_base, 'param': 'recurrent_dropout'},
                                 type="number", value=0.0, min=0.0, max=1.0, step=0.05, # Default 0.0 as backend doesn't use it yet
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                     ], style={'marginBottom':'8px', 'textAlign':'left'}),
                     # Note: Adding more layers would require significant backend LSTMModel redesign.
 
@@ -214,7 +214,7 @@ def get_index_callbacks(app):
                     html.Label("Time Steps (Sequence Len):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'time_steps'},
                                 type="number", value=10, min=2, step=1, # Default from backend
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                     html.Div([
                     html.Label("Optimizer:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
@@ -227,7 +227,7 @@ def get_index_callbacks(app):
                     html.Label("Learning Rate (float):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'learning_rate'},
                                 type="number", value=0.001, step=0.0001, # Default from backend
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                     html.Div([
                     html.Label("Loss Function:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
@@ -240,13 +240,13 @@ def get_index_callbacks(app):
                     html.Label("Training Epochs (int):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'epochs'},
                                 type="number", value=10, min=1, step=1, # Default from backend
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                     html.Div([
                     html.Label("Batch Size (int):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'batch_size'},
                                 type="number", value=256, min=1, step=1, # Default from backend
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
             ])
         elif selected_model == "svm":
@@ -257,7 +257,7 @@ def get_index_callbacks(app):
                     html.Label("Encoding Dimension (int):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'encoding_dim'},
                                 type="number", value=10, min=2, step=1, # Default 10
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 html.Div([
                     html.Label("AE Hidden Activation:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
@@ -284,7 +284,7 @@ def get_index_callbacks(app):
                     html.Label("AE Learning Rate (float):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'learning_rate'},
                                 type="number", value=0.001, step=0.0001,
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 html.Div([
                     html.Label("AE Loss Function:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
@@ -297,13 +297,13 @@ def get_index_callbacks(app):
                     html.Label("AE Training Epochs (int):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'epochs'},
                                 type="number", value=10, min=1, step=1, # Default 10
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                     html.Div([
                     html.Label("AE Batch Size (int):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'batch_size'},
                                 type="number", value=32, min=1, step=1, # Default 32
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- OneClassSVM Settings ---
@@ -321,28 +321,28 @@ def get_index_callbacks(app):
                     html.Label("SVM Nu (float 0-1):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'svm_nu'}, # Renamed param key
                                 type="number", value=0.1, min=0.0, max=1.0, step=0.01, # Default 0.1
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 # Gamma (already present, adjusted style)
                 html.Div([
                     html.Label("SVM Gamma ('scale', 'auto', float):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'svm_gamma'}, # Renamed param key
                                 type="text", value='scale', placeholder="'scale', 'auto' or float",
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 # Degree (already present, adjusted style)
                 html.Div([
                     html.Label("SVM Degree (int>=1, for Poly):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'svm_degree'}, # Renamed param key
                                 type="number", value=3, min=1, step=1,
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 # Coef0 (New)
                     html.Div([
                     html.Label("SVM Coef0 (float, Poly/Sigmoid):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'coef0'}, # Standard param name
                                 type="number", value=0.0, step=0.1, # Default 0.0
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                     # Shrinking (New)
                 html.Div([
@@ -358,14 +358,14 @@ def get_index_callbacks(app):
                     html.Label("SVM Tolerance (float):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'tol'}, # Standard param name
                                 type="number", value=1e-3, step=1e-4,
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                     # Max Iter (New)
                     html.Div([
                     html.Label("SVM Max Iterations (int):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'max_iter'}, # Standard param name
                                 type="number", placeholder="-1 (no limit)", step=1, min=-1, # Default -1
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # Note: Regularization (C) is not a parameter for OneClassSVM, Nu is used instead. Removed 'C' input.
@@ -377,7 +377,7 @@ def get_index_callbacks(app):
                     html.Label("Num Estimators (n_estimators):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'n_estimators'},
                                 type="number", value=100, min=10, step=10, # Default 100
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- Contamination ---
@@ -385,7 +385,7 @@ def get_index_callbacks(app):
                     html.Label("Contamination ('auto' or float):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'contamination'},
                                 type="text", value='auto', placeholder="'auto' or float (0-0.5)", # Text allows 'auto' or float
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- Max Samples ---
@@ -393,7 +393,7 @@ def get_index_callbacks(app):
                     html.Label("Max Samples ('auto', int, float):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'max_samples'},
                                 type="text", value='auto', placeholder="'auto', int or float", # Text allows 'auto', int, or float
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- Max Features ---
@@ -401,7 +401,7 @@ def get_index_callbacks(app):
                     html.Label("Max Features (float 0-1):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'max_features'},
                                 type="number", value=1.0, min=0.0, max=1.0, step=0.05, # Float proportion
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- Bootstrap ---
@@ -419,7 +419,7 @@ def get_index_callbacks(app):
                     html.Label("Random State (int):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'random_state'},
                                 type="number", placeholder="None", step=1, # Allow None (empty) or int
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # Add more settings if needed...
@@ -449,7 +449,7 @@ def get_index_callbacks(app):
                     html.Label("Max Depth (int):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'max_depth'},
                                 type="number", placeholder="None (unlimited)", step=1, min=1, # Ensure positive integer if set
-                                style={'width':'150px', 'verticalAlign':'middle'}) # Allow None (empty)
+                                ) # Allow None (empty)
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- Min Samples Split ---
@@ -457,7 +457,7 @@ def get_index_callbacks(app):
                     html.Label("Min Samples Split (int>=2):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'min_samples_split'},
                                 type="number", value=2, min=2, step=1, # Default is 2
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                     # --- Min Samples Leaf ---
@@ -465,7 +465,7 @@ def get_index_callbacks(app):
                     html.Label("Min Samples Leaf (int>=1):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'min_samples_leaf'},
                                 type="number", value=1, min=1, step=1, # Default is 1
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                     # --- Min Weight Fraction Leaf ---
@@ -473,7 +473,7 @@ def get_index_callbacks(app):
                     html.Label("Min Weight Fraction Leaf (float):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'min_weight_fraction_leaf'},
                                 type="number", value=0.0, min=0.0, max=0.5, step=0.01, # Range 0.0 to 0.5
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- Max Features ---
@@ -494,7 +494,7 @@ def get_index_callbacks(app):
                     html.Label("Random State (int):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'random_state'},
                                 type="number", placeholder="None", step=1,
-                                style={'width':'150px', 'verticalAlign':'middle'}) # Allow None (empty) or int
+                                ) # Allow None (empty) or int
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- Max Leaf Nodes ---
@@ -502,7 +502,7 @@ def get_index_callbacks(app):
                     html.Label("Max Leaf Nodes (int>=2):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'max_leaf_nodes'},
                                 type="number", placeholder="None (unlimited)", step=1, min=2,
-                                style={'width':'150px', 'verticalAlign':'middle'}) # Allow None (empty) or int >= 2
+                                ) # Allow None (empty) or int >= 2
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- Min Impurity Decrease ---
@@ -510,7 +510,7 @@ def get_index_callbacks(app):
                     html.Label("Min Impurity Decrease (float):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'min_impurity_decrease'},
                                 type="number", value=0.0, min=0.0, step=0.01, # Default is 0.0
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- CCP Alpha (Pruning) ---
@@ -518,7 +518,7 @@ def get_index_callbacks(app):
                     html.Label("CCP Alpha (Pruning, float):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'ccp_alpha'},
                                 type="number", value=0.0, min=0.0, step=0.01, # Default is 0.0
-                                style={'width':'150px', 'verticalAlign':'middle'})
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # Add more settings if needed...
