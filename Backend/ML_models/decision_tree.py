@@ -25,7 +25,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
     """
     
     def __init__(self, *kwargs):
-        Initializes the Decision Tree classifier model.
+        """Initializes the Decision Tree classifier model.
 
         Args:
             criterion (str): Function to measure the quality of a split.
