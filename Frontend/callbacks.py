@@ -1,3 +1,5 @@
+# callbacks.py (Complete and Updated File)
+
 import sys
 import traceback
 from dash import Dash, dcc, html, Input, Output, State, ALL, MATCH, callback, callback_context, no_update
@@ -6,6 +8,68 @@ from get_handler import get_handler
 import os
 from ml_model_hyperparameters import HYPERPARAMETER_DESCRIPTIONS
 
+# --- Create_active_jobs FUNCTION ---
+def create_active_jobs(active_jobs):
+    """
+    Generates the HTML structure for the active jobs list, returning a single Div.
+    """
+    if not active_jobs:
+        # Return a single Div containing the message
+        return html.Div("No active jobs found.")
+
+    job_divs = []
+    for job in active_jobs:
+        job_name = job.get("name", "Unknown Job") # Use .get for safety
+        # Construct the internal Dash link
+        dash_link = f'/job/{job_name}'
+
+        # Create the Div for each job entry
+        job_entry = html.Div([
+            # Confirmation dialog for stopping the job
+            dcc.ConfirmDialog(
+                id={"type": "confirm-box", "index": job_name},
+                message=f'Are you sure you want to cancel the job: {job_name}?',
+                displayed=False,
+            ),
+            # Link to the job's results page within the Dash app
+            html.A(
+                children=[job_name],
+                href=dash_link,
+                # target="_blank", # Optional: uncomment to open in new tab
+                style={
+                    "marginRight": "15px",
+                    "color": "#4CAF50", # Green link color
+                    "textDecoration": "none",
+                    "fontWeight": "bold",
+                    "fontSize": "16px"
+                }
+            ),
+            # Button to stop/cancel the job
+            html.Button(
+                "Stop Job",
+                id={"type": "remove-dataset-btn", "index": job_name},
+                n_clicks=0,
+                style={
+                    "fontSize": "12px",
+                    "backgroundColor": "#e74c3c", # Red button color
+                    "color": "#ffffff", # White text
+                    "border": "none",
+                    "borderRadius": "5px",
+                    "padding": "5px 10px", # Slightly more padding
+                    "cursor": "pointer" # Indicate it's clickable
+                }
+            )
+        ], style={'paddingBottom': '8px', 'borderBottom': '1px solid #444'}) # Add padding and separator line
+
+        job_divs.append(job_entry)
+
+    # Return a single Div wrapping the title and the list container
+    return html.Div([
+        html.H4("Active Job List", style={'color': '#C0C0C0', 'marginBottom': '10px'}),
+        html.Div(job_divs) # The list of job divs is the second child
+    ])
+
+# --- Callbacks for index page ---
 def get_index_callbacks(app):
 
 # --- NEW Callback to update Parameter Explanation Box ---
@@ -541,82 +605,85 @@ def get_index_callbacks(app):
         if "use_xai" in selected_xai:
              return {"display": "block", "marginTop": "10px", "textAlign": "center"}
         return {"display": "none"}
-    
+
     # --- Callback to populate columns for Injection Dropdown AND Label Dropdown ---
     @app.callback(
         Output("injection-column-dropdown", "options"),
         Output("label-column-dropdown", "options"),
-        Output("label-column-dropdown", "value"),
+        Output("label-column-dropdown", "value"), # Reset label value when dataset changes
         Input("dataset-dropdown", "value"),
         prevent_initial_call=True
     )
     def update_column_dropdown(selected_dataset):
-        print(f"--- update_column_dropdown callback triggered ---") # Start marker
-        print(f"Selected Dataset: {selected_dataset!r}") # Use !r to clearly see None vs ""
+        print(f"--- update_column_dropdown callback triggered ---")
+        print(f"Selected Dataset: {selected_dataset!r}")
 
-        # Check if a dataset is actually selected
         if not selected_dataset:
             print("No dataset selected. Returning empty options.")
             return [], [], None
 
         handler = get_handler()
         print(f"Handler object: {handler}")
-        columns = [] # Initialize columns
-        options = [] # Initialize options
+        columns = []
+        options = []
         try:
             print(f"Calling handler.handle_get_dataset_columns for '{selected_dataset}'...")
             columns = handler.handle_get_dataset_columns(selected_dataset)
-            # *** Check what the handler actually returned ***
             print(f"Handler returned columns: {columns} (Type: {type(columns)})")
 
-            # Ensure columns is a list before proceeding
             if not isinstance(columns, list):
                 print("Warning: Handler did not return a list for columns. Returning empty options.")
                 return [], [], None
 
-            # Create options list
             options = [{"label": col, "value": col} for col in columns]
             print(f"Generated options for dropdowns: {options}")
 
-            # Check if options are empty after filtering
-            if not options:
-                print("Warning: No column options remaining after filtering.")
+            if not options: print("Warning: No column options remaining.")
 
-            # Return options for both dropdowns, reset value for label dropdown
-            return options, options, None
+            return options, options, None # Return options for both, reset label value
 
         except Exception as e:
             print(f"!!! ERROR inside update_column_dropdown try block: {e}")
-            import traceback
-            traceback.print_exc() # Print the full error traceback to the server console
-            return [], [], None # Return empty on error
+            traceback.print_exc()
+            return [], [], None
 
     # --- Callback to generate dynamic XAI settings panel ---
     @app.callback(
         Output("xai-settings-panel", "children"),
         Input("xai-method-dropdown", "value"),
-        State("dataset-dropdown", "value"),
+        State("dataset-dropdown", "value"), # Need dataset to potentially populate features
     )
     def update_xai_settings_panel(selected_xai_methods, selected_dataset):
         if not selected_xai_methods:
-            return [] # Return empty if no method selected
-        
+            return []
+
         active_methods = [m for m in selected_xai_methods if m != 'none']
         if not active_methods:
              return []
 
-        all_settings_children = [] # Initialize list to hold all settings components
-        
+        all_settings_children = []
+        handler = get_handler() # Get handler once if needed for multiple methods
+
+        # Fetch columns once if needed by multiple XAI methods (like DiCE)
+        column_options = []
+        if selected_dataset:
+            try:
+                columns = handler.handle_get_dataset_columns(selected_dataset)
+                if isinstance(columns, list):
+                    column_options = [{"label": col, "value": col} for col in columns]
+                else:
+                    print(f"Warning: Handler did not return list for columns: {columns}")
+            except Exception as e:
+                print(f"!!! ERROR fetching columns for XAI settings panel: {e}")
+                traceback.print_exc()
+
         # --- Loop through each selected method ---
         for i, selected_xai_method in enumerate(active_methods):
-            # Add a separator between methods if more than one is selected
-            if i > 0:
-                all_settings_children.append(html.Hr(style={'borderColor': '#555', 'margin': '20px 0'}))
+            if i > 0: all_settings_children.append(html.Hr(style={'borderColor': '#555', 'margin': '20px 0'}))
 
-            # Add heading for the current method
             method_settings = [html.H5(f"Settings for {selected_xai_method.upper()}:", style={'color':'#ffffff', 'marginTop':'15px', 'marginBottom': '10px'})]
 
-            # --- Use Pattern-Matching IDs ---
+            # --- Pattern-Matching IDs ---
             if selected_xai_method == "ShapExplainer":
                 method_settings.extend([
                     html.Div([
@@ -685,24 +752,20 @@ def get_index_callbacks(app):
                          html.Label("Desired Class (desired_class):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
                          dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'desired_class'}, type="text", value="opposite", style={'width':'80px'})
                      ], style={'marginBottom':'8px'}),
-
-                    # --- Dynamic Features to Vary Dropdown ---
+                    # Features to vary dropdown
                     html.Div([
                         html.Label("Features to vary (features_to_vary):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
                         dcc.Dropdown(
-                            # Use a specific index in MATCH perhaps? Or just ensure unique IDs if needed elsewhere
-                            # For pattern matching state collection, the dict id is sufficient
                             id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'features_to_vary'},
-                            options=[], # To be populated below
-                            value=[],
+                            options=column_options, # Use pre-fetched options
+                            value=[], # Default to empty list (vary all mutable by default in DiCE)
                             multi=True,
-                            placeholder="Select features (leave empty to vary all)",
+                            placeholder="Select features (leave empty to vary all mutable)",
                             style={'width': '90%', 'maxWidth':'500px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'}
                         )
-                    ], id=f'dice-features-vary-div-{selected_xai_method}', # Make ID unique if needed elsewhere
-                       style={'marginBottom':'8px'}), # Unique ID might not be needed if only accessed via pattern matching
-
-                    html.Div([
+                    ], style={'marginBottom':'8px'}),
+                    # Other DiCE settings
+                     html.Div([
                           html.Label("Backend (ML model framework):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
                           dcc.Dropdown(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'backend'}, options=[{'label': 'SciKit-Learn', 'value': 'sklearn'},{'label': 'Tensorflow 1', 'value': 'TF1'},{'label': 'Tensorflow 2', 'value': 'TF2'},{'label': 'PyTorch', 'value': 'pytorch'}], value='sklearn', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
                      ], style={'marginBottom':'8px'}),
@@ -711,33 +774,9 @@ def get_index_callbacks(app):
                           dcc.Dropdown(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'dice_method'}, options=[{'label': 'Random', 'value': 'random'},{'label': 'Genetic', 'value': 'genetic'},{'label': 'KD-Tree', 'value': 'kdtree'}], value='genetic', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
                      ], style={'marginBottom':'8px'})
                 ]
-
-                # --- Populate the features_to_vary dropdown options ---
-                column_options = []
-                if selected_dataset:
-                    handler = get_handler()
-                    try:
-                        columns = handler.handle_get_dataset_columns(selected_dataset)
-                        if isinstance(columns, list):
-                            column_options = [{"label": col, "value": col} for col in columns]
-                        else:
-                            print(f"Warning: Handler did not return list for columns: {columns}")
-                    except Exception as e:
-                        print(f"!!! ERROR fetching columns for DiceExplainer: {e}")
-                        traceback.print_exc()
-
-                # Find the dropdown within dice_specific_settings and assign options
-                # This assumes the dropdown is the second child of the Div with label "Features to vary..."
-                for component in dice_specific_settings:
-                     if isinstance(component, html.Div) and component.children and isinstance(component.children[0], html.Label):
-                          if component.children[0].children == "Features to vary (features_to_vary):":
-                               if len(component.children) > 1 and isinstance(component.children[1], dcc.Dropdown):
-                                    component.children[1].options = column_options
-                                    break
-
                 method_settings.extend(dice_specific_settings)
-            # Add elif for other methods
-            # Append the generated settings for this method to the main list
+            # Add elif for other methods...
+
             all_settings_children.extend(method_settings)
 
         return all_settings_children
@@ -752,54 +791,134 @@ def get_index_callbacks(app):
              return {"display": "block", "marginTop": "10px", "textAlign": "center"}
         return {"display": "none"}
 
-    # --- Existing Callbacks for Active Jobs and Confirmation ---
+    # --- Callback to toggle visibility of Active Jobs section ---
     @app.callback(
         Output("active-jobs-section", "style"),
-        Input("active-jobs-list", "children")
+        Input("active-jobs-list", "children") # Trigger based on content changes
     )
     def toggle_active_jobs_section(children):
-        # Show the active jobs section if there are active jobs
-        if children == "No active jobs found.":
-            return {"display": "none"}
-        return {"display": "block", "marginTop": "30px"}
-        
-    # Callback to display confirmation box
+        # Show the active jobs section unless the content indicates no jobs
+        # Need to be careful about comparing component structures vs simple strings
+        no_jobs_message = "No active jobs found."
+        display_style = {"display": "block", "marginTop": "30px"}
+        hide_style = {"display": "none"}
+
+        if isinstance(children, list) and len(children) > 0:
+            # Check if the first child is a Div containing the no_jobs_message
+            # This depends on how create_active_jobs returns the message now
+            first_child = children[0]
+            if isinstance(first_child, html.Div) and getattr(first_child, 'children', None) == no_jobs_message:
+                 return hide_style
+            else:
+                 return display_style # Assume list contains job divs
+        elif isinstance(children, str) and children == no_jobs_message:
+            return hide_style # Direct string comparison
+        elif children: # If children exist and are not the 'no jobs' message
+             return display_style
+        else: # If children are None or empty list
+             return hide_style
+
+
+    # --- Callback to display confirmation box for stopping a job ---
     @app.callback(
         Output({"type": "confirm-box", "index": MATCH}, "displayed"),
-        Input({"type": "remove-dataset-btn", "index": MATCH}, "n_clicks")
+        Input({"type": "remove-dataset-btn", "index": MATCH}, "n_clicks"),
+        prevent_initial_call=True # Don't display on page load
     )
-    def display_confirm(value):
-        return True if value else False
+    def display_confirm(n_clicks):
+        return True if n_clicks and n_clicks > 0 else False
 
-    # Callback to manage active jobs
-    @app.callback(
-        [Output("active-jobs-list", "children")],
-        [Input("job-interval", "n_intervals"), Input({"type": "confirm-box", "index": ALL}, "submit_n_clicks")],
-        [State("active-jobs-json", "data")],
-        
+    # --- Callback to manage active jobs list ---
+    @callback(
+        Output("active-jobs-list", "children"),
+        # Output("active-jobs-error-message", "children"), # Keep commented unless added
+        Input("job-interval", "n_intervals"),
+        Input({"type": "confirm-box", "index": ALL}, "submit_n_clicks"), # Listen to confirmation clicks
+        State("active-jobs-json", "data") # Store previous state as JSON
     )
-    def manage_and_remove_active_jobs(children, submit_n_clicks, active_jobs_json):
+    def manage_and_remove_active_jobs(n_intervals, submit_n_clicks_list, active_jobs_json_state):
+        """
+        Periodically fetches the list of active jobs and updates the display.
+        Also handles job cancellation confirmation. Includes error handling.
+        Returns a list containing one item for the single Output.
+        """
         ctx = callback_context
-
         triggered_id = ctx.triggered_id
-
-        if triggered_id == None:
-            return no_update
+        print(f"manage_and_remove_active_jobs triggered by: {triggered_id}") # Log trigger
 
         handler = get_handler()
+        error_message = None # Initialize error message
 
-        if triggered_id != "job-interval":
-            job = triggered_id["index"]
-            handler.handle_cancel_job(job)
+        # --- Handle Job Cancellation ---
+        # Check if the trigger was one of the confirmation buttons AND it was clicked
+        if isinstance(triggered_id, dict) and triggered_id.get("type") == "confirm-box":
+            # Find which button was clicked
+            button_index = -1
+            for i, n_clicks in enumerate(submit_n_clicks_list):
+                 # Check if this specific confirmation box was clicked (n_clicks > 0)
+                 # This logic assumes submit_n_clicks resets; adjust if needed
+                 if n_clicks and n_clicks > 0:
+                     # Extract the job name from the ID of the confirmation box that triggered
+                     all_confirm_ids = ctx.inputs_list[1] # Get list of Input dicts for confirm-box
+                     if i < len(all_confirm_ids):
+                          button_index = i
+                          job_to_cancel = all_confirm_ids[i]['id']['index']
+                          print(f"Confirmation received for job: {job_to_cancel}")
+                          try:
+                              response = handler.handle_cancel_job(job_to_cancel)
+                              if response != "success":
+                                   print(f"Backend error cancelling job '{job_to_cancel}': {response}")
+                                   error_message = f"Error cancelling {job_to_cancel}: {response}"
+                              # Reset n_clicks? Dash doesn't directly support this easily
+                              # The callback will proceed to refresh the list anyway
+                          except Exception as cancel_err:
+                              print(f"!!! EXCEPTION during handle_cancel_job for '{job_to_cancel}': {cancel_err}")
+                              traceback.print_exc()
+                              error_message = f"Frontend error cancelling job {job_to_cancel}."
+                          break # Assume only one confirmation can be submitted at a time
 
-        active_jobs = json.loads(handler.handle_get_running())
-        active_jobs = active_jobs["running"]
-        jobs_json = json.dumps(active_jobs)
+        # --- Fetch and Update Active Jobs List ---
+        try:
+            print("Fetching active jobs from backend...")
+            raw_response = handler.handle_get_running()
+            print(f"Raw response from handle_get_running: {raw_response}") # Log raw response
 
-        if jobs_json == active_jobs_json:
-            return no_update
-        
-        return create_active_jobs(active_jobs)
+            if not raw_response: raise ValueError("Received empty response from handle_get_running.")
+
+            active_jobs_data = json.loads(raw_response)
+            print(f"Parsed active_jobs_data: {active_jobs_data}") # Log parsed data
+
+            if not isinstance(active_jobs_data, dict) or 'running' not in active_jobs_data: raise TypeError("Invalid data structure received. Expected {'running': [...]}")
+            if not isinstance(active_jobs_data['running'], list): raise TypeError("Invalid data structure: 'running' key is not a list.")
+            active_jobs_list = active_jobs_data["running"]
+            print(f"Extracted active_jobs_list: {active_jobs_list}") # Log the final list
+
+            # --- Compare with previous state ---
+            current_jobs_json = json.dumps(active_jobs_list, sort_keys=True) # Sort keys for consistent comparison
+            prev_jobs_json_state = active_jobs_json_state if active_jobs_json_state else json.dumps([]) # Handle initial None state
+            # Re-parse prev_jobs_json_state for comparison consistency if needed, or compare strings directly
+            # For simplicity, compare JSON strings directly
+            if current_jobs_json == prev_jobs_json_state and triggered_id == "job-interval":
+                print("Job list hasn't changed. Returning no_update.")
+                return no_update
+
+            # --- Generate new layout component ---
+            print("Job list changed or cancellation may have occurred. Updating display.")
+            new_children_component = create_active_jobs(active_jobs_list) # Gets the single Div
+
+            # --- Wrap the single component in a list for the Output ---
+            return [new_children_component]
+
+        except Exception as e:
+            print(f"!!! EXCEPTION in manage_and_remove_active_jobs callback: {e}")
+            traceback.print_exc()
+            error_output = html.Div([
+                html.P("Error updating active jobs list:", style={'color': 'red', 'fontWeight': 'bold'}),
+                html.Pre(f"{traceback.format_exc()}", style={'color': 'red', 'fontSize': 'small', 'whiteSpace': 'pre-wrap'})
+            ])
+            # --- Wrap the error component in a list for the Output ---
+            return [error_output]
+
 
     # --- start_job_handler ---
     @app.callback(
@@ -813,12 +932,8 @@ def get_index_callbacks(app):
             State("duration-input", "value"), State("injection-column-dropdown", "value"),
             State("injection-check", "value"), State("speedup-input", "value"),
             State("popup", "style"),
-            # Labeled States
             State("labeled-check", "value"), State("label-column-dropdown", "value"),
-            # --- XAI States (MODIFIED) ---
-            State("xai-check", "value"),
-            State("xai-method-dropdown", "value"), # Receives a LIST now
-            # --- Pattern-Matching State for ALL XAI settings ---
+            State("xai-check", "value"), State("xai-method-dropdown", "value"),
             State({'type': 'xai-setting', 'method': ALL, 'param': ALL}, 'value'),
             State({'type': 'xai-setting', 'method': ALL, 'param': ALL}, 'id'),
             # --- NEW: Add ML Settings States ---
@@ -843,137 +958,112 @@ def get_index_callbacks(app):
             ):
         handler = get_handler()
         children = "Job submission processed."
-        style_copy = style.copy()
+        style_copy = style.copy() if style else {} # Ensure style_copy is a dict
 
         ctx = callback_context
-        if not ctx.triggered or ctx.triggered[0]['prop_id'] != 'start-job-btn.n_clicks':
-            if ctx.triggered and ctx.triggered[0]['prop_id'] == 'popup-interval.n_intervals':
-                style_copy.update({"display": "none"})
-                return style_copy, True, children
+        # Check if callback was triggered by button click or interval timeout
+        triggered_prop_id = ctx.triggered[0]['prop_id'] if ctx.triggered else 'No trigger'
+
+        # Handle popup closing
+        if triggered_prop_id == 'popup-interval.n_intervals':
+            style_copy.update({"display": "none"})
+            # Return style, disable interval, keep children text
+            return style_copy, True, children
+
+        # Handle button click
+        if triggered_prop_id != 'start-job-btn.n_clicks' or not n_clicks or n_clicks == 0:
+            # If not triggered by button or button hasn't been clicked, do nothing
             return no_update, no_update, no_update
 
-        trigger = ctx.triggered[0]["prop_id"]
+        # --- Proceed with Job Submission Logic (triggered by button) ---
+        print(f"Start job button clicked (n_clicks={n_clicks})")
 
-        if trigger == "start-job-btn.n_clicks":
-            # --- Basic Validation ---
-            if not selected_dataset:
-                style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
-                return style_copy, False, "Please select a dataset."
-            if not selected_detection_model:
-                 style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
-                 return style_copy, False, "Please select a detection model."
-            if not job_name:
-                style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
-                return style_copy, False, "Job name cannot be empty."
-
+        # Basic Validation
+        error_msg = None
+        if not selected_dataset: error_msg = "Please select a dataset."
+        elif not selected_detection_model: error_msg = "Please select a detection model."
+        elif not job_name: error_msg = "Job name cannot be empty."
+        else:
             response = handler.check_name(job_name)
-            if response != "success":
-                 style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
-                 return style_copy, False, "Job name already exists!"
+            if response != "success": error_msg = "Job name already exists!"
 
-            # --- Process Labeled Data Info ---
-            is_labeled = "is_labeled" in labeled_check_val
-            label_col_to_pass = None
-            if is_labeled:
-                if not selected_label_col:
-                    style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
-                    return style_copy, False, "Please select the label column for the labeled dataset."
-                label_col_to_pass = selected_label_col
-            # --- End Labeled Data Info ---
+        if error_msg:
+            style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
+            return style_copy, False, error_msg # Show error popup
 
-            # --- Process Injection Info ---
-            inj_params_list = None # Backend expects list or None
-            if "use_injection" in inj_check:
-                # Add validation for injection params if needed
-                if not selected_injection_method or selected_injection_method == "None":
-                     style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
-                     return style_copy, False, "Please select an injection method."
-                if not timestamp:
-                     style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
-                     return style_copy, False, "Please enter an injection timestamp."
-                # Basic validation passed, create params dict
-                inj_params = {
-                    "anomaly_type": selected_injection_method, "timestamp": str(timestamp),
-                    "magnitude": str(magnitude if magnitude is not None else 1), # Use default if None
-                    "percentage": str(percentage if percentage is not None else 0), # Default if None
-                    "duration": str(duration if duration else '0s'), # Default if None/empty
-                    "columns": injection_columns if injection_columns else [] # Use empty list if None
-                }
-                inj_params_list = [inj_params] # Backend expects a list
-            # --- End Injection Info ---
+        # Process Labeled Data Info
+        is_labeled = "is_labeled" in labeled_check_val
+        label_col_to_pass = None
+        if is_labeled:
+            if not selected_label_col:
+                style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
+                return style_copy, False, "Please select the label column."
+            label_col_to_pass = selected_label_col
 
-            # --- Process XAI Info ---
-            use_xai = "use_xai" in xai_check_val
-        xai_params_list = None # Changed from xai_params to list
+        # Process Injection Info
+        inj_params_list = None
+        if "use_injection" in inj_check:
+            if not selected_injection_method or selected_injection_method == "None": error_msg = "Please select an injection method."
+            elif not timestamp: error_msg = "Please enter an injection timestamp."
+            # Add more validation for magnitude, percentage, duration, columns if needed
 
+            if error_msg:
+                style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
+                return style_copy, False, error_msg
+
+            inj_params = {
+                "anomaly_type": selected_injection_method, "timestamp": str(timestamp),
+                "magnitude": str(magnitude if magnitude is not None else 1),
+                "percentage": str(percentage if percentage is not None else 0),
+                "duration": str(duration if duration else '0s'),
+                "columns": injection_columns if injection_columns else []
+            }
+            inj_params_list = [inj_params]
+
+        # Process XAI Info
+        use_xai = "use_xai" in xai_check_val
+        xai_params_list = None
         if use_xai:
             active_methods = [m for m in selected_xai_methods if m != 'none'] if selected_xai_methods else []
             if not active_methods:
-                style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
-                return style_copy, False, "Please select at least one XAI method if 'Use Explainability' is checked."
+                 style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
+                 return style_copy, False, "Please select at least one XAI method."
 
-            # --- Parse ALL Pattern-Matching State results into a structured dict ---
-            # all_parsed_settings = { 'ShapExplainer': {'param1': val1, ...}, 'DiceExplainer': {'paramA': valA,...} }
             all_parsed_settings = {}
             print(f"DEBUG: Received XAI settings IDs: {xai_settings_ids}")
             print(f"DEBUG: Received XAI settings Values: {xai_settings_values}")
 
             for id_dict, value in zip(xai_settings_ids, xai_settings_values):
-                method_name = id_dict['method']
-                param_name = id_dict['param']
+                method_name = id_dict.get('method')
+                param_name = id_dict.get('param')
+                if not method_name or not param_name or method_name not in active_methods: continue
 
-                # Only process settings for methods that are actually selected
-                if method_name not in active_methods:
-                    continue # Skip settings for methods not currently selected
-
-                # Initialize dict for the method if it doesn't exist
-                if method_name not in all_parsed_settings:
-                    all_parsed_settings[method_name] = {}
-
-                # Handle None values if necessary (user cleared input)
-                # (Add specific default logic here if needed, similar to previous single-method version)
-                if value is None and param_name not in ['features_to_vary', 'kernel_width']: # Allow None/empty for these
-                     print(f"Warning: XAI setting '{param_name}' for method '{method_name}' has None value. Check defaults.")
-                     # Example default assignment:
-                     # if method_name == 'LimeExplainer' and param_name == 'num_samples': value = 1000
-
-                # Special handling / Type conversion if needed
-                if param_name == 'features_to_vary' and value == []:
-                    print(f"DEBUG: features_to_vary for {method_name} is empty list. Backend might default to 'all'.")
-
-                # Store the value
+                if method_name not in all_parsed_settings: all_parsed_settings[method_name] = {}
+                # Handle None values if necessary (user cleared input), similar to original logic
+                # ... (add specific default logic if needed) ...
                 all_parsed_settings[method_name][param_name] = value
 
             print(f"DEBUG: Parsed all XAI settings: {all_parsed_settings}")
 
-            # --- Construct the final list of XAI params for the backend ---
             xai_params_list = []
             for method_name in active_methods:
                 if method_name in all_parsed_settings:
                     current_settings = all_parsed_settings[method_name]
-
-                    # Perform any key renaming needed for the backend *for this specific method*
+                    # Perform key renaming if needed (e.g., l1_reg_k for Shap)
                     if method_name == "ShapExplainer" and "l1_reg_k" in current_settings:
                         current_settings["l1_reg_k_features"] = current_settings.pop("l1_reg_k")
 
-                    xai_params_list.append({
-                        "method": method_name,
-                        "settings": current_settings
-                    })
+                    xai_params_list.append({"method": method_name, "settings": current_settings})
                 else:
-                    # This case might happen if a method was selected but somehow its settings weren't rendered/parsed
                     print(f"Warning: No settings found/parsed for selected method: {method_name}")
-                    # Decide how to handle: skip, add with empty settings, or error out?
-                    # Example: Add with empty settings
-                    # xai_params_list.append({"method": method_name, "settings": {}})
+                    xai_params_list.append({"method": method_name, "settings": {}}) # Add with empty settings
 
-            if not xai_params_list: # If loop finished but list is empty (e.g., due to warnings/skips)
-                 print("Error: Could not construct XAI parameters for selected methods.")
-                 # Handle error appropriately
+            if not xai_params_list: # Should not happen if active_methods is not empty
+                 style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
+                 return style_copy, False, "Error constructing XAI parameters."
 
             print(f"DEBUG: Constructed xai_params_list for backend: {xai_params_list}")
-        # --- End XAI Info ---
-
+            
         # --- NEW: Process ML Model Settings ---
         ml_params_dict = {}
         if selected_detection_model: # Only parse if a model is selected
@@ -1004,12 +1094,10 @@ def get_index_callbacks(app):
             print(f"DEBUG: Constructed ml_params_dict for backend: {ml_params_dict}")
 
         # --- Call Backend Handler ---
+
         try:
-            print(f"Sending job with parameters:")
-            print(f"  Mode: {selected_mode}")
-            print(f"  Dataset: {selected_dataset}")
-            print(f"  Detection Model: {selected_detection_model}")
-            print(f"  Job Name: {job_name}")
+            print(f"Sending job '{job_name}' with mode '{selected_mode}'...")
+            print(f"  Dataset: {selected_dataset}, Model: {selected_detection_model}")
             print(f"  Label Column: {label_col_to_pass}")
             print(f"  XAI Params: {xai_params_list}")
             print(f"  Injection Params: {inj_params_list}")
@@ -1028,11 +1116,22 @@ def get_index_callbacks(app):
                     model_params=model_params_to_pass # NEW ARG
                 )
             else: # stream
+                # Validate speedup for stream mode
+                speedup_val = 1.0 # Default
+                try:
+                     speedup_val = float(speedup) if speedup is not None else 1.0
+                     if speedup_val <= 0: raise ValueError("Speedup must be positive.")
+                except ValueError:
+                     style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
+                     return style_copy, False, "Invalid speedup value for stream mode."
+
                 response = handler.handle_run_stream(
+
                     selected_dataset, selected_detection_model, job_name, speedup,
                     label_column=label_col_to_pass, xai_params=xai_params_list, inj_params=inj_params_list,
                     model_params=model_params_to_pass # NEW ARG
                 )
+
             if response == "success":
                 style_copy.update({"backgroundColor": "#4CAF50", "display": "block"})
                 children = f"Job '{job_name}' started successfully!"
@@ -1042,34 +1141,10 @@ def get_index_callbacks(app):
 
         except Exception as e:
             print(f"Error calling backend handler: {e}")
+            traceback.print_exc()
             style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
             children = "Error communicating with backend."
 
-        return style_copy, False, children # Show popup
+        # Return style to show popup, disable interval timer, set popup text
+        return style_copy, False, children
 
-def create_active_jobs(active_jobs):
-    if len(active_jobs) == 0:
-        return ["No active jobs found."]
-    job_divs = []
-    GRAFANA_URL = f"http://localhost:{os.getenv('GRAFANA_PORT')}"
-    for job in active_jobs:
-        new_div = html.Div([
-            dcc.ConfirmDialog(
-                id={"type": "confirm-box", "index": job["name"]},
-                message=f'Are you sure you want to cancel the job {job["name"]}?',
-                displayed=False,
-            ),
-            html.A(
-                children=[job["name"]],
-                # href=f'/{job["name"]}' if job["type"] == "stream" else f'/{job["name"]}?batch=True', #Old version with bokeh
-                href=f'{GRAFANA_URL}/d/stream01/stream-jobs' if job["type"] == "stream" else f'{GRAFANA_URL}/d/batch01/batch-jobs', # New version with grafana
-                style={"marginRight": "10px", "color": "#4CAF50", "textDecoration": "none", "fontWeight": "bold"}
-            ),
-            html.Button("Stop", id={"type": "remove-dataset-btn", "index": job["name"]}, n_clicks=0, style={
-                "fontSize": "12px", "backgroundColor": "#e74c3c", "color": "#ffffff", "border": "none",
-                "borderRadius": "5px", "padding": "5px", "marginLeft": "7px"
-            })
-        ])
-        job_divs.append(new_div)
-
-    return [job_divs]

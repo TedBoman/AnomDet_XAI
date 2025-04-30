@@ -23,9 +23,8 @@ class DecisionTreeModel(model_interface.ModelInterface):
     Handles class imbalance using the 'class_weight' parameter.
     Provides compatibility with SHAP/LIME via the `predict_proba_xai` method.
     """
-
+    
     def __init__(self, *kwargs):
-        """
         Initializes the Decision Tree classifier model.
 
         Args:
