@@ -291,11 +291,12 @@ def split_data(data):
     total_rows = len(data)
 
     # Calculate split indices
-    train_end = int(total_rows * 0.70) # 99% for training
+
+    train_end = int(total_rows * 0.70) # 70% for training
 
     # Split the data
     training_data = data.iloc[:train_end]
-    testing_data = data.iloc[train_end:] # Remaining 1% is testing
+    testing_data = data.iloc[train_end:] # Remaining 30% is testing
 
     return training_data, testing_data
 
@@ -396,7 +397,7 @@ def run_batch(
         # Define default feature columns (adjust slicing as needed!)
         # Example: Exclude first ('timestamp'?) and last three ('label', 'inj_anomaly', 'is_anomaly'?)
         try:
-            if model == 'XGBoost': # Handle specific model cases if needed
+            if model == 'XGBoost' or model == 'decision_tree': # Handle specific model cases if needed
                 feature_columns = df.columns[1:-3].tolist()
                 training_columns = df.columns[1:-2].tolist()
             else:
@@ -499,6 +500,7 @@ def run_batch(
             if 'svm' in model_type_str: interpretation = 'lower_is_anomaly'
             elif 'lstm' in model_type_str: interpretation = 'higher_is_anomaly'
             elif 'xgboost' in model_type_str: interpretation = 'higher_is_anomaly'
+            elif 'decision_tree' in model_type_str: interpretation = 'higher_is_anomaly'
             # Add other model types here
             else: warnings.warn(f"Unknown model type '{model}' for score interpretation. Assuming higher score is anomaly.", RuntimeWarning)
 
