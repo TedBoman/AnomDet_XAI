@@ -100,7 +100,7 @@ class IsolationForestModel(model_interface.ModelInterface):
         return data_2d
 
 
-    def get_anomaly_score(self, processed_data_2d: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict_proba(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """
         Calculates anomaly scores using the Isolation Forest decision_function.
         Lower scores are more anomalous. Handles 2D/3D input.
@@ -109,6 +109,7 @@ class IsolationForestModel(model_interface.ModelInterface):
             np.ndarray: 1D array of anomaly scores, length matches input samples.
         """
         print("Calculating anomaly scores (Isolation Forest decision_function)...")
+        processed_data_2d = self._prepare_data_for_predict(detection_data)
 
         if processed_data_2d.size == 0: return np.array([])
 
@@ -137,48 +138,12 @@ class IsolationForestModel(model_interface.ModelInterface):
         print(f"Detected {np.sum(anomalies)} anomalies out of {len(anomalies)} samples.")
         return anomalies # Returns 1D boolean array
 
-    def predict_proba(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
-        processed_data_2d = self._prepare_data_for_predict(detection_data)
-        scores = self.get_anomaly_score(processed_data_2d)
+    def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+        scores = self.predict_proba(detection_data)
         # Convert scores (lower=anomaly) to probabilities P(anomaly) ~ [0,1]
         # Needs careful scaling based on score distribution / offsets
         offset = getattr(self.model, 'offset_', 0) # Internal threshold related to contamination
-        # --- FIX: Handle Zero Standard Deviation ---
-        # Check standard deviation across all scores provided in the batch
-        # Use ddof=0 if you want population std dev, but for small samples it might not matter much
-        std_dev = np.std(scores)
-
-        if std_dev < 1e-10: # Check if standard deviation is effectively zero
-            warnings.warn("Standard deviation of scores is zero in predict_proba (likely single sample or identical scores). Using fallback based on offset.", RuntimeWarning)
-            # Fallback logic: Compare score directly to the offset
-            # If score < offset, it's considered anomalous by predict() -> high P(anomaly)
-            # If score >= offset, it's considered normal by predict() -> low P(anomaly)
-            # Use np.where for vectorized operation
-            # Ensure scores is compared element-wise even if it's scalar (though get_anomaly_score should return 1D array)
-            prob_anomaly = np.where(np.less(scores, offset), 0.99, 0.01) # Assign high/low probability directly
-        else:
-            # Original sigmoid scaling - use only when std_dev is non-zero
-            # Ensure division is safe
-            z = (offset - scores) / std_dev
-            prob_anomaly = 1.0 / (1.0 + np.exp(-z)) # Example scaling
-
-        # --- End Fix ---
-
-        # Ensure probabilities are clipped to [0, 1] range
-        np.clip(prob_anomaly, 0.0, 1.0, out=prob_anomaly)
-
+        # Simple sigmoid approach (needs tuning!)
+        prob_anomaly = 1 / (1 + np.exp(-(offset - scores) / np.std(scores))) # Example scaling
         prob_normal = 1.0 - prob_anomaly
-
-        # Ensure outputs are 1D arrays before vstack, handle potential scalar case if input was single sample
-        prob_normal = np.atleast_1d(prob_normal)
-        prob_anomaly = np.atleast_1d(prob_anomaly)
-
-        # Combine into (n_samples, 2) array
-        probabilities = np.vstack([prob_normal, prob_anomaly]).T
-
-        # Ensure the output shape is always (n_samples, 2)
-        if probabilities.shape[0] != scores.size or probabilities.shape[1] != 2:
-            # This check might be needed if input was scalar and vstack behaved unexpectedly
-            probabilities = probabilities.reshape(scores.size, 2)
-
-        return probabilities
+        return np.vstack([prob_normal, prob_anomaly]).T

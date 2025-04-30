@@ -196,67 +196,58 @@ class ModelWrapperForXAI:
             raise TypeError(f"ModelWrapperForXAI.predict_proba expects NumPy array or pandas DataFrame, got {type(X_input)}")
 
         expected_features = len(self._feature_names)
-        X_processed_3d = None  # This will hold the 3D array for the internal model call
+        X_to_pass_internally = None  # This will hold the 3D array for the internal model call
         n_samples_in = 0 # Track original number of samples before processing
 
-        # --- Input Shape Handling (Ensure X_processed_3d is 3D) ---
+        # --- Input Shape Handling ---
         if X_np_input.ndim >= 1:
             n_samples_in = X_np_input.shape[0]
-        else: # Handle 0-dimensional array edge case
-            n_samples_in = 1 # Or potentially 0 if input is truly empty?
+        else:
+            n_samples_in = 1 # Handle 0-dim edge case
 
         if X_np_input.ndim == 3:
-            # Input is already 3D (samples, seq_len, features)
+            # Input is already 3D. Assume it's correct for models trained on 3D numpy.
+            # The internal model's XAI predict_proba should validate seq_len/features.
             if X_np_input.shape[-1] == expected_features:
-                X_processed_3d = X_np_input
+                X_to_pass_internally = X_np_input
                 print(f"DEBUG Wrapper predict_proba: Using 3D input shape {X_np_input.shape}.")
             else:
                 warnings.warn(f"Wrapper predict_proba received 3D input with unexpected feature count {X_np_input.shape[-1]}. Expected {expected_features}. Returning neutral probabilities.", RuntimeWarning)
                 return np.full((n_samples_in, 2), 0.5)
 
         elif X_np_input.ndim == 2:
-            # Input is 2D (samples, features or samples, flat_features)
-            if X_np_input.shape[-1] == expected_features:
-                # Reshape 2D (samples, features) to 3D (samples, 1, features)
-                X_processed_3d = X_np_input[:, np.newaxis, :]
-                print(f"DEBUG Wrapper predict_proba: Reshaped 2D input ({X_np_input.shape}) to 3D ({X_processed_3d.shape}) assuming seq_len=1.")
+            # Input is 2D.
+            # If the model was trained on DataFrame, it expects 2D.
+            # If the model was trained on NumPy, its XAI predict_proba might expect 2D (flattened) or need reshaping - let internal handle it.
+            # ---> Pass the 2D array directly. The internal XAI predict_proba should know what to do based on self.input_type.
+            X_to_pass_internally = X_np_input
+            print(f"DEBUG Wrapper predict_proba: Reshaped 2D input ({X_np_input.shape}) to 3D ({X_to_pass_internally.shape}) assuming seq_len=1.")
+        elif X_np_input.ndim == 1:
+            # Handle single sample 1D input. Reshape to 2D (1, n_features) for consistency.
+            print(f"DEBUG Wrapper predict_proba: Reshaping 1D input ({X_np_input.shape}) to 2D (1, {X_np_input.shape[0]})")
+            # Validate feature count for 1D case
+            if len(X_np_input) == expected_features:
+                X_to_pass_internally = X_np_input.reshape(1, -1)
             else:
-                current_sequence_length = self.sequence_length or 1
-                expected_flat_features = current_sequence_length * expected_features
-                if X_np_input.shape[1] == expected_flat_features:
-                    # Reshape back to 3D: (samples, flat_features) -> (samples, seq_len, features)
-                    try:
-                        X_processed_3d = X_np_input.reshape((n_samples_in, current_sequence_length, expected_features))
-                        print(f"DEBUG Wrapper predict_proba: Reshaped 2D flattened input ({X_np_input.shape}) to 3D ({X_processed_3d.shape}).")
-                    except ValueError as reshape_err:
-                        warnings.warn(f"Wrapper predict_proba failed to reshape 2D input ({X_np_input.shape}) to 3D ({n_samples_in}, {current_sequence_length}, {expected_features}). Error: {reshape_err}. Returning neutral probabilities.", RuntimeWarning)
-                        return np.full((n_samples_in, 2), 0.5)
-                else:
-                    warnings.warn(f"Wrapper predict_proba received 2D input with unexpected feature count {X_np_input.shape[1]}. Expected {expected_features} or {expected_flat_features} (flattened). Returning neutral probabilities.", RuntimeWarning)
-                    return np.full((n_samples_in, 2), 0.5)
-
-        elif X_np_input.ndim == 1 and len(X_np_input) == expected_features:
-            # Handle single sample 1D input -> (1, 1, features)
-            X_processed_3d = X_np_input.reshape((1, 1, expected_features))
-            n_samples_in = 1
-            print(f"DEBUG Wrapper predict_proba: Reshaped 1D input ({X_np_input.shape}) to 3D ({X_processed_3d.shape}) assuming seq_len=1.")
-
+                warnings.warn(f"Wrapper predict_proba received 1D input with unexpected feature count {len(X_np_input)}. Expected {expected_features}. Returning neutral probabilities.", RuntimeWarning)
+                return np.full((n_samples_in, 2), 0.5)
         else:
-            warnings.warn(f"Wrapper predict_proba received unexpected input shape {X_np_input.shape}. Expected 2D or 3D. Returning neutral probabilities.", RuntimeWarning)
+            warnings.warn(f"Wrapper predict_proba received unexpected input shape {X_np_input.shape}. Expected 1D, 2D or 3D. Returning neutral probabilities.", RuntimeWarning)
             return np.full((n_samples_in, 2), 0.5)
 
-        # Ensure X_processed_3d is assigned
-        if X_processed_3d is None:
-            warnings.warn("Wrapper predict_proba: Failed to process input into 3D format. Returning neutral probabilities.", RuntimeWarning)
+        # Ensure X_to_pass_internally is assigned
+        if X_to_pass_internally is None:
+            # This case might be redundant now but kept for safety
+            warnings.warn("Wrapper predict_proba: Failed to process input shape. Returning neutral probabilities.", RuntimeWarning)
             return np.full((n_samples_in, 2), 0.5)
 
         # ----------------------------------------------------------------------
         # Call Internal Model's predict_proba
         # ----------------------------------------------------------------------
-        print(f"DEBUG Wrapper predict_proba: Calling internal 'predict_proba' with processed shape {X_processed_3d.shape}")
+        print(f"DEBUG Wrapper predict_proba: Calling internal 'predict_proba' with processed shape {X_to_pass_internally.shape}")
         try:
             # Assuming the internal method now returns shape (n_samples, 2) -> [P(normal), P(anomaly)]
-            internal_probabilities = self._call_internal_method(X_processed_3d, 'predict_proba')
+            internal_probabilities = self._call_internal_method(X_to_pass_internally, 'predict_proba')
             print(f"DEBUG Wrapper predict_proba: Internal 'predict_proba' returned shape {internal_probabilities.shape}")
         except Exception as e:
             warnings.warn(f"Wrapper predict_proba: Error calling internal 'predict_proba': {e}. Returning neutral probabilities.", RuntimeWarning)

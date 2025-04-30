@@ -8,7 +8,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 import warnings
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 
 # Assuming ExplainerMethodAPI is defined elsewhere if needed for type hints on explainer_object
 # from explainer_method_api import ExplainerMethodAPI
@@ -195,6 +195,7 @@ def process_and_plot_dice(
     results: Any, # Expect dice_ml.explanation.Explanation or similar structure
     explainer_object: Any, # The DiceExplainerWrapper instance (MUST have flat_feature_names, outcome_name)
     instances_explained: np.ndarray, # 3D numpy array (instance_idx, seq_len, features)
+    original_labels: Union[np.ndarray, pd.Series],
     feature_names: List[str], # Base feature names (used for dimension check)
     sequence_length: int, # Used for dimension check
     output_dir: str,
@@ -272,19 +273,25 @@ def process_and_plot_dice(
                     raise ValueError(f"Length mismatch: Flattened original data ({len(original_flat_np)}) vs "
                                      f"expected flat feature names ({len(expected_flat_feature_names)}).")
 
-                # Create Series using the DEFINITIVE feature names list
                 original_series = pd.Series(original_flat_np, index=expected_flat_feature_names)
+                original_series['type'] = 'original'
+
+                # --- Replace pd.NA assignment with label retrieval ---
+                try:
+                    # Get the true label for the current instance index 'i'
+                    true_label = original_labels[i]
+                    original_series[outcome_name] = true_label
+                    print(f"      Instance {i}: Assigned original label '{true_label}' to column '{outcome_name}'.")
+                except IndexError:
+                    print(f"      Warning: Index {i} out of bounds for original_labels (length {len(original_labels)}). Setting label to NA.")
+                    original_series[outcome_name] = pd.NA # Fallback to NA if index is invalid
+                except Exception as e_label:
+                    print(f"      Warning: Error retrieving label for instance index {i}: {e_label}. Setting label to NA.")
+                    original_series[outcome_name] = pd.NA # Fallback to NA on other errors
+                # --- End label retrieval ---
 
                 # Add 'type' and placeholder 'outcome' columns
                 original_series['type'] = 'original'
-                if outcome_name not in original_series.index:
-                    # Use pd.NA for missing integer/boolean if using nullable types
-                    original_series[outcome_name] = pd.NA
-                else:
-                     # If outcome column somehow existed from features, ensure it can hold NA
-                     if pd.api.types.is_integer_dtype(cfs_df[outcome_name].dtype):
-                          original_series[outcome_name] = pd.NA # Overwrite with NA
-
 
                 # Convert to DataFrame row
                 original_df_row = original_series.to_frame().T
