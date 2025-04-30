@@ -17,7 +17,8 @@ class BackendAPI:
     def run_batch(self, model: str, dataset: str, name: str, debug=False,
                 inj_params: Optional[List[Dict[str, Any]]]=None, # Backend expects list? Match frontend
                 label_column: Optional[str]=None,      # <-- ADDED
-                xai_params: Optional[Dict[str, Any]]=None   # <-- ADDED
+                xai_params: Optional[Dict[str, Any]]=None,   # <-- ADDED
+                model_params: Optional[Dict[str, Any]]=None,   # <-- ADDED
                 ) -> None:
         data = {
             "METHOD": "run-batch",
@@ -34,6 +35,8 @@ class BackendAPI:
             data["label_column"] = label_column
         if xai_params is not None:
             data["xai_params"] = xai_params
+        if model_params is not None:
+            data["model_params"] = model_params
 
         #print(f"API sending run-batch data: {data}") # Optional: Debug log
         self.__send_data(data, response=False)
@@ -42,7 +45,8 @@ class BackendAPI:
     def run_stream(self, model: str, dataset: str, name: str, speedup: int, debug=False,
                 inj_params: Optional[List[Dict[str, Any]]]=None,
                 label_column: Optional[str]=None, 
-                xai_params: Optional[Dict[str, Any]]=None 
+                xai_params: Optional[Dict[str, Any]]=None,
+                model_params: Optional[Dict[str, Any]]=None,
                 ) -> None:
         data = {
             "METHOD": "run-stream",
@@ -54,11 +58,12 @@ class BackendAPI:
         }
         if inj_params:
             data["inj_params"] = inj_params
-
         if label_column is not None:
             data["label_column"] = label_column
         if xai_params is not None:
             data["xai_params"] = xai_params
+        if model_params is not None:
+            data["model_params"] = model_params
 
         #print(f"API sending run-stream data: {data}") # Optional: Debug log
         self.__send_data(data, response=False)

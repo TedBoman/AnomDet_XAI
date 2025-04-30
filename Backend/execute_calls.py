@@ -344,7 +344,8 @@ def run_batch(
     inj_params: Optional[List[Dict[str, Any]]] = None, 
     debug: bool = False,
     label_column: Optional[str] = None, 
-    xai_params: Optional[Dict[str, Any]] = None
+    xai_params: Optional[Dict[str, Any]] = None,
+    model_params: Optional[Dict[str, Any]] = None,
 ) -> None:    
     print("Starting Batch-job!")
     sys.stdout.flush()
@@ -433,7 +434,7 @@ def run_batch(
         all_features_df = df[[col for col in feature_columns if col in df.columns]]
         all_features_df_with_labels = df
 
-        balanced_df = get_balanced_anomaly_sample(all_features_df_with_labels, total_rows=80, label_column='label', anomaly_value=1, random_state=42)
+        balanced_df = get_balanced_anomaly_sample(all_features_df_with_labels, total_rows=10, label_column='label', anomaly_value=1, random_state=42)
 
         # Define which base features are continuous (example: assume all for now)
         continuous_features_list = feature_columns # Adjust if you have categorical base features
@@ -467,16 +468,31 @@ def run_batch(
 
         # --- Model Training ---
         try:
-            model_instance = get_model(model)
+            # Prepare parameters for the model, ensuring None is handled
+            effective_model_params = model_params or {}
+            print(f"Attempting to get model '{model}' with parameters: {effective_model_params}")
+
+            # Pass model_params during instantiation via get_model
+            # This assumes get_model and the underlying model classes
+            # accept these parameters as keyword arguments.
+            model_instance = get_model(model, **effective_model_params)
+
             print(f"Training model type: {type(model_instance).__name__}")
             start_time = time.perf_counter()
+
             # Train on TRAINING features DataFrame
-            model_instance.run(training_features_df) # Assuming run takes df, adjust if it needs **kwargs for epochs etc.
+            # If the run method *also* takes specific training-time params (like epochs),
+            # those might still be passed here or could be part of model_params as well.
+            # Assuming basic run just takes data for now based on original code.
+            model_instance.run(training_features_df)
+
             end_time = time.perf_counter()
             print(f"Training took {end_time-start_time:.2f}s")
         except Exception as train_err:
-             print(f"ERROR during model retrieval or training: {train_err}")
-             return # Stop if model cannot be trained
+            print(f"ERROR during model retrieval or training: {train_err}")
+            import traceback
+            traceback.print_exc() # Print full traceback for better debugging
+            return # Stop if model cannot be trained
 
         # --- Sequence Length Determination ---
         sequence_length = getattr(model_instance, 'sequence_length', None)
@@ -604,7 +620,7 @@ def run_batch(
         if xai_params and isinstance(xai_params, list) and model_wrapper is not None:
             print(f"Processing {len(xai_params)} XAI method(s)...") # Log how many methods
 
-            max_bg_samples = 2500
+            max_bg_samples = 25000
             
             # Loop through each configuration dictionary in the list
             for xai_config in xai_params:
@@ -710,29 +726,65 @@ def run_batch(
                                 ts_explainer = None
 
                             # 3. Prepare Instances for Explanation
-                            # Choose data: anomalies if available, otherwise fallback to test sample
-                            data_source_for_explanation = anomaly_feature_df if not anomaly_feature_df.empty else all_features_df_with_labels
+                            # Choose data: anomalies if available, otherwise fallback
+                            data_source_for_explanation = balanced_df if not balanced_df.empty else all_features_df_with_labels
                             print(f"Running explanation on columns: {data_source_for_explanation.columns.values} with a length of {len(data_source_for_explanation)}")
 
+                            # Create 3D feature array for explanation
                             instances_to_explain_np = ut.dataframe_to_sequences(
                                 df=data_source_for_explanation, sequence_length=sequence_length,
                                 feature_cols=feature_columns
                             )
 
-                            instances_explained_np_lables = ut.dataframe_to_sequences(
-                                df=data_source_for_explanation, sequence_length=sequence_length,
-                                feature_cols=feature_columns
-                            )
-
-                            # Limit number of explanations for performance
+                            # Limit number of explanations AFTER generating sequences
                             n_explain_max = settings.get("n_explain_max", 10) # Example: get max explain from settings
-                            if len(instances_to_explain_np) > n_explain_max:
-                                instances_to_explain_np = instances_to_explain_np[:n_explain_max]
-                                instances_explained_np_lables = instances_explained_np_lables[:n_explain_max]
-                            if instances_to_explain_np.size == 0: raise ValueError("No instances to explain")
+                            num_instances_available = instances_to_explain_np.shape[0]
 
-                            print(f"Prepared {instances_to_explain_np.shape[0]} instances for explanation.")
+                            if num_instances_available == 0:
+                                print("Warning: No sequences generated for explanation. Skipping XAI method.")
+                                continue # Skip to the next method if no instances
 
+                            num_instances_to_explain = min(num_instances_available, n_explain_max)
+                            if num_instances_available > n_explain_max:
+                                print(f"Limiting explanation instances from {num_instances_available} to {num_instances_to_explain}.")
+                                instances_to_explain_np = instances_to_explain_np[:num_instances_to_explain]
+
+                            print(f"Prepared {instances_to_explain_np.shape[0]} instances (features) for explanation.")
+
+                            # --- Extract Corresponding True Labels ---
+                            original_labels_for_handler = None # Initialize
+                            try:
+                                # Calculate end indices in the source DataFrame for the sequences being explained
+                                # Assumes sequential generation: 0th sequence ends at index (seq_len - 1),
+                                # 1st sequence ends at index (seq_len), etc.
+                                start_index_in_df = sequence_length - 1
+                                end_indices_for_explanation = list(range(start_index_in_df, start_index_in_df + num_instances_to_explain))
+
+                                # Ensure indices are valid for the source DataFrame length
+                                max_source_index = len(data_source_for_explanation) - 1
+                                if not end_indices_for_explanation or end_indices_for_explanation[-1] > max_source_index:
+                                    raise IndexError(f"Calculated end index ({end_indices_for_explanation[-1]}) exceeds source data length ({max_source_index}). Check sequence generation.")
+
+                                # Extract labels using calculated indices
+                                if actual_label_col not in data_source_for_explanation.columns:
+                                    raise KeyError(f"Label column '{actual_label_col}' not found in data_source_for_explanation DataFrame.")
+
+                                original_labels_for_handler = data_source_for_explanation[actual_label_col].iloc[end_indices_for_explanation].values
+                                print(f"Successfully extracted {len(original_labels_for_handler)} true labels for explained instances.")
+
+                                # Sanity check lengths
+                                if len(original_labels_for_handler) != num_instances_to_explain:
+                                    warnings.warn("Length mismatch between extracted labels and instances to explain after indexing. Check logic.", RuntimeWarning)
+                                    # Attempt to recover if possible, otherwise might need to skip
+                                    min_len = min(len(original_labels_for_handler), num_instances_to_explain)
+                                    original_labels_for_handler = original_labels_for_handler[:min_len]
+                                    instances_to_explain_np = instances_to_explain_np[:min_len]
+                                    print(f"Adjusted instances/labels to length {min_len} due to mismatch.")
+
+                            except (KeyError, IndexError, Exception) as label_err:
+                                print(f"ERROR extracting original labels for handler: {label_err}")
+                                print("Proceeding without original labels for the handler.")
+                                # original_labels_for_handler remains None
 
                             # 4. Define Plot Handlers Dictionary (mapping names to functions)
                             plot_handlers = { "ShapExplainer": x.process_and_plot_shap, 
@@ -777,7 +829,7 @@ def run_batch(
                                         # Call DiCE Handler
                                         handler_func = plot_handlers.get(method_name)
                                         if handler_func:
-                                            handler_func(results=xai_results, explainer_object=explainer_object, instances_explained=instances_explained_np_lables, feature_names=feature_columns, sequence_length=sequence_length, output_dir=output_dir, mode='classification', job_name=name)
+                                            handler_func(results=xai_results, explainer_object=explainer_object, instances_explained=instances_to_explain_np, original_labels=original_labels_for_handler, feature_names=feature_columns, sequence_length=sequence_length, output_dir=output_dir, mode='classification', job_name=name)
                                         else: print("No plot handler for DiCE")
 
                                     elif method_name == "ShapExplainer":
@@ -891,7 +943,13 @@ def run_batch(
         return 0
 
 # Starts processing of dataset as a stream
-def run_stream(db_conn_params, model: str, path: str, name: str, speedup: int, inj_params: dict=None, debug=False) -> None:
+def run_stream(db_conn_params, 
+               model: str, 
+               path: str, 
+               name: str, 
+               speedup: int, 
+               inj_params: dict=None, 
+               debug=False) -> None:
     print("Starting Stream-job!")
     sys.stdout.flush()
 

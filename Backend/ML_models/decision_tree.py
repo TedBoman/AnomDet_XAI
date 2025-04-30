@@ -23,17 +23,8 @@ class DecisionTreeModel(model_interface.ModelInterface):
     Handles class imbalance using the 'class_weight' parameter.
     Provides compatibility with SHAP/LIME via the `predict_proba_xai` method.
     """
-
-    def __init__(self, 
-                 criterion='gini', 
-                 max_depth=10000,         # Whatever you do, do not set to "none"
-                 min_samples_split=2, 
-                 min_samples_leaf=1, 
-                 random_state=42, 
-                 class_weight='balanced', # Default to balanced for anomaly detection
-                 imputer_strategy='mean', # Strategy for NaN imputation
-                 **kwargs):
-        """
+    
+    def __init__(self, *kwargs):
         Initializes the Decision Tree classifier model.
 
         Args:
@@ -48,30 +39,44 @@ class DecisionTreeModel(model_interface.ModelInterface):
         """
         self.model: Optional[DecisionTreeClassifier] = None
         self.scaler: Optional[MinMaxScaler] = None
-        self.imputer: Optional[SimpleImputer] = None # <-- Add imputer instance variable
-        self.input_type: Optional[str] = None # 'dataframe' or 'numpy'
+        self.imputer: Optional[SimpleImputer] = None
+        self.input_type: Optional[str] = None
         self.processed_feature_names: Optional[List[str]] = None
-        self.sequence_length: Optional[int] = None 
+        self.sequence_length: Optional[int] = None
         self.n_original_features: Optional[int] = None
-        self.label_col: Optional[str] = None # DataFrame specific
-        self._imputer_strategy = imputer_strategy # Store strategy
+        self.label_col: Optional[str] = None
 
+        # --- Extract parameters from kwargs with defaults ---
+        # Core Decision Tree parameters
+        criterion = kwargs.get('criterion', 'gini')
+        max_depth = kwargs.get('max_depth', None) # Default changed to None
+        min_samples_split = kwargs.get('min_samples_split', 2)
+        min_samples_leaf = kwargs.get('min_samples_leaf', 1)
+        random_state = kwargs.get('random_state', 42)
+        class_weight = kwargs.get('class_weight', 'balanced')
+
+        # Imputer strategy
+        self._imputer_strategy = kwargs.get('imputer_strategy', 'mean')
+
+        # Store all parameters passed to the underlying model
         self.model_params = {
             'criterion': criterion,
             'max_depth': max_depth,
             'min_samples_split': min_samples_split,
             'min_samples_leaf': min_samples_leaf,
-            'class_weight': class_weight, 
+            'class_weight': class_weight,
             'random_state': random_state,
         }
-        self.model_params.update(kwargs) 
+        # Add any other kwargs intended for DecisionTreeClassifier
+        allowed_dt_params = set(DecisionTreeClassifier().get_params().keys())
+        extra_dt_params = {k: v for k, v in kwargs.items() if k in allowed_dt_params and k not in self.model_params}
+        self.model_params.update(extra_dt_params)
 
         if self.model_params.get('class_weight') is None:
             warnings.warn("class_weight was None, setting to 'balanced' by default.", UserWarning)
             self.model_params['class_weight'] = 'balanced'
 
-        # print(f"DecisionTreeModel Initialized with params: {self.model_params}, Imputer Strategy: {self._imputer_strategy}")
-
+        print(f"DecisionTreeModel Initialized with params: {self.model_params}, Imputer Strategy: {self._imputer_strategy}")
 
     def _prepare_data_for_model(
         self, X: Union[pd.DataFrame, np.ndarray],
@@ -370,7 +375,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
 
 
     # --- METHOD FOR XAI (SHAP/LIME) ---
-    def predict_proba_xai(self, X_xai: np.ndarray) -> np.ndarray:
+    def predict_proba(self, X_xai: np.ndarray) -> np.ndarray:
         """
         Prediction function for XAI methods (SHAP/LIME).
         Accepts input in the *original* format expected during training and

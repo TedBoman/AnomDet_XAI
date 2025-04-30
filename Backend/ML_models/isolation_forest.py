@@ -11,27 +11,53 @@ class IsolationForestModel(model_interface.ModelInterface):
     """ Isolation Forest for anomaly detection on 2D data. """
     sequence_length = 1 # Indicate non-sequential nature
 
-    def __init__(self, n_estimators=100, contamination='auto', random_state=None, **kwargs):
-        """ Initializes Isolation Forest. kwargs are passed to IsolationForest. """
-        self.model_params = {
-             'n_estimators': n_estimators,
-             'contamination': contamination, # Often needs tuning or setting explicitly
-             'random_state': random_state,
-             'n_jobs': -1 # Use all cores
-             # 'max_features': 1.0, 'max_samples': 'auto', 'bootstrap': False
-        }
-        self.model_params.update(kwargs)
-        # Note: Contamination='auto' might behave differently across sklearn versions.
-        # Setting a specific float (e.g., 0.05, 0.1) is often more reliable.
-        # If contamination is float, predict uses it directly. If 'auto', uses internal offset.
-        # Decision_function scores are independent of contamination setting.
+    def __init__(self, **kwargs):
+        """
+        Initializes Isolation Forest using parameters from kwargs.
 
-        self.model: Optional[IsolationForest] = IsolationForest(**self.model_params)
-        self.scaler: Optional[StandardScaler] = None # Add scaler if needed
+        Expected kwargs (examples):
+            n_estimators (int): Number of base estimators (trees) in the ensemble (default: 100).
+            contamination (float or 'auto'): Expected proportion of outliers (default: 'auto').
+            max_samples (int or float): Number/fraction of samples to draw for each tree (default: 'auto').
+            max_features (int or float): Number/fraction of features to draw for each tree (default: 1.0).
+            bootstrap (bool): Whether samples are drawn with replacement (default: False).
+            random_state (int): Controls the randomness of the estimator (default: None).
+            n_jobs (int): Number of jobs to run in parallel (default: -1).
+            ... other IsolationForest parameters ...
+        """
+        self.scaler: Optional[StandardScaler] = StandardScaler() # Always use scaler
         self.n_features: Optional[int] = None
-        self.feature_names: Optional[List[str]] = None # Store feature names
-        print(f"IsolationForestModel Initialized with params: {self.model_params}")
+        self.feature_names: Optional[List[str]] = None
 
+        # --- Extract parameters from kwargs with defaults ---
+        n_estimators = kwargs.get('n_estimators', 100)
+        contamination = kwargs.get('contamination', 'auto')
+        max_samples = kwargs.get('max_samples', 'auto')
+        max_features = kwargs.get('max_features', 1.0)
+        bootstrap = kwargs.get('bootstrap', False) # Note: sklearn default might change
+        random_state = kwargs.get('random_state', None)
+        n_jobs = kwargs.get('n_jobs', -1)
+
+        # Store all parameters passed to the underlying model
+        self.model_params = {
+            'n_estimators': n_estimators,
+            'contamination': contamination,
+            'max_samples': max_samples,
+            'max_features': max_features,
+            'bootstrap': bootstrap,
+            'random_state': random_state,
+            'n_jobs': n_jobs
+        }
+        # Add any other kwargs intended for IsolationForest
+        allowed_if_params = set(IsolationForest().get_params().keys())
+        extra_if_params = {k: v for k, v in kwargs.items() if k in allowed_if_params and k not in self.model_params}
+        self.model_params.update(extra_if_params)
+
+        # Instantiate the model using the collected parameters
+        self.model: Optional[IsolationForest] = IsolationForest(**self.model_params)
+
+        print(f"IsolationForestModel Initialized with effective params: {self.model_params}")
+     
     def run(self, df: pd.DataFrame):
         """ Trains the Isolation Forest model. """
         if not isinstance(df, pd.DataFrame): raise TypeError("Input 'df' must be a pandas DataFrame.")
@@ -100,7 +126,7 @@ class IsolationForestModel(model_interface.ModelInterface):
         return data_2d
 
 
-    def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict_proba(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """
         Calculates anomaly scores using the Isolation Forest decision_function.
         Lower scores are more anomalous. Handles 2D/3D input.
@@ -138,8 +164,8 @@ class IsolationForestModel(model_interface.ModelInterface):
         print(f"Detected {np.sum(anomalies)} anomalies out of {len(anomalies)} samples.")
         return anomalies # Returns 1D boolean array
 
-    def predict_proba(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
-        scores = self.get_anomaly_score(detection_data)
+    def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+        scores = self.predict_proba(detection_data)
         # Convert scores (lower=anomaly) to probabilities P(anomaly) ~ [0,1]
         # Needs careful scaling based on score distribution / offsets
         offset = getattr(self.model, 'offset_', 0) # Internal threshold related to contamination
