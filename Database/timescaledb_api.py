@@ -1,7 +1,7 @@
 import numpy as np
 from db_interface import DBInterface
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 import psycopg2
 import psycopg2.extras as extras
 from psycopg2.extras import execute_values
@@ -100,27 +100,21 @@ class TimescaleDBAPI(DBInterface):
         try:
             conn = psycopg2.connect(self.connection_string)
             cursor = conn.cursor()
+
+            params = {}
+            from_dt_utc_naive = from_time.astimezone(timezone.utc).replace(tzinfo=None)
+            params['from_ts'] = from_dt_utc_naive
+
+            if to_time is not None:
+                to_dt_utc_naive = to_time.astimezone(timezone.utc).replace(tzinfo=None)
+                params['to_ts'] = to_dt_utc_naive
+
             if to_time is not None:
                 query = f'SELECT * FROM {table_name} WHERE timestamp >= \'{from_time}\' AND timestamp <= \'{to_time}\' ORDER BY timestamp ASC;'
             else:
                 query = f'SELECT * FROM {table_name} WHERE timestamp >= \'{from_time}\' ORDER BY timestamp ASC;'
 
-            cursor.execute(query)
-
-            data = cursor.fetchall()
-            conn.close()
-            
-            df = pd.DataFrame(data)
-            df.columns = [desc[0] for desc in cursor.description]
-
-            cols = df.columns.tolist()
-
-            cols.remove("is_anomaly")
-            cols.remove("injected_anomaly")
-            cols.remove("timestamp")
-            
-            for col in cols:
-                df[col] = df[col].astype(float)
+            df = pd.read_sql_query(query, conn, params=params) # Let pandas handle it
 
             return df
         except Exception as error:

@@ -354,6 +354,6 @@ def layout(handler):
         ),
         # --- END Explanation Box ---
 
-    ], id="main-settings-container", style={ "backgroundColor": "#105E90", "padding": "40px", "minHeight": "100vh", "display": "flex", "flex-wrap": "nowrap", "align-items": "center"})
+    ], id="main-settings-container", style={ "backgroundColor": "#105E90", "padding": "40px", "minHeight": "100vh", "display": "flex", "flexWrap": "nowrap", "alignItems": "center"})
 
     return layout
