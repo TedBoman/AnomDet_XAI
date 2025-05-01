@@ -434,7 +434,7 @@ def run_batch(
         all_features_df = df[[col for col in feature_columns if col in df.columns]]
         all_features_df_with_labels = df
 
-        balanced_df = get_balanced_anomaly_sample(all_features_df_with_labels, total_rows=10, label_column='label', anomaly_value=1, random_state=42)
+        #balanced_df = get_balanced_anomaly_sample(all_features_df_with_labels, total_rows=len(df), label_column='label', anomaly_value=1, random_state=42)
 
         # Define which base features are continuous (example: assume all for now)
         continuous_features_list = feature_columns # Adjust if you have categorical base features
@@ -727,7 +727,7 @@ def run_batch(
 
                             # 3. Prepare Instances for Explanation
                             # Choose data: anomalies if available, otherwise fallback
-                            data_source_for_explanation = balanced_df if not balanced_df.empty else all_features_df_with_labels
+                            data_source_for_explanation = all_features_df_with_labels if not all_features_df_with_labels.empty else anomaly_feature_df
                             print(f"Running explanation on columns: {data_source_for_explanation.columns.values} with a length of {len(data_source_for_explanation)}")
 
                             # Create 3D feature array for explanation

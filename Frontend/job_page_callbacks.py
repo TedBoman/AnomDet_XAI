@@ -551,7 +551,7 @@ def register_job_page_callbacks(app):
                             elif extension == html_extension:
                                 print(f"  - Found HTML: {filename}, URL: {asset_url}")
                                 component_to_add = html.Iframe(src=asset_url,
-                                                               style={'width': '100%', 'height': '600px', 'marginTop': '10px', 'border': '1px solid #444'})
+                                                               style={'width': '100%', 'height': '300px', 'marginTop': '10px', 'border': '1px solid #444', 'backgroundColor': 'white'})
                                 component_with_header = html.Div([
                                     html.H5(filename, style={'marginTop':'15px', 'marginBottom':'5px', 'color':'#ddd', 'fontWeight':'normal', 'fontSize':'1em'}),
                                     component_to_add
