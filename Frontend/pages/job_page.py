@@ -3,7 +3,7 @@ import dash
 from dash import dcc, html
 import plotly.graph_objects as go # Often needed for graph creation
 
-# --- Helper function (ensure it's correctly defined as before) ---
+# --- Helper function ---
 def get_display_job_name(full_job_name):
     """Removes known prefixes ('job_batch_', 'job_stream_') using slicing."""
     if not full_job_name:
