@@ -1148,4 +1148,3 @@ def get_index_callbacks(app):
 
         # Return style to show popup, disable interval timer, set popup text
         return style_copy, False, children
-

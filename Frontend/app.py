@@ -2,6 +2,8 @@
 import dash
 from dash import dcc, html, Input, Output, State
 import os
+import flask
+import urllib.parse
 from dotenv import load_dotenv
 
 from pages.index import layout as index_layout
@@ -15,6 +17,7 @@ load_dotenv()
 HOST = 'Backend' 
 PORT = int(os.getenv('BACKEND_PORT'))
 FRONTEND_PORT = int(os.getenv('FRONTEND_PORT'))
+XAI_DIR = "/app/data"
 
 # Dash application
 # Consider adding themes or external stylesheets if desired
@@ -22,6 +25,34 @@ FRONTEND_PORT = int(os.getenv('FRONTEND_PORT'))
 # app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 app = dash.Dash(__name__, suppress_callback_exceptions = True)
+
+# --- Add static route for XAI assets ---
+@app.server.route(f'/xai-assets/<path:resource>')
+def serve_xai_asset(resource):
+    """Serves files from the XAI_DIR."""
+    # Basic security: prevent navigating up directories
+    resource = urllib.parse.unquote(resource) # Decode URL chars like %20
+    safe_path = os.path.abspath(os.path.join(XAI_DIR, resource))
+    if not safe_path.startswith(os.path.abspath(XAI_DIR)):
+        print(f"Forbidden access attempt: {resource}")
+        return flask.abort(403) # Forbidden
+
+    # Check if file exists before trying to send
+    if not os.path.isfile(safe_path):
+         print(f"XAI asset not found: {safe_path}")
+         return flask.abort(404) # Not Found
+
+    print(f"Serving XAI asset: {safe_path}")
+    # Use send_from_directory for proper handling of MIME types etc.
+    # The 'directory' argument should be the base directory (XAI_DIR)
+    # The 'path' argument is the path relative to the directory
+    try:
+        directory, filename = os.path.split(safe_path)
+        return flask.send_from_directory(directory, filename)
+    except Exception as e:
+        print(f"Error serving {safe_path}: {e}")
+        return flask.abort(500) # Internal server error
+# --------------------------------------
 
 # Main layout
 app.layout = html.Div([

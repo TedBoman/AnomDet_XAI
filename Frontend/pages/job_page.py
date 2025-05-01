@@ -48,6 +48,9 @@ def layout(handler, job_name):
         # --- Store Components ---
         dcc.Store(id='job-page-job-name-store', data=job_name),
         dcc.Store(id='job-page-data-store'),
+        dcc.Store(id='job-page-xai-store'), # Assuming you might use XAI later
+        dcc.Store(id='job-page-status-store'), # Assuming you might use status later
+
         # ... other stores ...
         dcc.Interval(id='job-page-interval-component', interval=10*1000, n_intervals=0),
 
@@ -142,13 +145,14 @@ def layout(handler, job_name):
             ], style={'marginBottom': '20px'}),
             # XAI Section
             html.Div([
-                 html.H3("Explainability (XAI) Results", style={'color': theme_colors['text_medium']}),
-                 dcc.Graph(id='xai-feature-importance-graph', figure={}),
-                 html.Div(id='xai-other-results-display')
-             ], id='xai-results-section', style={'display': 'none', 'marginBottom': '20px'}),
-             # Other plots placeholder
-             html.Div(id='other-plots-section')
-        # Using theme colors
+                html.H3("Explainability (XAI) Results", style={'color': '#C0C0C0'}),
+                # Container where the callback will inject results
+                html.Div(id='xai-results-content', children="Checking for XAI results...")
+            ], id='xai-results-section', style={'display': 'block', 'marginBottom': '20px'}), # Keep visible initially or control via callback
+
+            # Other plots placeholder (keep as before)
+            html.Div(id='other-plots-section')
+
         ], style={'padding': '20px', 'backgroundColor': theme_colors['content_background'], 'borderRadius': '10px'}),
 
     # Using theme colors

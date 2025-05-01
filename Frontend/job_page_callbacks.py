@@ -1,7 +1,11 @@
 # job_page_callbacks.py
 import sys
+import os
+import urllib.parse
+
+import numpy as np
 import dash
-from dash import dcc, html, Input, Output, State, callback, no_update
+from dash import dcc, html, Input, Output, State, callback, no_update, dash_table
 import plotly.graph_objects as go
 import pandas as pd
 import traceback
@@ -15,6 +19,187 @@ from pages.job_page import get_display_job_name
 # from job_page import get_display_job_name # Adjust if necessary
 
 from get_handler import get_handler # Assuming this helper exists
+
+# --- Ensure XAI_DIR is consistent with app.py ---
+XAI_DIR = "/app/data" # The path INSIDE the container
+# ---------------------------------------------
+
+# --- Helper Function to Generate Asset URL ---
+def get_asset_url(job_name, method_name, filename):
+    """Constructs the URL for accessing assets via the Flask static route."""
+    # Quote each part to handle special characters in names
+    quoted_job = urllib.parse.quote(job_name)
+    quoted_method = urllib.parse.quote(method_name)
+    quoted_file = urllib.parse.quote(filename)
+    return f"/xai-assets/{quoted_job}/{quoted_method}/{quoted_file}"
+# -------------------------------------------
+
+# --- Helper Function for CSV Display ---
+def create_datatable(file_path):
+    """Reads a CSV and returns a Dash DataTable or an error message."""
+    try:
+        # Use StringIO to handle potential encoding issues if needed, though direct path usually works
+        df = pd.read_csv(file_path)
+        # Limit rows for display performance if necessary
+        max_rows = 50
+        if len(df) > max_rows:
+             df_display = df.head(max_rows)
+             disclaimer = html.P(f"(Displaying first {max_rows} rows)", style={'fontSize':'small', 'color':'#ccc'})
+        else:
+             df_display = df
+             disclaimer = None
+
+        table = dash_table.DataTable(
+             columns=[{"name": i, "id": i} for i in df_display.columns],
+             data=df_display.to_dict('records'),
+             style_table={'overflowX': 'auto', 'marginTop': '10px'},
+             style_header={
+                 'backgroundColor': 'rgb(30, 30, 30)',
+                 'color': 'white',
+                 'fontWeight': 'bold'
+             },
+             style_cell={
+                 'backgroundColor': 'rgb(50, 50, 50)',
+                 'color': 'white',
+                 'border': '1px solid #555',
+                 'textAlign': 'left',
+                 'padding': '5px',
+                 'minWidth': '80px', 'width': '150px', 'maxWidth': '300px', # Adjust width constraints
+                 'overflow': 'hidden',
+                 'textOverflow': 'ellipsis',
+             },
+             tooltip_data=[ # Add tooltips for potentially truncated cells
+                {
+                    column: {'value': str(value), 'type': 'markdown'}
+                    for column, value in row.items()
+                } for row in df_display.to_dict('records')
+            ],
+            tooltip_duration=None # Keep tooltip visible indefinitely on hover
+        )
+        if disclaimer:
+             return html.Div([disclaimer, table])
+        else:
+             return table
+    except Exception as e:
+        print(f"Error reading/parsing CSV {file_path}: {e}")
+        return html.P(f"Error displaying CSV: {os.path.basename(file_path)} - {e}", style={'color':'red'})
+# ------------------------------------
+
+# --- Helper Function for counterfactual CSV Display ---
+def create_cfe_delta_table(file_path):
+    """Reads a CFE CSV, calculates differences, and returns a styled DataTable."""
+    try:
+        df_cfe = pd.read_csv(file_path)
+
+        # Find the original row
+        original_rows = df_cfe[df_cfe['type'].str.lower() == 'original']
+        if original_rows.empty:
+            return html.P(f"Error: 'original' row not found in {os.path.basename(file_path)}.", style={'color': 'red'})
+        original_row = original_rows.iloc[0]
+
+        # Get counterfactual rows
+        cf_rows = df_cfe[df_cfe['type'].str.lower() == 'counterfactual']
+        if cf_rows.empty:
+            return html.P(f"No 'counterfactual' rows found in {os.path.basename(file_path)}.", style={'color': 'orange'})
+
+        # Identify feature columns (exclude 'type')
+        feature_cols = [col for col in df_cfe.columns if col.lower() != 'type']
+
+        display_data = []
+        style_conditions = []
+
+        # Process each counterfactual row
+        for idx, cf_row in cf_rows.iterrows():
+            display_row = {'Counterfactual #': idx - original_row.name} # Simple row number
+            changed_features_list = []
+            row_index = idx - original_row.name - 1 # 0-based index for styling
+
+            for col in feature_cols:
+                original_val = original_row[col]
+                cf_val = cf_row[col]
+
+                # Check if the value changed (handle potential type differences and NaN)
+                changed = False
+                # Try numeric comparison first with tolerance for floats
+                try:
+                    # Check for NaN equality explicitly
+                    if pd.isna(original_val) and pd.isna(cf_val):
+                        changed = False
+                    elif pd.isna(original_val) or pd.isna(cf_val):
+                        changed = True # One is NaN, the other isn't
+                    # Use isclose for floats, direct compare otherwise
+                    elif isinstance(original_val, (int, float)) and isinstance(cf_val, (int, float)):
+                         if not np.isclose(original_val, cf_val, rtol=1e-05, atol=1e-08):
+                              changed = True
+                    elif original_val != cf_val: # Direct comparison for others (strings etc)
+                        changed = True
+                except TypeError: # Fallback if types are incompatible for comparison
+                     if str(original_val) != str(cf_val):
+                           changed = True
+
+                if changed:
+                    # Show the new counterfactual value
+                    display_row[col] = cf_val
+                    changed_features_list.append(col)
+                    # Add style condition to highlight this cell
+                    style_conditions.append({
+                        'if': {'row_index': row_index, 'column_id': col},
+                        'backgroundColor': '#3D9970', # Teal-ish highlight
+                        'color': 'white',
+                        'fontWeight': 'bold'
+                    })
+                else:
+                    # Indicate no change (e.g., with a dash)
+                    display_row[col] = "—" # Em dash for clarity
+
+            display_row['Changes'] = ", ".join(changed_features_list) if changed_features_list else "None"
+            display_data.append(display_row)
+
+        # Define columns for the DataTable
+        table_columns = [{"name": "CF #", "id": "Counterfactual #"}] + \
+                        [{"name": "Changed Features", "id": "Changes"}] + \
+                        [{"name": i, "id": i} for i in feature_cols]
+
+        delta_table = dash_table.DataTable(
+            columns=table_columns,
+            data=display_data,
+            style_table={'overflowX': 'auto', 'marginTop': '10px'},
+            style_header={
+                'backgroundColor': 'rgb(30, 30, 30)',
+                'color': 'white',
+                'fontWeight': 'bold'
+            },
+            style_cell={ # Default cell style
+                'backgroundColor': 'rgb(50, 50, 50)',
+                'color': 'white',
+                'border': '1px solid #555',
+                'textAlign': 'left',
+                'padding': '5px',
+                'minWidth': '80px', 'width': '120px', 'maxWidth': '180px', # Adjust width as needed
+                'overflow': 'hidden',
+                'textOverflow': 'ellipsis',
+            },
+            # Apply conditional styles LAST to override defaults
+            style_data_conditional=style_conditions,
+            tooltip_data=[ # Show full value on hover for truncated cells
+                {
+                    column: {'value': str(value), 'type': 'markdown'}
+                    for column, value in row.items()
+                } for row in display_data
+            ],
+             tooltip_duration=None # Keep tooltip visible
+        )
+
+        return html.Div([
+            html.P("Counterfactual Explanations (Highlighted cells show changed values from original):", style={'marginTop':'10px', 'fontWeight':'bold'}),
+            delta_table
+            ])
+
+    except Exception as e:
+        print(f"Error creating CFE delta table for {file_path}: {e}")
+        traceback.print_exc()
+        return html.P(f"Error processing counterfactuals file: {os.path.basename(file_path)} - {e}", style={'color':'red'})
+# --------------------------------------------------------
 
 def register_job_page_callbacks(app):
     print("Registering job page callbacks...")
@@ -243,8 +428,144 @@ def register_job_page_callbacks(app):
             })
             sys.stdout.flush()
 
+        sys.stdout.flush() # Ensure prints are flushed
+        return fig # Return only the figure
+    
+    @app.callback(
+        [Output('xai-results-content', 'children'),
+         Output('xai-results-section', 'style')], # To hide/show the whole section
+        [Input('job-page-job-name-store', 'data')] # Trigger when job name changes
+    )
+    def update_xai_display(job_name):
+        """
+        Scans the XAI directory for the current job, identifies subdirectories
+        named after XAI methods, and displays their contents (images, html, csv).
+        """
         sys.stdout.flush()
-        return fig
+
+        if not job_name:
+            return "No job selected.", {'display': 'none'} # Hide section if no job
+
+        print(f"(XAI Display CB) Checking results for job: {job_name}")
+        # Use the corrected XAI_DIR variable
+        job_xai_base_path = os.path.join(XAI_DIR, job_name)
+        xai_content_blocks = [] # List to hold Divs for each method
+        found_any_results = False
+
+        # Supported file extensions
+        image_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg']
+        html_extension = '.html'
+        csv_extension = '.csv'
+
+        # Check if the base job directory exists
+        if not os.path.isdir(job_xai_base_path):
+            print(f"(XAI Display CB) Base XAI directory not found: {job_xai_base_path}")
+            # Return message, show the section to display the message
+            return f"No XAI results found for job '{job_name}'. Base directory missing: {job_xai_base_path}", {'display': 'block'}
+
+        try:
+            # List potential XAI method subdirectories
+            # Define known/expected method names if possible for better filtering
+            # known_methods = {'ShapExplainer', 'LimeExplainer', 'DiceExplainer'}
+            method_subdirs = []
+            for item in os.listdir(job_xai_base_path):
+                item_path = os.path.join(job_xai_base_path, item)
+                if os.path.isdir(item_path):
+                     # Optional: Check if 'item' name matches known_methods if you have a list
+                     method_subdirs.append(item) # Assume all subdirs are methods for now
+
+            if not method_subdirs:
+                print(f"(XAI Display CB) No subdirectories found within: {job_xai_base_path}")
+                return f"No XAI method subdirectories found within '{job_xai_base_path}'.", {'display': 'block'}
+
+            # Process each found method subdirectory
+            for method_name in sorted(method_subdirs): # Sort for consistent order
+                method_path = os.path.join(job_xai_base_path, method_name)
+                method_file_components = [] # List to hold components for files within this method
+                print(f"(XAI Display CB) Scanning method directory: {method_path}")
+
+                try:
+                    # List and process files within the method directory
+                    files_in_method_dir = [f for f in os.listdir(method_path) if os.path.isfile(os.path.join(method_path, f))]
+
+                    if not files_in_method_dir:
+                         print(f"  - No files found in {method_path}")
+                         method_file_components.append(html.P("(No displayable files found in this directory)", style={'color':'#aaa'}))
+                    else:
+                        for filename in sorted(files_in_method_dir): # Sort files
+                            file_path = os.path.join(method_path, filename)
+                            _, extension = os.path.splitext(filename.lower())
+
+                            # Generate the correct URL using the helper
+                            asset_url = get_asset_url(job_name, method_name, filename)
+
+                            component_to_add = None
+                            if extension in image_extensions:
+                                print(f"  - Found Image: {filename}, URL: {asset_url}")
+                                component_to_add = html.Img(src=asset_url,
+                                                             alt=f"{method_name} - {filename}",
+                                                             style={'maxWidth': '95%', 'height': 'auto', 'marginTop': '10px', 'border':'1px solid #444', 'display':'block', 'marginLeft':'auto', 'marginRight':'auto'}) # Center images
+                                print(component_to_add)
+                                component_with_header = html.Div([
+                                    html.H5(filename, style={'marginTop':'15px', 'marginBottom':'5px', 'color':'#ddd', 'fontWeight':'normal', 'fontSize':'1em'}),
+                                    component_to_add
+                                ], style={'marginBottom':'20px'})
+                                method_file_components.append(component_with_header)
+                                found_any_results = True # Mark that we found at least one displayable file
+                            
+                            elif extension == html_extension:
+                                print(f"  - Found HTML: {filename}, URL: {asset_url}")
+                                component_to_add = html.Iframe(src=asset_url,
+                                                               style={'width': '100%', 'height': '300px', 'marginTop': '10px', 'border': '1px solid #444', 'backgroundColor': 'white'})
+                                component_with_header = html.Div([
+                                    html.H5(filename, style={'marginTop':'15px', 'marginBottom':'5px', 'color':'#ddd', 'fontWeight':'normal', 'fontSize':'1em'}),
+                                    component_to_add
+                                ], style={'marginBottom':'20px'})
+                                method_file_components.append(component_with_header)
+                                found_any_results = True # Mark that we found at least one displayable file
+                            
+                            elif extension == csv_extension:
+                                print(f"  - Found CSV: {filename}")
+                                # Use the helper function to create a DataTable
+                                component_to_add = create_cfe_delta_table(file_path)
+                                component_with_header = html.Div([
+                                    html.H5(filename, style={'marginTop':'15px', 'marginBottom':'5px', 'color':'#ddd', 'fontWeight':'normal', 'fontSize':'1em'}),
+                                    component_to_add
+                                ], style={'marginBottom':'20px'})
+                                method_file_components.append(component_with_header)
+                                found_any_results = True # Mark that we found at least one displayable file
+
+                            print(f"method_file_components (after each file): {method_file_components}")
+                            sys.stdout.flush()
+
+                except Exception as e:
+                    print(f"(XAI Display CB) Error scanning/processing files in directory {method_path}: {e}")
+                    method_file_components.append(html.P(f"Error processing results for {method_name}: {e}", style={'color':'red'}))
+
+                print(f"method_file_components (after last append): {method_file_components}")
+                # Create a block for this method if it has any components (even error messages)
+                if method_file_components:
+                    xai_content_blocks.append(html.Div([
+                        # Method Title
+                        html.H4(f"{method_name} Results", style={'borderBottom': '1px solid #555', 'paddingBottom': '5px', 'marginTop': '25px', 'marginBottom': '15px', 'color':'#eee'}),
+                        # File Components
+                        *method_file_components # Unpack the list of components
+                    ], className="xai-method-block", style={'marginBottom': '30px', 'padding': '15px', 'border': '1px solid #555', 'borderRadius':'5px', 'backgroundColor': 'rgba(40,40,40,0.5)'})) # Style the block
+
+            # --- Final Check and Return ---
+            if not found_any_results:
+                # This message means subdirectories were found, but no displayable files inside them
+                 print("(XAI Display CB) Method subdirectories found, but no displayable files within them.")
+                 return f"No displayable XAI results files (.png, .html, .csv) found for job '{job_name}' in method subdirectories.", {'display': 'block'}
+
+            print("(XAI Display CB) Finished processing XAI results. Returning content blocks.")
+            # Return the list of method blocks, ensure section is visible
+            return xai_content_blocks, {'display': 'block'}
+
+        except Exception as e:
+            print(f"(XAI Display CB) General error processing XAI for job {job_name}:")
+            traceback.print_exc()
+            return f"An error occurred while trying to load XAI results: {e}", {'display': 'block'}
 
     # --- <<< ADDED CALLBACK FOR THE 'BACK TO HOME' BUTTON >>> ---
     @app.callback(
@@ -260,7 +581,7 @@ def register_job_page_callbacks(app):
         return dash.no_update # If no clicks (or initial call), do nothing
     # --- <<< END 'BACK TO HOME' CALLBACK >>> ---
 
-    # --- Add other callbacks for XAI or other plots if needed ---
+    # --- Add other callbacks if needed ---
 
     print("Job page callbacks registered.")
     sys.stdout.flush() # Ensure registration message is flushed
