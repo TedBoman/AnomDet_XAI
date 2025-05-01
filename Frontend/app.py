@@ -20,15 +20,12 @@ FRONTEND_PORT = int(os.getenv('FRONTEND_PORT'))
 # Consider adding themes or external stylesheets if desired
 # import dash_bootstrap_components as dbc
 # app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-app = dash.Dash(__name__)
-app.config.suppress_callback_exceptions = True
+app = dash.Dash(__name__, suppress_callback_exceptions=True)
 
 # Main layout
 app.layout = html.Div([
     dcc.Store(id="store-data"), 
     dcc.Location(id="url", refresh=False),
-    dcc.Store(id='job-page-job-name-store'),
-    dcc.Store(id='job-page-data-store'),
     html.Div(id="page-content")
 ])
 

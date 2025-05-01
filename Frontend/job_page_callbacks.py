@@ -14,8 +14,8 @@ def register_job_page_callbacks(app):
     print("Registering job page callbacks...")
 
     @app.callback(
-    Output('job-page-job-name-store', 'data'),
-    Input('url', 'pathname') # Triggered when URL pathname changes (including initial load)
+        Output('job-page-job-name-store', 'data'),
+        Input('url', 'pathname') # Triggered when URL pathname changes (including initial load)
     )
     def update_job_store_from_url(pathname):
         """
@@ -53,8 +53,7 @@ def register_job_page_callbacks(app):
         [
             Input('job-page-job-name-store', 'data'),       # Trigger on job change
             Input('job-page-interval-component', 'n_intervals') # Trigger on interval
-        ]
-        # No State needed
+        ],
     )
     def update_data_store(job_name, n_intervals):
         """
@@ -212,7 +211,7 @@ def register_job_page_callbacks(app):
             print(f"(Graph Update CB) Converted timestamp dtype: {df['timestamp'].dtype}") # Should be datetime64[ns, UTC]
 
             # --- Populate Dropdown Options ---
-            cols_to_exclude = {'timestamp', 'label', 'is_anomaly', 'injected_anomaly'}
+            cols_to_exclude = {'timestamp'}
             numeric_cols = df.select_dtypes(include=['number']).columns # Step 1: Find numeric cols
             available_y_cols = [col for col in numeric_cols if col not in cols_to_exclude] # Step 2: Filter excluded
             dropdown_options = [{'label': col, 'value': col} for col in available_y_cols] # Step 3: Create options list
