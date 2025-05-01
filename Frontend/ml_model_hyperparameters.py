@@ -75,3 +75,49 @@ HYPERPARAMETER_DESCRIPTIONS = {
     }
     # Add entries for other models if needed
 }
+
+
+# Example placement: Near the top of callbacks.py or in a separate file
+
+XAI_METHOD_DESCRIPTIONS = {
+    "ShapExplainer": {
+        "description": "SHAP (SHapley Additive exPlanations) assigns each feature an importance value for a particular prediction based on cooperative game theory. It explains how much each feature contributes to pushing the model output from the base value (average model output over the training dataset) to the current prediction.",
+        "capabilities": "Provides global and local explanations, theoretically sound (Shapley values), consistent, handles feature interactions to some extent.",
+        "limitations": "Can be computationally expensive, especially KernelSHAP (model-agnostic version). TreeSHAP is faster but specific to tree models. Interpretation of interaction effects can be complex.",
+        "parameters": {
+            "n_explain_max": "Maximum number of instances (predictions) to explain.",
+            "nsamples": "(KernelSHAP) Number of times to sample perturbations for each explanation. Higher values increase accuracy but also computation time.",
+            "k_summary": "(KernelSHAP) Number of samples from the background dataset used to summarize it (e.g., using k-means).",
+            "l1_reg_k": "(KernelSHAP) Number of features to select using L1 regularization (Lasso) when approximating Shapley values. Controls sparsity.",
+            "shap_method": "Specifies the SHAP algorithm variant to use ('kernel', 'tree', 'linear', 'partition'). 'kernel' is model-agnostic but slower. 'tree' is optimized for tree-based models (like XGBoost, Decision Tree)."
+        }
+    },
+    "LimeExplainer": {
+        "description": "LIME (Local Interpretable Model-agnostic Explanations) explains individual predictions of any black-box model by learning a simpler, interpretable linear model locally around the prediction.",
+        "capabilities": "Model-agnostic, provides intuitive local explanations (feature importance for a specific prediction), relatively easy to understand.",
+        "limitations": "Explanations are local and may not represent global model behavior. Sensitive to hyperparameter choices (kernel width, number of samples). Explanation instability can occur. May struggle with highly non-linear interactions.",
+        "parameters": {
+            "n_explain_max": "Maximum number of instances (predictions) to explain.",
+            "num_features": "Maximum number of features to include in the local explanation.",
+            "num_samples": "Number of perturbed samples generated around the instance to train the local linear model.",
+            "kernel_width": "Width of the kernel function used to weight perturbed samples based on proximity to the original instance. Smaller values focus more locally.",
+            "feature_selection": "Method used to select features for the local explanation ('auto', 'highest_weights', 'forward_selection', 'lasso_path', 'none').",
+            "discretize_continuous": "Whether to discretize continuous features for perturbation and explanation generation.",
+            "sample_around_instance": "Whether to sample perturbations centered around the instance being explained."
+        }
+    },
+    "DiceExplainer": {
+        "description": "DiCE (Diverse Counterfactual Explanations) generates counterfactual examples, which are minimal changes to feature values that flip the model's prediction to a desired outcome (e.g., from 'anomaly' to 'normal'). It aims to provide diverse examples.",
+        "capabilities": "Model-agnostic, provides actionable insights by showing what needs to change for a different outcome, generates multiple diverse counterfactuals.",
+        "limitations": "Finding counterfactuals can be computationally expensive. Generated counterfactuals might not always be realistic or feasible. Primarily focused on 'what-if' scenarios rather than direct feature importance.",
+        "parameters": {
+            "n_explain_max": "Maximum number of instances (predictions) to find counterfactuals for.",
+            "total_CFs": "Desired number of diverse counterfactual examples to generate per instance.",
+            "desired_class": "The target prediction class for the counterfactuals (e.g., 'opposite' to flip the current prediction, or a specific class index like 0 or 1).",
+            "features_to_vary": "List of feature names that are allowed to be changed when generating counterfactuals. If empty or not specified, DiCE typically considers all mutable features.",
+            "backend": "Specifies the machine learning framework the model was built with ('sklearn', 'TF1', 'TF2', 'pytorch') to ensure compatibility.",
+            "dice_method": "Algorithm used to generate counterfactuals ('random', 'genetic', 'kdtree'). 'genetic' often finds better counterfactuals but is slower."
+        }
+    }
+    # Add entries for other XAI methods if you implement them
+}

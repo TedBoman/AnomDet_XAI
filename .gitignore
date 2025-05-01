@@ -1,4 +1,5 @@
 .idea
+.VSCodeCounter
 Database/anom_secrets/*
 **.env
 **.pyc

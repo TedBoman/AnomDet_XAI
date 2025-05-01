@@ -40,6 +40,27 @@ def layout(handler):
 
     layout = html.Div([
 
+        # --- Hyperparameter Explanation Box ---
+        html.Div(
+            id="parameter-explanation-box",
+            children=[html.P("Select a model to see parameter explanations.", style={'color':'#b0b0b0'})],
+            style={
+                "padding": "20px",
+                "backgroundColor": "#0a3d5a", # Slightly different background
+                "borderRadius": "1rem",
+                "boxShadow": "0 2px 5px rgb(0, 0, 0)",
+                "minWidth": "300px", # Adjust width as needed
+                "maxWidth": "400px",
+                "height": "fit-content", # Adjust height based on content
+                "maxHeight": "80vh", # Limit max height and make scrollable if needed
+                "overflowY": "auto", # Add scroll if content exceeds maxHeight
+                # Add flex properties if needed, e.g., flex: 1 (takes up 1/3 width)
+                "color": "#e0e0e0",
+                "textAlign": "left",
+            }
+        ),
+        # --- END Explanation Box ---
+
         # --- AnomDetX Settings panel ---
         html.Div( 
             [ 
@@ -333,10 +354,10 @@ def layout(handler):
             "textAlign": "center",
         }),
 
-        # --- NEW: Hyperparameter Explanation Box ---
+        # --- XAI method Explanation Box ---
         html.Div(
-            id="parameter-explanation-box",
-            children=[html.P("Select a model to see parameter explanations.", style={'color':'#b0b0b0'})],
+            id="xai-explanation-box",
+            children=[html.P("Select a XAI method to see parameter explanations.", style={'color':'#b0b0b0'})],
             style={
                 "padding": "20px",
                 "backgroundColor": "#0a3d5a", # Slightly different background
@@ -352,7 +373,7 @@ def layout(handler):
                 "textAlign": "left",
             }
         ),
-        # --- END Explanation Box ---
+        # --- Explanation Box ---
 
     ], id="main-settings-container", style={ "backgroundColor": "#105E90", "padding": "40px", "minHeight": "100vh", "display": "flex", "flexWrap": "nowrap", "alignItems": "center"})
 

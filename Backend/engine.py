@@ -21,8 +21,6 @@ DATABASE = {
     "PASSWORD": os.getenv('DATABASE_PASSWORD'),
     "DATABASE": os.getenv('DATABASE_NAME')
 }
-GRAFANA_URL = f"http://{os.getenv('GRAFANA_HOST')}:{os.getenv('GRAFANA_PORT')}"
-GRAFANA_API_KEY = os.getenv('GRAFANA_API_KEY')
 
 DATASET_DIRECTORY = "./Datasets/"
 

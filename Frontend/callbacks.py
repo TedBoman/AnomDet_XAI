@@ -7,6 +7,7 @@ import json
 from get_handler import get_handler
 import os
 from ml_model_hyperparameters import HYPERPARAMETER_DESCRIPTIONS
+from ml_model_hyperparameters import XAI_METHOD_DESCRIPTIONS
 from pages.job_page import get_display_job_name
 
 # --- Create_active_jobs FUNCTION ---
@@ -99,6 +100,56 @@ def get_index_callbacks(app):
                         html.Strong(f"{param}:", style={'color':'#ffffff'}),
                         html.P(desc, style={'color':'#d0d0d0', 'marginTop':'2px', 'marginBottom':'10px', 'fontSize':'14px'})
                     ])
+                )
+
+        return explanation_children
+    
+    @app.callback(
+    Output("xai-explanation-box", "children"),
+    Input("xai-method-dropdown", "value"),
+    # Assuming XAI_METHOD_DESCRIPTIONS is available in this scope
+    # (either defined in callbacks.py or imported)
+    )
+    def update_xai_explanations(selected_methods):
+        if not selected_methods or 'none' in selected_methods:
+            # Handle case where no method or only 'none' is selected
+            # Check if only 'none' is selected if 'none' is a valid option
+            active_methods = [m for m in selected_methods if m != 'none']
+            if not active_methods:
+                return [html.P("Select an XAI method to see its description.", style={'color':'#b0b0b0'})]
+        else:
+            # If multiple methods are selected, perhaps show the first one? Or allow selecting one?
+            # For simplicity, let's show the description for the first selected active method
+            active_methods = [m for m in selected_methods if m != 'none']
+            if not active_methods: # Should not happen if we passed the first check, but for safety
+                return [html.P("Select an XAI method to see its description.", style={'color':'#b0b0b0'})]
+            
+            first_method = active_methods[0]
+            descriptions = XAI_METHOD_DESCRIPTIONS.get(first_method, {})
+
+        if not descriptions:
+            return [html.P(f"No description available for method: {first_method}", style={'color':'#ffcc00'})]
+
+        explanation_children = [
+            html.H5(f"{first_method} Description:", style={'color':'#ffffff', 'marginBottom':'10px', 'borderBottom': '1px solid #555', 'paddingBottom':'5px'}),
+            html.P(descriptions.get("description", "N/A")),
+            html.H6("Capabilities:", style={'color':'#cccccc', 'marginTop':'10px'}),
+            html.P(descriptions.get("capabilities", "N/A")),
+            html.H6("Limitations:", style={'color':'#cccccc', 'marginTop':'10px'}),
+            html.P(descriptions.get("limitations", "N/A")),
+            html.H6("Parameters:", style={'color':'#cccccc', 'marginTop':'10px', 'marginBottom':'5px'}),
+        ]
+
+        params_dict = descriptions.get("parameters", {})
+        if not params_dict:
+            explanation_children.append(html.P("No specific parameters listed.", style={'fontStyle': 'italic', 'color':'#aaaaaa'}))
+        else:
+            for param, desc in params_dict.items():
+                explanation_children.append(
+                    html.Div([
+                        html.Strong(f"{param}:", style={'color':'#ffffff'}),
+                        html.P(desc, style={'color':'#d0d0d0', 'marginTop':'2px', 'marginBottom':'10px', 'fontSize':'14px'})
+                    ], style={'marginLeft':'15px'}) # Indent parameter descriptions
                 )
 
         return explanation_children
