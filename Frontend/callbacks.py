@@ -74,7 +74,7 @@ def create_active_jobs(active_jobs):
 # --- Callbacks for index page ---
 def get_index_callbacks(app):
 
-# --- NEW Callback to update Parameter Explanation Box ---
+# --- Callback to update Parameter Explanation Box ---
     @app.callback(
         Output("parameter-explanation-box", "children"),
         Input("detection-model-dropdown", "value")
@@ -424,43 +424,43 @@ def get_index_callbacks(app):
 
                 # --- OneClassSVM Settings ---
                 html.H6("OneClassSVM Parameters:", style={'color':'#cccccc', 'marginTop':'20px', 'marginBottom': '8px', 'textAlign':'left'}),
-                # Kernel (already present, adjusted style)
+                # Kernel 
                 html.Div([
                     html.Label("SVM Kernel:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
-                    dcc.Dropdown(id={**setting_id_base, 'param': 'svm_kernel'}, # Renamed param key
+                    dcc.Dropdown(id={**setting_id_base, 'param': 'svm_kernel'}, 
                                     options=[{'label': k, 'value': k} for k in ['rbf', 'linear', 'poly', 'sigmoid']],
                                     value='rbf', clearable=False,
                                     style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
-                # Nu (New)
+                # Nu 
                 html.Div([
                     html.Label("SVM Nu (float 0-1):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
-                    dcc.Input(id={**setting_id_base, 'param': 'svm_nu'}, # Renamed param key
+                    dcc.Input(id={**setting_id_base, 'param': 'svm_nu'}, 
                                 type="number", value=0.1, min=0.0, max=1.0, step=0.01, # Default 0.1
                                 )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
-                # Gamma (already present, adjusted style)
+                # Gamma 
                 html.Div([
                     html.Label("SVM Gamma ('scale', 'auto', float):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
-                    dcc.Input(id={**setting_id_base, 'param': 'svm_gamma'}, # Renamed param key
+                    dcc.Input(id={**setting_id_base, 'param': 'svm_gamma'}, 
                                 type="text", value='scale', placeholder="'scale', 'auto' or float",
                                 )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
-                # Degree (already present, adjusted style)
+                # Degree 
                 html.Div([
                     html.Label("SVM Degree (int>=1, for Poly):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
-                    dcc.Input(id={**setting_id_base, 'param': 'svm_degree'}, # Renamed param key
+                    dcc.Input(id={**setting_id_base, 'param': 'svm_degree'}, 
                                 type="number", value=3, min=1, step=1,
                                 )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
-                # Coef0 (New)
+                # Coef0 
                     html.Div([
                     html.Label("SVM Coef0 (float, Poly/Sigmoid):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'coef0'}, # Standard param name
                                 type="number", value=0.0, step=0.1, # Default 0.0
                                 )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
-                    # Shrinking (New)
+                    # Shrinking 
                 html.Div([
                     html.Label("SVM Shrinking Heuristic:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Dropdown(id={**setting_id_base, 'param': 'shrinking'}, # Standard param name
@@ -469,14 +469,14 @@ def get_index_callbacks(app):
                                     clearable=False,
                                     style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
-                    # Tol (New)
+                    # Tol 
                     html.Div([
                     html.Label("SVM Tolerance (float):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'tol'}, # Standard param name
                                 type="number", value=1e-3, step=1e-4,
                                 )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
-                    # Max Iter (New)
+                    # Max Iter 
                     html.Div([
                     html.Label("SVM Max Iterations (int):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'max_iter'}, # Standard param name
@@ -484,7 +484,6 @@ def get_index_callbacks(app):
                                 )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
-                # Note: Regularization (C) is not a parameter for OneClassSVM, Nu is used instead. Removed 'C' input.
             ])
         elif selected_model == "isolation_forest":
             settings_children.extend([
@@ -908,7 +907,7 @@ def get_index_callbacks(app):
             button_index = -1
             for i, n_clicks in enumerate(submit_n_clicks_list):
                  # Check if this specific confirmation box was clicked (n_clicks > 0)
-                 # This logic assumes submit_n_clicks resets; adjust if needed
+                 # This logic assumes submit_n_clicks resets;
                  if n_clicks and n_clicks > 0:
                      # Extract the job name from the ID of the confirmation box that triggered
                      all_confirm_ids = ctx.inputs_list[1] # Get list of Input dicts for confirm-box
@@ -921,7 +920,6 @@ def get_index_callbacks(app):
                               if response != "success":
                                    print(f"Backend error cancelling job '{job_to_cancel}': {response}")
                                    error_message = f"Error cancelling {job_to_cancel}: {response}"
-                              # Reset n_clicks? Dash doesn't directly support this easily
                               # The callback will proceed to refresh the list anyway
                           except Exception as cancel_err:
                               print(f"!!! EXCEPTION during handle_cancel_job for '{job_to_cancel}': {cancel_err}")
@@ -988,7 +986,6 @@ def get_index_callbacks(app):
             State("xai-check", "value"), State("xai-method-dropdown", "value"),
             State({'type': 'xai-setting', 'method': ALL, 'param': ALL}, 'value'),
             State({'type': 'xai-setting', 'method': ALL, 'param': ALL}, 'id'),
-            # --- NEW: Add ML Settings States ---
             State({'type': 'ml-setting', 'model': ALL, 'param': ALL}, 'value'),
             State({'type': 'ml-setting', 'model': ALL, 'param': ALL}, 'id'),
         ]
@@ -1004,7 +1001,7 @@ def get_index_callbacks(app):
             selected_xai_methods,
             xai_settings_values,
             xai_settings_ids,
-            # --- NEW: Add ML Settings Args ---
+            # --- ML Settings Args ---
             ml_settings_values,
             ml_settings_ids
             ):
@@ -1116,7 +1113,7 @@ def get_index_callbacks(app):
 
             print(f"DEBUG: Constructed xai_params_list for backend: {xai_params_list}")
             
-        # --- NEW: Process ML Model Settings ---
+        # --- Process ML Model Settings ---
         ml_params_dict = {}
         if selected_detection_model: # Only parse if a model is selected
             print(f"DEBUG: Received ML settings IDs: {ml_settings_ids}")
@@ -1157,15 +1154,13 @@ def get_index_callbacks(app):
             sys.stdout.flush()
 
             # --- Modify backend call signatures to include ml_params_dict ---
-            # You will need to update handle_run_batch and handle_run_stream
-            # in your FrontendHandler and the corresponding backend methods.
             model_params_to_pass = ml_params_dict if ml_params_dict else None # Pass None if empty
 
             if selected_mode == "batch":
                 response = handler.handle_run_batch(
                     selected_dataset, selected_detection_model, job_name,
                     label_column=label_col_to_pass, xai_params=xai_params_list, inj_params=inj_params_list,
-                    model_params=model_params_to_pass # NEW ARG
+                    model_params=model_params_to_pass 
                 )
             else: # stream
                 # Validate speedup for stream mode
@@ -1181,7 +1176,7 @@ def get_index_callbacks(app):
 
                     selected_dataset, selected_detection_model, job_name, speedup,
                     label_column=label_col_to_pass, xai_params=xai_params_list, inj_params=inj_params_list,
-                    model_params=model_params_to_pass # NEW ARG
+                    model_params=model_params_to_pass 
                 )
 
             if response == "success":
