@@ -24,7 +24,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
     Provides compatibility with SHAP/LIME via the `predict_proba_xai` method.
     """
     
-    def __init__(self, *kwargs):
+    def __init__(self, **kwargs):
         """Initializes the Decision Tree classifier model.
 
         Args:

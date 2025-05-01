@@ -32,7 +32,7 @@ def layout(handler, job_name):
             id='job-page-interval-component',
             interval=10*1000,  # Interval in milliseconds (e.g., 10 seconds)
             n_intervals=0,
-            disabled=True # Keep enabled for potential streaming updates
+            disabled=False # Keep enabled for potential streaming updates
         ),
 
         # --- Header and Navigation (keep as before) ---
@@ -63,10 +63,10 @@ def layout(handler, job_name):
 
             # XAI Section (keep as before, assuming placeholder for now)
             html.Div([
-                 html.H3("Explainability (XAI) Results", style={'color': '#C0C0C0'}),
-                 dcc.Graph(id='xai-feature-importance-graph', figure={}),
-                 html.Div(id='xai-other-results-display')
-             ], id='xai-results-section', style={'display': 'none', 'marginBottom': '20px'}), # Hidden initially
+                html.H3("Explainability (XAI) Results", style={'color': '#C0C0C0'}),
+                # Container where the callback will inject results
+                html.Div(id='xai-results-content', children="Checking for XAI results...")
+            ], id='xai-results-section', style={'display': 'block', 'marginBottom': '20px'}), # Keep visible initially or control via callback
 
             # Other plots placeholder (keep as before)
             html.Div(id='other-plots-section')

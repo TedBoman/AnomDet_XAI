@@ -634,7 +634,7 @@ def run_batch(
                     except:
                         shap_method = 'kernel'
                 
-                output_dir = "/output" # Ensure this path is accessible/writable in Docker
+                output_dir = "/data" # Ensure this path is accessible/writable in Docker
 
                 if not method_name or method_name == "none":
                     print("XAI method not specified in parameters. Skipping XAI.")
@@ -642,7 +642,7 @@ def run_batch(
                     print("XAI components not available (import failed). Skipping XAI.")
                 else:
                     xai_methods_to_run = [method_name] # Explain only the selected method
-                    output_dir = "/output"
+                    output_dir = "/data"
                     os.makedirs(output_dir, exist_ok=True)
 
                     # Check prerequisites

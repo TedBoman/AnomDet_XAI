@@ -30,7 +30,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ${XAI_PLOT_OUTPUT_PATH}:/output
+      - ${XAI_PLOT_OUTPUT_PATH}:/app/data
     restart: always
 
   backend:
@@ -47,7 +47,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ${XAI_PLOT_OUTPUT_PATH}:/output
+      - ${XAI_PLOT_OUTPUT_PATH}:/data
     restart: always
   
 volumes:

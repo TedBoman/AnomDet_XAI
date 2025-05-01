@@ -138,57 +138,92 @@ class XGBoostModel(model_interface.ModelInterface):
                 return X_processed_scaled, None, self.processed_feature_names # No labels
 
         elif isinstance(X, np.ndarray):
-            print(f"DEBUG _prepare_data: Processing NumPy input shape {X.shape}") # Add shape print
-            self.input_type = 'numpy'
-            if X.ndim != 3: raise ValueError(f"NumPy X must be 3D (samples, seq_len, features), got {X.ndim}D")
-            n_samples, seq_len, n_feat = X.shape
-            self.sequence_length = seq_len # Store sequence length
-            self.n_original_features = n_feat # Store original feature count
+            # --- MODIFICATION STARTS HERE ---
+            # Handle both 3D and 2D NumPy input, especially for inference
+            print(f"DEBUG _prepare_data: Processing NumPy input shape {X.shape}")
+
+            original_ndim = X.ndim
+            temp_X = X # Work with a temporary variable
+
+            # If input is 2D during inference, reshape to 3D assuming seq_len=1
+            if not is_training and original_ndim == 2:
+                n_samples_2d, n_feat_2d = temp_X.shape
+                # Check if feature count matches expected original features
+                if self.n_original_features is not None and n_feat_2d != self.n_original_features:
+                     raise ValueError(f"Inference 2D NumPy input has {n_feat_2d} features, expected {self.n_original_features}.")
+                temp_X = temp_X[:, np.newaxis, :] # Reshape to (samples, 1, features)
+                print(f"DEBUG _prepare_data: Reshaped 2D NumPy input to 3D {temp_X.shape} for inference.")
+
+            # Now proceed assuming temp_X is 3D (either originally or after reshape)
+            if temp_X.ndim != 3:
+                 # This check should now primarily catch invalid initial shapes other than 2D during inference
+                 raise ValueError(f"NumPy X must be 3D (or 2D during inference), got {original_ndim}D initially.")
+
+            n_samples, seq_len, n_feat = temp_X.shape
 
             if is_training:
+                # Training path expects 3D input initially
+                if original_ndim != 3: # Ensure original input was 3D for training
+                    raise ValueError(f"NumPy training input must be 3D, got {original_ndim}D.")
+
+                print(f"DEBUG _prepare_data (Train): NumPy input shape {temp_X.shape}") # Add shape print
+                self.input_type = 'numpy'
+                self.sequence_length = seq_len
+                self.n_original_features = n_feat
+
                 if y is None: raise ValueError("Labels 'y' required for NumPy training.")
                 if not isinstance(y, np.ndarray) or y.ndim != 1 or len(y) != n_samples:
                     raise ValueError("Invalid 'y' for NumPy training.")
 
-                # --- Preserve 3D Structure during Scaling ---
-                # Reshape 3D -> 2D for scaler: (samples, seq_len, features) -> (samples * seq_len, features)
-                X_reshaped_for_scaling = X.reshape(-1, n_feat)
-                print(f"DEBUG _prepare_data: Reshaped 3D to 2D for scaling: {X_reshaped_for_scaling.shape}")
+                # Flatten 3D -> 2D for XGBoost training
+                X_flattened = temp_X.reshape(n_samples, seq_len * n_feat)
+                print(f"DEBUG _prepare_data (Train): Flattened 3D to 2D for scaling/training: {X_flattened.shape}")
 
-                # Scaling (Fit and Transform)
+                # Scaling (Fit and Transform flattened data)
                 self.scaler = MinMaxScaler()
-                X_processed_scaled = self.scaler.fit_transform(X_reshaped_for_scaling)
-                print(f"DEBUG _prepare_data: Scaled 2D data shape: {X_processed_scaled.shape}")
+                X_processed_scaled = self.scaler.fit_transform(X_flattened)
+                print(f"DEBUG _prepare_data (Train): Scaled 2D data shape: {X_processed_scaled.shape}")
 
-                # Feature names: You might still need flattened names for compatibility elsewhere (e.g., DiCE)
-                # Or maybe just the original feature names are sufficient if the 3D model uses them?
-                # Let's keep flattened for now, but be aware of this potential mismatch in meaning.
+                # Generate flattened feature names
                 n_flattened_features = seq_len * n_feat
                 self.processed_feature_names = [f"feature_{i}_step_{j}" for j in range(seq_len) for i in range(n_feat)]
                 if len(self.processed_feature_names) != n_flattened_features:
-                    warnings.warn("Feature name generation mismatch.")
-                    self.processed_feature_names = [f"flat_feature_{k}" for k in range(n_flattened_features)]
+                     warnings.warn("Feature name generation mismatch.")
+                     self.processed_feature_names = [f"flat_feature_{k}" for k in range(n_flattened_features)]
 
                 y_aligned = y
+                # Return 2D scaled data for XGBoost training
                 return X_processed_scaled, y_aligned, self.processed_feature_names
 
-            else: # Detection for NumPy (preserve 3D)
+            else: # Detection/Inference for NumPy input
+                print(f"DEBUG _prepare_data (Inference): NumPy input shape {temp_X.shape}")
                 if self.scaler is None or self.sequence_length is None or self.n_original_features is None or self.processed_feature_names is None:
-                    raise RuntimeError("Model (trained on NumPy) not ready.")
-                if seq_len != self.sequence_length: raise ValueError(f"Input seq len {seq_len} != train seq len {self.sequence_length}.")
-                if n_feat != self.n_original_features: raise ValueError(f"Input features {n_feat} != train features {self.n_original_features}.")
+                    raise RuntimeError("Model (trained on NumPy or receiving NumPy for inference) not ready.")
 
-                # --- Preserve 3D Structure during Scaling ---
-                # Reshape 3D -> 2D for scaler
-                X_reshaped_for_scaling = X.reshape(-1, n_feat)
-                print(f"DEBUG _prepare_data: Reshaped 3D to 2D for scaling: {X_reshaped_for_scaling.shape}")
+                # Validate sequence length and features against trained values
+                # Note: If input was 2D and reshaped, seq_len will be 1 here.
+                # This check might need adjustment if models trained on numpy should *only* accept their original seq_len during inference.
+                # For now, we allow seq_len=1 if input was 2D.
+                if self.input_type == 'numpy' and seq_len != self.sequence_length:
+                    # Only strictly enforce seq_len if model was trained on numpy
+                     raise ValueError(f"Input seq len {seq_len} != train seq len {self.sequence_length} for NumPy-trained model.")
+                if n_feat != self.n_original_features:
+                     raise ValueError(f"Input features {n_feat} != train features {self.n_original_features}.")
+
+                # Flatten 3D -> 2D for XGBoost prediction
+                X_flattened = temp_X.reshape(n_samples, seq_len * n_feat)
+                print(f"DEBUG _prepare_data (Inference): Flattened 3D to 2D for scaling/prediction: {X_flattened.shape}")
 
                 # Scaling (Transform only)
-                scaled_data_2d = self.scaler.transform(X_reshaped_for_scaling)
-                print(f"DEBUG _prepare_data: Scaled 2D data shape: {scaled_data_2d.shape}")
+                X_processed_scaled = self.scaler.transform(X_flattened)
+                print(f"DEBUG _prepare_data (Inference): Scaled 2D data shape: {X_processed_scaled.shape}")
 
-                # Return the 3D SCALED array
-                return scaled_data_2d, None, self.processed_feature_names # No labels
+                # Return 2D scaled data for XGBoost prediction
+                return X_processed_scaled, None, self.processed_feature_names # No labels
+
+        else:
+             raise TypeError("Input 'X' must be pandas DataFrame or NumPy array.")
+
 
     def run(self, X: Union[pd.DataFrame, np.ndarray], y: Optional[np.ndarray] = None, label_col: str = 'label'):
         """
