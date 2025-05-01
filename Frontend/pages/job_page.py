@@ -3,74 +3,153 @@ import dash
 from dash import dcc, html
 import plotly.graph_objects as go # Often needed for graph creation
 
+# --- Helper function (ensure it's correctly defined as before) ---
+def get_display_job_name(full_job_name):
+    """Removes known prefixes ('job_batch_', 'job_stream_') using slicing."""
+    if not full_job_name:
+        return "No Job Selected"
+
+    prefix_batch = "job_batch_"
+    prefix_stream = "job_stream_"
+
+    if full_job_name.startswith(prefix_batch):
+        return full_job_name[10:]
+    elif full_job_name.startswith(prefix_stream):
+        return full_job_name[11:]
+    else:
+        return full_job_name
+# --- End Helper Function ---
+
+
 # This is the main layout function called by app.py
 def layout(handler, job_name):
     """
     Defines the layout for the individual job results page.
-    All numeric columns are available in the graph legend but hidden by default.
-
-    Args:
-        handler: The FrontendHandler instance (passed from app.py).
-        job_name (str): The name of the job being displayed.
-
-    Returns:
-        dash.html.Div: The layout components for the page.
+    Header: Button (left), Title+Loading (center), Spacer (right).
     """
-    print(f"Generating layout for job: {job_name}")
+    display_name = get_display_job_name(job_name)
+    print(f"Generating layout for job: {display_name}")
 
-    # Note: The list of numeric columns is now determined dynamically
-    # within the callback based on the fetched data. No need to define it here.
+    # --- Theme Colors (example, adjust if you have specific values) ---
+    theme_colors = {
+        'background': '#0D3D66',
+        'header_background': '#1E3A5F',
+        'content_background': '#104E78',
+        'status_background': '#145E88',
+        'text_light': '#E0E0E0',
+        'text_medium': '#C0C0C0',
+        'text_dark': '#FFFFFF', # White for high contrast on dark buttons
+        'border_light': '#444'
+    }
+    # --- End Theme Colors ---
+
 
     return html.Div([
-        # --- Store Components (keep as before) ---
+        # --- Store Components ---
         dcc.Store(id='job-page-job-name-store', data=job_name),
         dcc.Store(id='job-page-data-store'),
-        dcc.Store(id='job-page-xai-store'), # Assuming you might use XAI later
-        dcc.Store(id='job-page-status-store'), # Assuming you might use status later
+        # ... other stores ...
+        dcc.Interval(id='job-page-interval-component', interval=10*1000, n_intervals=0),
 
-        dcc.Interval(
-            id='job-page-interval-component',
-            interval=10*1000,  # Interval in milliseconds (e.g., 10 seconds)
-            n_intervals=0,
-            disabled=True # Keep enabled for potential streaming updates
-        ),
-
-        # --- Header and Navigation (keep as before) ---
+        # --- Header ---
         html.Div([
-            html.H1(f"Analysis Results: {job_name}", style={'textAlign': 'center', 'color': '#E0E0E0'}),
-            dcc.Link("<< Back to Home Page", href="/", style={'color': '#7FDBFF', 'fontSize': '18px'}),
-            dcc.Loading(
-                id="loading-job-page", type="circle", fullscreen=False,
-                children=[html.Div(id="loading-output-jobpage")] # Target for loading indicator
-            ),
-        ], style={'marginBottom': '20px', 'padding': '15px', 'backgroundColor': '#1E3A5F', 'borderRadius': '5px'}),
+            # --- Left Column (Button) ---
+            html.Div([
+                html.Button(
+                    "<< Back",
+                    id="back-to-home-button",
+                    n_clicks=0,
+                    # <<< Updated Button Style >>>
+                    style={
+                        'backgroundColor': theme_colors['status_background'], # Match status bg or another theme color
+                        'color': theme_colors['text_dark'], # Use white/light text
+                        'border': f"1px solid {theme_colors['border_light']}", # Subtle border
+                        'borderRadius': '5px',         # Match other elements
+                        'padding': '6px 12px',         # Padding
+                        'fontSize': '14px',            # Font size
+                        'cursor': 'pointer',           # Cursor
+                        'fontWeight': 'bold'           # Make text bolder maybe?
+                    }
+                )
+            # Style for the left column div
+            # Let flexbox determine width based on button size + padding
+            ], style={'flex': '0 1 auto', 'textAlign': 'left'}), # Don't grow, allow shrink, auto basis
+
+            # --- Center Column (Title + Loading) ---
+            html.Div([
+                html.H1(
+                    f"Analysis Results: {display_name}",
+                    style={
+                        'color': theme_colors['text_light'],
+                        'margin': '0',
+                        'display': 'inline-block',
+                        'verticalAlign': 'middle'
+                        }
+                ),
+                dcc.Loading(
+                    id="loading-job-page",
+                    type="circle",
+                    fullscreen=False,
+                    children=[html.Div(id="loading-output-jobpage")],
+                    style={
+                        'display': 'inline-block',
+                        'marginLeft': '15px',
+                        'verticalAlign': 'middle',
+                        'position': 'relative', # Helps vertical alignment sometimes
+                        'top': '2px'            # Fine-tune vertical alignment if needed
+                        }
+                )
+            # Style for the center column div
+            # Allow grow/shrink, center content
+            ], style={'flex': '1 1 auto', 'textAlign': 'center'}),
+
+            # --- Right Column (Spacer) ---
+            # <<< Added Spacer Div >>>
+            html.Div([
+                # Empty div, its purpose is to take up space equal to the left column
+                # We make it invisible but it still occupies layout space
+                html.Button("<< Back", style={'visibility': 'hidden', 'fontSize': '14px', 'padding': '6px 12px'}) # Mimic button size invisibly
+            ], style={'flex': '0 1 auto', 'visibility': 'hidden'}), # Match left flex, hide content
+
+        ], style={ # Main Header Div Style
+            'display': 'flex',
+            'alignItems': 'center',
+            # Use space-between ONLY if spacer exactly matches button width,
+            # otherwise let flex grow handle centering. Let's stick with flex-grow.
+            # 'justifyContent': 'space-between', # Use if spacer width is reliable
+            'marginBottom': '20px',
+            'padding': '15px',
+            'backgroundColor': theme_colors['header_background'],
+            'borderRadius': '5px'
+           }
+        ), # --- End Header Div ---
 
         # --- Main Content Area ---
         html.Div([
-            # Status Display (keep as before)
-            html.Div(id='job-status-display', style={'marginBottom': '15px', 'padding': '10px', 'border': '1px solid #444', 'borderRadius': '5px', 'backgroundColor': '#145E88', 'color': '#FFFFFF'}),
-
-            # --- DROPDOWN REMOVED ---
-            # The html.Div containing the dcc.Dropdown with id='y-axis-dropdown' has been removed.
-
-            # Graph for main timeseries data and anomalies
+            # Status Display (Using theme colors)
+            html.Div(id='job-status-display', style={
+                'marginBottom': '15px', 'padding': '10px',
+                'border': f"1px solid {theme_colors['border_light']}",
+                'borderRadius': '5px',
+                'backgroundColor': theme_colors['status_background'],
+                'color': theme_colors['text_dark']
+                }),
+            # Graph Area
             html.Div([
-                html.H3("Time Series Data & Detected Anomalies", style={'color': '#C0C0C0'}),
-                # Added hint about legend interaction
-                html.P("(Click legend items to toggle visibility)", style={'color': '#A0A0A0', 'fontSize':'small', 'textAlign':'center', 'marginTop': '-10px', 'marginBottom': '10px'}),
-                dcc.Graph(id='timeseries-anomaly-graph', figure={}) # Initial empty figure
+                html.H3("Time Series Data & Detected Anomalies", style={'color': theme_colors['text_medium']}),
+                html.P("(Click features in legend to toggle visibility)", style={'color': '#A0A0A0', 'fontSize':'small', 'textAlign':'center', 'marginTop': '-10px', 'marginBottom': '10px'}),
+                dcc.Graph(id='timeseries-anomaly-graph', figure={})
             ], style={'marginBottom': '20px'}),
-
-            # XAI Section (keep as before, assuming placeholder for now)
+            # XAI Section
             html.Div([
-                 html.H3("Explainability (XAI) Results", style={'color': '#C0C0C0'}),
+                 html.H3("Explainability (XAI) Results", style={'color': theme_colors['text_medium']}),
                  dcc.Graph(id='xai-feature-importance-graph', figure={}),
                  html.Div(id='xai-other-results-display')
-             ], id='xai-results-section', style={'display': 'none', 'marginBottom': '20px'}), # Hidden initially
+             ], id='xai-results-section', style={'display': 'none', 'marginBottom': '20px'}),
+             # Other plots placeholder
+             html.Div(id='other-plots-section')
+        # Using theme colors
+        ], style={'padding': '20px', 'backgroundColor': theme_colors['content_background'], 'borderRadius': '10px'}),
 
-            # Other plots placeholder (keep as before)
-            html.Div(id='other-plots-section')
-
-        ], style={'padding': '20px', 'backgroundColor': '#104E78', 'borderRadius': '10px'}),
-
-    ], style={'padding': '30px', 'backgroundColor': '#0D3D66', 'minHeight': '100vh'})
+    # Using theme colors
+    ], style={'padding': '30px', 'backgroundColor': theme_colors['background'], 'minHeight': '100vh'})

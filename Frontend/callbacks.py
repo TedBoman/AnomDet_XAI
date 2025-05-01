@@ -7,6 +7,7 @@ import json
 from get_handler import get_handler
 import os
 from ml_model_hyperparameters import HYPERPARAMETER_DESCRIPTIONS
+from pages.job_page import get_display_job_name
 
 # --- Create_active_jobs FUNCTION ---
 def create_active_jobs(active_jobs):
@@ -28,12 +29,12 @@ def create_active_jobs(active_jobs):
             # Confirmation dialog for stopping the job
             dcc.ConfirmDialog(
                 id={"type": "confirm-box", "index": job_name},
-                message=f'Are you sure you want to cancel the job: {job_name}?',
+                message=f'Are you sure you want to cancel the job: {get_display_job_name(job_name)}?',
                 displayed=False,
             ),
             # Link to the job's results page within the Dash app
             html.A(
-                children=[job_name],
+                children=[get_display_job_name(job_name)],
                 href=dash_link,
                 # target="_blank", # Optional: uncomment to open in new tab
                 style={
