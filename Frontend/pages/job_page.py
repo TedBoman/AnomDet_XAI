@@ -1,12 +1,13 @@
 # pages/job_page.py
 import dash
-from dash import dcc, html, Input, Output, State
+from dash import dcc, html
+import plotly.graph_objects as go # Often needed for graph creation
 
 # This is the main layout function called by app.py
 def layout(handler, job_name):
     """
     Defines the layout for the individual job results page.
-    Includes a dropdown for selecting columns to plot.
+    All numeric columns are available in the graph legend but hidden by default.
 
     Args:
         handler: The FrontendHandler instance (passed from app.py).
@@ -17,24 +18,21 @@ def layout(handler, job_name):
     """
     print(f"Generating layout for job: {job_name}")
 
-    # Define known numeric columns from the creditcard dataset for the dropdown
-    # Excludes 'Time', 'Class'/'label', 'is_anomaly', 'injected_anomaly'
-    numeric_columns = [f'V{i}' for i in range(1, 29)] + ['Amount']
-    dropdown_options = [{'label': col, 'value': col} for col in numeric_columns]
+    # Note: The list of numeric columns is now determined dynamically
+    # within the callback based on the fetched data. No need to define it here.
 
     return html.Div([
         # --- Store Components (keep as before) ---
         dcc.Store(id='job-page-job-name-store', data=job_name),
         dcc.Store(id='job-page-data-store'),
-        dcc.Store(id='job-page-xai-store'),
-        dcc.Store(id='job-page-status-store'),
+        dcc.Store(id='job-page-xai-store'), # Assuming you might use XAI later
+        dcc.Store(id='job-page-status-store'), # Assuming you might use status later
 
         dcc.Interval(
-        id='job-page-interval-component',
-        interval=10*1000,  # Interval in milliseconds (e.g., 10 seconds = 10 * 1000ms)
-        n_intervals=0,     # Initial value, doesn't matter much
-        disabled=False     # Keep it enabled so it ticks for streaming jobs
-                           # The callback logic already ignores ticks for batch jobs
+            id='job-page-interval-component',
+            interval=10*1000,  # Interval in milliseconds (e.g., 10 seconds)
+            n_intervals=0,
+            disabled=True # Keep enabled for potential streaming updates
         ),
 
         # --- Header and Navigation (keep as before) ---
@@ -43,7 +41,7 @@ def layout(handler, job_name):
             dcc.Link("<< Back to Home Page", href="/", style={'color': '#7FDBFF', 'fontSize': '18px'}),
             dcc.Loading(
                 id="loading-job-page", type="circle", fullscreen=False,
-                children=[html.Div(id="loading-output-jobpage")]
+                children=[html.Div(id="loading-output-jobpage")] # Target for loading indicator
             ),
         ], style={'marginBottom': '20px', 'padding': '15px', 'backgroundColor': '#1E3A5F', 'borderRadius': '5px'}),
 
@@ -52,31 +50,23 @@ def layout(handler, job_name):
             # Status Display (keep as before)
             html.Div(id='job-status-display', style={'marginBottom': '15px', 'padding': '10px', 'border': '1px solid #444', 'borderRadius': '5px', 'backgroundColor': '#145E88', 'color': '#FFFFFF'}),
 
-            # --- !!! ADDED COLUMN SELECTOR DROPDOWN !!! ---
-            html.Div([
-                html.Label("Select Columns to Plot:", style={'marginRight': '10px', 'color': '#E0E0E0', 'fontWeight':'bold'}),
-                dcc.Dropdown(
-                    id='y-axis-dropdown',
-                    options=dropdown_options,
-                    value=['Amount'],  # Default value (e.g., plot 'Amount' initially)
-                    multi=True,       # Allow multiple selections
-                    style={'width': '80%', 'display': 'inline-block', 'verticalAlign': 'middle', 'color': '#333'}
-                )
-            ], style={'marginBottom': '20px', 'textAlign': 'center'}),
-            # --- !!! END ADDED DROPDOWN !!! ---
+            # --- DROPDOWN REMOVED ---
+            # The html.Div containing the dcc.Dropdown with id='y-axis-dropdown' has been removed.
 
             # Graph for main timeseries data and anomalies
             html.Div([
                 html.H3("Time Series Data & Detected Anomalies", style={'color': '#C0C0C0'}),
-                dcc.Graph(id='timeseries-anomaly-graph', figure={})
+                # Added hint about legend interaction
+                html.P("(Click legend items to toggle visibility)", style={'color': '#A0A0A0', 'fontSize':'small', 'textAlign':'center', 'marginTop': '-10px', 'marginBottom': '10px'}),
+                dcc.Graph(id='timeseries-anomaly-graph', figure={}) # Initial empty figure
             ], style={'marginBottom': '20px'}),
 
-            # XAI Section (keep as before)
+            # XAI Section (keep as before, assuming placeholder for now)
             html.Div([
                  html.H3("Explainability (XAI) Results", style={'color': '#C0C0C0'}),
                  dcc.Graph(id='xai-feature-importance-graph', figure={}),
                  html.Div(id='xai-other-results-display')
-             ], id='xai-results-section', style={'display': 'none', 'marginBottom': '20px'}),
+             ], id='xai-results-section', style={'display': 'none', 'marginBottom': '20px'}), # Hidden initially
 
             # Other plots placeholder (keep as before)
             html.Div(id='other-plots-section')
