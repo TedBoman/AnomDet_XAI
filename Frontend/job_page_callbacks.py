@@ -16,7 +16,7 @@ def register_job_page_callbacks(app):
     # --- Callback to parse job name from URL ---
     @app.callback(
         Output('job-page-job-name-store', 'data'),
-        Input('url', 'pathname')
+        Input('url', 'pathname') # Triggered when URL pathname changes (including initial load)
     )
     def update_job_store_from_url(pathname):
         """
@@ -51,7 +51,7 @@ def register_job_page_callbacks(app):
         [
             Input('job-page-job-name-store', 'data'),      # Trigger on job change
             Input('job-page-interval-component', 'n_intervals') # Trigger on interval
-        ]
+        ],
     )
     def update_data_store(job_name, n_intervals):
         """

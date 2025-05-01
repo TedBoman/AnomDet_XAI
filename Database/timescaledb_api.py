@@ -99,7 +99,6 @@ class TimescaleDBAPI(DBInterface):
         # Assuming the docker container is started, connect to the database
         try:
             conn = psycopg2.connect(self.connection_string)
-            cursor = conn.cursor()
 
             params = {}
             from_dt_utc_naive = from_time.astimezone(timezone.utc).replace(tzinfo=None)
@@ -115,6 +114,8 @@ class TimescaleDBAPI(DBInterface):
                 query = f'SELECT * FROM {table_name} WHERE timestamp >= \'{from_time}\' ORDER BY timestamp ASC;'
 
             df = pd.read_sql_query(query, conn, params=params) # Let pandas handle it
+
+            print(f"Read data with columns: {df.columns.values}")
 
             return df
         except Exception as error:
