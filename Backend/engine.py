@@ -189,20 +189,65 @@ def __handle_api_call(conn, data: dict) -> None:
             backend_data["started-jobs"].append(job)
             
         case "get-data":
-            if data["to_timestamp"] == None:
-                df = backend_data["db_api"].read_data(datetime.fromtimestamp(int(data["from_timestamp"])), data["job_name"])
-            else:
-                df = backend_data["db_api"].read_data(datetime.fromtimestamp(int(data["from_timestamp"])), data["job_name"], datetime.fromtimestamp(int(data["to_timestamp"])))
-            df["timestamp"] = df["timestamp"].apply(execute_calls.map_to_timestamp)
-            df["timestamp"] = df["timestamp"].astype(float)
-            data_json = df.to_json(orient="split")
+            try:
+                # --- Correctly parse the 'from_timestamp' ISO string ---
+                from_dt = datetime.fromisoformat(data["from_timestamp"])
+                print(f"Parsed from_timestamp: {from_dt}") # Optional: for debugging
 
-            df_dict = {
-                "data": data_json
-            }
-            df_json = json.dumps(df_dict)
-            conn.sendall(bytes(df_json, encoding="utf-8"))
-            print("Data sent")
+                to_dt = None
+                if data["to_timestamp"] is not None:
+                    # --- Correctly parse the 'to_timestamp' ISO string (if provided) ---
+                    to_dt = datetime.fromisoformat(data["to_timestamp"])
+                    print(f"Parsed to_timestamp: {to_dt}") # Optional: for debugging
+
+                # Call the database function with the correct datetime objects
+                if to_dt is None:
+                    df = backend_data["db_api"].read_data(from_dt, data["job_name"])
+                else:
+                    df = backend_data["db_api"].read_data(from_dt, data["job_name"], to_dt)
+
+                # --- The rest of your data processing ---
+                # Check if DataFrame is empty before proceeding (optional but good practice)
+                if df is not None and not df.empty:
+                    # Assuming 'timestamp' column exists and needs mapping/conversion
+                    if "timestamp" in df.columns:
+                        df["timestamp"] = df["timestamp"].apply(execute_calls.map_to_timestamp)
+                        df["timestamp"] = df["timestamp"].astype(float) # Be careful if map_to_timestamp doesn't return numbers
+
+                    data_json = df.to_json(orient="split")
+                    df_dict = {"data": data_json}
+                else:
+                    # Handle empty DataFrame case - send back empty data structure
+                    print("Warning: db_api.read_data returned empty DataFrame.")
+                    df_dict = {"data": None} # Send None in 'data' key as per frontend expectation
+
+                df_json = json.dumps(df_dict)
+                conn.sendall(bytes(df_json, encoding="utf-8"))
+                print("Data sent")
+
+            except (ValueError, TypeError) as e:
+                # Catch errors during timestamp parsing (e.g., invalid format)
+                print(f"Error processing get-data request: Invalid timestamp format? {e}")
+                # Send an error response back to the client (optional but recommended)
+                error_dict = {"error": f"Invalid timestamp format: {e}", "data": None}
+                error_json = json.dumps(error_dict)
+                try:
+                    conn.sendall(bytes(error_json, encoding="utf-8"))
+                except Exception as send_err:
+                    print(f"Failed to send error response: {send_err}")
+
+            except Exception as e:
+                # Catch any other unexpected errors during processing
+                print(f"Error processing get-data request: {e}")
+                import traceback
+                traceback.print_exc() # Print full traceback for debugging
+                # Send an error response back to the client (optional but recommended)
+                error_dict = {"error": f"Internal server error: {e}", "data": None}
+                error_json = json.dumps(error_dict)
+                try:
+                    conn.sendall(bytes(error_json, encoding="utf-8"))
+                except Exception as send_err:
+                    print(f"Failed to send error response: {send_err}")
         case "get-running":
             jobs = []
             for job in backend_data["running-jobs"]:

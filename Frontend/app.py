@@ -27,6 +27,8 @@ app.config.suppress_callback_exceptions = True
 app.layout = html.Div([
     dcc.Store(id="store-data"), 
     dcc.Location(id="url", refresh=False),
+    dcc.Store(id='job-page-job-name-store'),
+    dcc.Store(id='job-page-data-store'),
     html.Div(id="page-content")
 ])
 
@@ -36,7 +38,6 @@ handler = get_handler()
 @app.callback(
     Output("page-content", "children"),
     Input("url", "pathname"),
-    
 )
 def display_page(pathname):
     print(f"Routing: Pathname received: {pathname}") # Debugging line
