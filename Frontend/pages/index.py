@@ -63,6 +63,7 @@ def layout(handler):
                 # Add flex properties if needed, e.g., flex: 1 (takes up 1/3 width)
                 "color": "#e0e0e0",
                 "textAlign": "left",
+                "margin": "30px",
             }
         ),
         # --- END Explanation Box ---
@@ -83,8 +84,8 @@ def layout(handler):
 
                         # *** NEW: Dataset Upload Component ***
                         html.Div([
-                             html.Label("Upload Dataset:", style={"fontSize": "22px", "color": "#ffffff", "display": "block", "marginBottom": "5px"}),
-                             dcc.Upload(
+                            html.Label("Upload Dataset:", style={"fontSize": "22px", "color": "#ffffff", "display": "block", "marginBottom": "5px"}),
+                            dcc.Upload(
                                 id='upload-dataset',
                                 children=html.Div([
                                     'Drag and Drop or ',
@@ -106,9 +107,9 @@ def layout(handler):
                                 multiple=False,
                                 # Define accepted file types (example: CSV)
                                 accept='.csv,.parquet,.json,.txt' # Adjust as needed
-                             ),
+                            ),
                              # *** NEW: Div to show upload status/filename ***
-                             html.Div(id='output-upload-state', style={'color': '#4CAF50', 'marginTop': '10px', 'textAlign': 'center', 'minHeight': '20px'}),
+                            html.Div(id='output-upload-state', style={'color': '#4CAF50', 'marginTop': '10px', 'textAlign': 'center', 'minHeight': '20px'}),
                         ], style={"textAlign": "center", "marginBottom": "20px"}),
                         # --- END Dataset Upload Component ---
 
@@ -350,16 +351,17 @@ def layout(handler):
                             n_intervals=0,
                             disabled=True 
                             ),
+                            dcc.Store(id='xai-method-state-store'),
                         ]),
                 # --- End Main settings panel
 
         ], style={ # Style for the parent flex container
-             "display": "flex",
-             "flexDirection": "row", # Arrange items side-by-side
-             "justifyContent": "center", # Center the items horizontally
-             "alignItems": "flex-start", # Align items to the top
-             "maxWidth": "80rem", # Adjust overall max width if needed
-             "margin": "auto", # Center the whole container
+            "display": "flex",
+            "flexDirection": "row", # Arrange items side-by-side
+            "justifyContent": "center", # Center the items horizontally
+            "alignItems": "flex-start", # Align items to the top
+            "maxWidth": "80rem", # Adjust overall max width if needed
+            "margin": "30px",
         }),
 
 
@@ -387,7 +389,7 @@ def layout(handler):
             "backgroundColor": "#104E78",
             "maxWidth": "40rem",
             "borderRadius": "2rem",
-            "margin": "auto",
+            "margin": "30px",
             "boxShadow": "0 4px 10px rgb(0, 0, 0)",
             "textAlign": "center",
         }),
@@ -395,7 +397,7 @@ def layout(handler):
         # --- XAI method Explanation Box ---
         html.Div(
             id="xai-explanation-box",
-            children=[html.P("Select a XAI method to see parameter explanations.", style={'color':'#b0b0b0'})],
+            children=[html.P("Select an XAI method to see its description.", style={'color':'#b0b0b0'})],
             style={
                 "padding": "20px",
                 "backgroundColor": "#0a3d5a", # Slightly different background
@@ -409,10 +411,11 @@ def layout(handler):
                 # Add flex properties if needed, e.g., flex: 1 (takes up 1/3 width)
                 "color": "#e0e0e0",
                 "textAlign": "left",
+                "margin": "30px",
             }
         ),
         # --- Explanation Box ---
 
-    ], id="main-settings-container", style={ "backgroundColor": "#105E90", "padding": "40px", "minHeight": "100vh", "display": "flex", "flexWrap": "nowrap", "alignItems": "center"})
+    ], id="main-settings-container", style={ "backgroundColor": "#105E90", "padding": "40px", "minHeight": "100vh", "display": "flex", "flexWrap": "nowrap", "alignItems": "flex-start"})
 
     return layout
