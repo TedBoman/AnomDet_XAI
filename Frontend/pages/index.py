@@ -6,6 +6,12 @@ import dash
 from dash import dcc, html, Input, Output, State, callback, ctx
 from dash.dependencies import ALL
 from callbacks import create_active_jobs
+import base64 # Needed for decoding uploaded file content
+import io     # Needed for reading decoded content if using pandas
+
+UPLOAD_DIRECTORY = "/app/Datasets"
+if not os.path.exists(UPLOAD_DIRECTORY):
+    os.makedirs(UPLOAD_DIRECTORY) # Create the directory if it doesn't exist
 
 def layout(handler):
     try:
@@ -57,6 +63,7 @@ def layout(handler):
                 # Add flex properties if needed, e.g., flex: 1 (takes up 1/3 width)
                 "color": "#e0e0e0",
                 "textAlign": "left",
+                "margin": "30px",
             }
         ),
         # --- END Explanation Box ---
@@ -74,16 +81,51 @@ def layout(handler):
                 # --- NEW: Parent Div for settings and explanations ---
                 html.Div([
                     html.Div([
+                        
+                        # --- SEPARATOR ---
+                        html.Hr(style={'borderColor': '#446e92', }),
+
+                        # *** NEW: Dataset Upload Component ***
                         html.Div([
-                            html.Label("Select Dataset:", style={"fontSize": "22px", "color": "#ffffff"}),
+                            html.Label("Upload Dataset:", style={"fontSize": "22px", "color": "#ffffff", "display": "block", "marginBottom": "5px"}),
+                            dcc.Upload(
+                                id='upload-dataset',
+                                children=html.Div([
+                                    'Drag and Drop or ',
+                                    html.A('Select Files')
+                                ]),
+                                style={
+                                    'width': '350px',
+                                    'height': '60px',
+                                    'lineHeight': '60px',
+                                    'borderWidth': '1px',
+                                    'borderStyle': 'dashed',
+                                    'borderRadius': '5px',
+                                    'textAlign': 'center',
+                                    'margin': '10px auto',
+                                    'color': '#e0e0e0',
+                                    'backgroundColor': '#145E88'
+                                },
+                                # Allow multiple files to be uploaded? Set False if only one.
+                                multiple=False,
+                                # Define accepted file types (example: CSV)
+                                accept='.csv,.parquet,.json,.txt' # Adjust as needed
+                            ),
+                             # *** NEW: Div to show upload status/filename ***
+                            html.Div(id='output-upload-state', style={'color': '#4CAF50', 'marginTop': '10px', 'textAlign': 'center', 'minHeight': '20px'}),
+                        ], style={"textAlign": "center", "marginBottom": "5px"}),
+                        # --- END Dataset Upload Component ---
+
+                        html.Div([
+                            html.Label("Or Select Existing Dataset:", style={"fontSize": "22px", "color": "#ffffff"}),
                             dcc.Dropdown(
                                 id="dataset-dropdown",
                                 options=[{"label": dataset, "value": dataset} for dataset in datasets],
                                 value=None,
                                 placeholder="Select a dataset",
-                                style={"width": "350px", "fontSize": "18px", "margin": "auto", "border": "0.05rem solid black"}
+                                style={"width": "350px", "fontSize": "18px", "margin": "auto",}
                             )
-                        ], style={"textAlign": "center", "marginBottom": "30px"}),
+                        ], style={"textAlign": "center", "marginBottom": "5px"}),
 
                         # --- Labeled Dataset Section ---
                         html.Div([
@@ -91,7 +133,7 @@ def layout(handler):
                                 id="labeled-check",
                                 options=[{"label": "Is dataset labeled for anomalies?", "value": "is_labeled"}],
                                 value=[], # Initially unchecked
-                                style={"fontSize": "20px", "color": "#ffffff", "marginBottom": "10px"}
+                                style={"fontSize": "20px", "color": "#ffffff", "marginBottom": "10px",}
                             ),
                             # Div to hold the conditional label column dropdown
                             html.Div(
@@ -104,13 +146,16 @@ def layout(handler):
                                         value=None, # Reset by callback
                                         placeholder="Select label column",
                                         multi=False, # Select only ONE label column
-                                        style={"width": "300px", "margin": "5px auto", "border": "0.05rem solid black"}
+                                        style={"width": "300px", "margin": "5px auto",}
                                     )
                                 ],
                                 # Initially hidden, shown by callback
                                 style={"display": "none", "marginTop": "10px", "textAlign": "center"}
                             )
-                        ], style={"textAlign": "center", "marginBottom": "20px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px"}),
+                        ], style={"textAlign": "center", "marginBottom": "20px", "padding": "10px", 'borderStyle': 'none', "borderRadius": "5px"}),
+
+                        # --- SEPARATOR ---
+                        html.Hr(style={'borderColor': '#446e92', }),
 
                         # --- Detection Model Selection ---
                         html.Div([
@@ -119,7 +164,7 @@ def layout(handler):
                                 id="detection-model-dropdown",
                                 options=[{"label": model, "value": model} for model in models],
                                 placeholder="Select a detection model",
-                                style={"width": "350px", "fontSize": "18px", "margin": "auto", "border": "0.05rem solid black"}
+                                style={"width": "350px", "fontSize": "18px", "margin": "auto",}
                             )
                         ], style={"textAlign": "center", "marginTop": "30px"}),
 
@@ -165,12 +210,15 @@ def layout(handler):
                                 # Initially hidden, shown by callback
                                 style={"display": "none", "marginTop": "10px", "textAlign": "center"}
                             )
-                        ], style={"textAlign": "center", "marginBottom": "20px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px"}),
+                        ], style={"textAlign": "center", "marginBottom": "5px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px", 'borderStyle': 'none', "marginTop": "10px"}),
+                        
+                        # --- SEPARATOR ---
+                        html.Hr(style={'borderColor': '#446e92', }),
 
                         # --- Injection Section ---
                         html.Div([
                             dcc.Checklist( id="injection-check", options=[{"label": "Inject Anomalies?", "value": "use_injection"}], value=[],
-                                        style={"fontSize": "20px", "color": "#ffffff", "marginBottom": "10px"} ),
+                                        style={"fontSize": "20px", "color": "#ffffff", "marginBottom": "5px"} ),
                             html.Div( id="injection-panel", children=[
                                 html.Label("Select Injection Method:", style={"fontSize": "18px", "color": "#e0e0e0", "display":"block"}),
                                 dcc.Dropdown( id="injection-method-dropdown", options=[{"label": method, "value": method} for method in injection_methods], value="None", placeholder="Select a method",
@@ -229,8 +277,11 @@ def layout(handler):
                                 ], style={"marginTop": "20px", "textAlign": "center"})
                             ], style={"display": "none"} # injection-panel starts hidden
                             )
-                        ], style={"textAlign": "center", "marginBottom": "20px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px"}),
-                            
+                        ], style={"textAlign": "center", "marginBottom": "5px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px", 'borderStyle': 'none',}),
+                        
+                        # --- SEPARATOR ---
+                        html.Hr(style={'borderColor': '#446e92', }),
+                        
                         # --- Job Naming ---
                         html.Div([
                             html.Label("Job name: ", style={"fontSize": "22px", "color": "#ffffff"}),
@@ -242,6 +293,9 @@ def layout(handler):
                                         style={"width": "200px", "marginTop": "10px"}
                                     )
                         ], style={"display": "block", "marginTop": "15px", "textAlign": "center"}),
+
+                        # --- SEPARATOR ---
+                        html.Hr(style={'borderColor': '#446e92', }),
 
                         # --- Mode Selection (Batch/Stream) ---
                         html.Div([
@@ -312,18 +366,21 @@ def layout(handler):
                             n_intervals=0,
                             disabled=True 
                             ),
+                            dcc.Store(id='xai-method-state-store'),
                         ]),
                 # --- End Main settings panel
 
         ], style={ # Style for the parent flex container
-             "display": "flex",
-             "flexDirection": "row", # Arrange items side-by-side
-             "justifyContent": "center", # Center the items horizontally
-             "alignItems": "flex-start", # Align items to the top
-             "maxWidth": "80rem", # Adjust overall max width if needed
-             "margin": "auto", # Center the whole container
+            "display": "flex",
+            "flexDirection": "row", # Arrange items side-by-side
+            "justifyContent": "center", # Center the items horizontally
+            "alignItems": "flex-start", # Align items to the top
+            "maxWidth": "80rem", # Adjust overall max width if needed
+            "margin": "30px",
         }),
 
+        # --- SEPARATOR ---
+        html.Hr(style={'borderColor': '#446e92', }),
 
             # --- Active Jobs ---
             html.Div(
@@ -349,7 +406,7 @@ def layout(handler):
             "backgroundColor": "#104E78",
             "maxWidth": "40rem",
             "borderRadius": "2rem",
-            "margin": "auto",
+            "margin": "30px",
             "boxShadow": "0 4px 10px rgb(0, 0, 0)",
             "textAlign": "center",
         }),
@@ -357,7 +414,7 @@ def layout(handler):
         # --- XAI method Explanation Box ---
         html.Div(
             id="xai-explanation-box",
-            children=[html.P("Select a XAI method to see parameter explanations.", style={'color':'#b0b0b0'})],
+            children=[html.P("Select an XAI method to see its description.", style={'color':'#b0b0b0'})],
             style={
                 "padding": "20px",
                 "backgroundColor": "#0a3d5a", # Slightly different background
@@ -371,10 +428,11 @@ def layout(handler):
                 # Add flex properties if needed, e.g., flex: 1 (takes up 1/3 width)
                 "color": "#e0e0e0",
                 "textAlign": "left",
+                "margin": "30px",
             }
         ),
         # --- Explanation Box ---
 
-    ], id="main-settings-container", style={ "backgroundColor": "#105E90", "padding": "40px", "minHeight": "100vh", "display": "flex", "flexWrap": "nowrap", "alignItems": "center"})
+    ], id="main-settings-container", style={ "backgroundColor": "#105E90", "padding": "40px", "minHeight": "100vh", "display": "flex", "flexWrap": "nowrap", "alignItems": "flex-start"})
 
     return layout

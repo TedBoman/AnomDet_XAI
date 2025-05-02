@@ -31,6 +31,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${XAI_PLOT_OUTPUT_PATH}:/app/data
+      - datasets:/app/Datasets
     restart: always
 
   backend:
@@ -48,8 +49,9 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${XAI_PLOT_OUTPUT_PATH}:/data
+      - datasets:/Datasets
     restart: always
   
 volumes:
   timescaledb_data:
-  grafana_data:
+  datasets:

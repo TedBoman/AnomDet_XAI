@@ -1,14 +1,17 @@
 # callbacks.py (Complete and Updated File)
 
+import base64
 import sys
 import traceback
-from dash import Dash, dcc, html, Input, Output, State, ALL, MATCH, callback, callback_context, no_update
+from dash import Dash, dcc, html, Input, Output, State, ALL, MATCH, callback, callback_context, no_update, ctx
 import json
 from get_handler import get_handler
 import os
 from ml_model_hyperparameters import HYPERPARAMETER_DESCRIPTIONS
 from ml_model_hyperparameters import XAI_METHOD_DESCRIPTIONS
 from pages.job_page import get_display_job_name
+
+UPLOAD_DIRECTORY = "/app/Datasets"
 
 # --- Create_active_jobs FUNCTION ---
 def create_active_jobs(active_jobs):
@@ -71,13 +74,142 @@ def create_active_jobs(active_jobs):
         html.Div(job_divs) # The list of job divs is the second child
     ])
 
+# Define a function to handle saving and processing (outside the callback for clarity)
+def save_file(name, content):
+    """Decode and save a file uploaded with dcc.Upload."""
+    data = content.encode("utf8").split(b";base64,")[1]
+    filepath = os.path.join(UPLOAD_DIRECTORY, name)
+    try:
+        with open(filepath, "wb") as fp:
+            fp.write(base64.decodebytes(data))
+        print(f"Saved file: {filepath}")
+        return filepath # Return the path where the file was saved
+    except Exception as e:
+        print(f"Error saving file {name}: {e}")
+        return None
+    
+    # --- Helper function to build the explanation content ---
+def build_xai_explanation_content(method_name, current_index, total_methods):
+    """Builds the HTML content for a single XAI method's explanation."""
+    if not method_name or method_name == 'none':
+        return [html.P("Invalid method selected.", style={'color':'#ffcc00'})]
+
+    descriptions = XAI_METHOD_DESCRIPTIONS.get(method_name, {})
+    if not descriptions:
+        return [html.P(f"No description available for method: {method_name}", style={'color':'#ffcc00'})]
+
+    # --- Navigation Elements ---
+    nav_elements = []
+    if total_methods > 1:
+        nav_elements = [
+            html.Div([
+                html.Button('⬅️ Prev', id='xai-prev-btn', n_clicks=0,
+                            disabled=(current_index == 0), # Disable if first item
+                            style={'marginRight': '10px', 'padding': '5px 10px'}),
+                html.Span(f"Method {current_index + 1} of {total_methods}",
+                        style={'color': '#ffffff', 'fontWeight': 'bold'}),
+                html.Button('Next ➡️', id='xai-next-btn', n_clicks=0,
+                            disabled=(current_index >= total_methods - 1), # Disable if last item
+                            style={'marginLeft': '10px', 'padding': '5px 10px'}),
+            ], style={'textAlign': 'center', 'marginBottom': '15px'})
+        ]
+
+    # --- Description Content ---
+    explanation_children = [
+        html.H4(f"{method_name} Description:",),
+        html.P(descriptions.get("description", "No description provided."),),
+        html.H5("Capabilities:",),
+        html.P(descriptions.get("capabilities", "Not specified."),),
+        html.H5("Limitations:",),
+        html.P(descriptions.get("limitations", "Not specified."),),
+        html.H5("Parameters:",),
+    ]
+
+    params_dict = descriptions.get("parameters", {})
+    if not params_dict:
+        explanation_children.append(html.P("No specific parameters listed.", style={'fontStyle': 'italic', 'color':'#aaaaaa', 'marginLeft':'15px'}))
+    else:
+        for param, desc in params_dict.items():
+            explanation_children.append(
+                html.Div([
+                    html.Strong(f"{param}:", style={'color':'#ffffff'}),
+                    html.P(desc, style={'color':'#d0d0d0', 'marginTop':'2px', 'marginBottom':'10px', 'fontSize':'14px'})
+                ], style={'marginLeft':'15px'})
+            )
+
+    # Combine navigation and content
+    return nav_elements + explanation_children
+
 # --- Callbacks for index page ---
 def get_index_callbacks(app):
 
-# --- Callback to update Parameter Explanation Box ---
+    # The actual callback
+    @callback(
+        Output('dataset-dropdown', 'options'),
+        Output('dataset-dropdown', 'value'),
+        Output('output-upload-state', 'children'),
+        Input('upload-dataset', 'contents'),
+        State('upload-dataset', 'filename'),
+        State('dataset-dropdown', 'options'), # Get current options to append
+        prevent_initial_call=True # Don't run on page load
+    )
+    def update_output(uploaded_contents, uploaded_filename, existing_options):
+        if uploaded_contents is not None:
+            # Save the uploaded file
+            filepath = save_file(uploaded_filename, uploaded_contents)
+
+            if filepath:
+                # --- Important: Inform your backend handler ---
+                # This step depends HEAVILY on how your `handler` object works.
+                # Ideally, the handler has a method to register/add datasets.
+                # Example (replace with your actual handler logic):
+                try:
+                    # Assuming handler has a method like this:
+                    # handler.register_uploaded_dataset(filepath, uploaded_filename)
+                    # OR maybe it just needs to know to rescan a directory.
+                    # For now, we'll just update the dropdown directly,
+                    # but the handler *needs* to know about the file eventually.
+                    print(f"File {uploaded_filename} saved. Handler should be notified.")
+
+                    # --- Refresh dataset list (Option 1: Ask handler) ---
+                    # try:
+                    #     updated_datasets = handler.handle_get_datasets() # Ideal way
+                    #     new_options = [{"label": ds, "value": ds} for ds in updated_datasets]
+                    # except Exception as e:
+                    #     print(f"Error refreshing datasets via handler: {e}")
+                    #     # Fallback to manual update if handler fails
+                    #     new_options = existing_options + [{"label": uploaded_filename, "value": uploaded_filename}]
+
+                    # --- Refresh dataset list (Option 2: Manual Update - Simpler but less robust) ---
+                    # Check if the dataset is already in the options to avoid duplicates
+                    is_new = True
+                    for option in existing_options:
+                        if option['value'] == uploaded_filename:
+                            is_new = False
+                            break
+                    if is_new:
+                        new_options = existing_options + [{"label": uploaded_filename, "value": uploaded_filename}]
+                    else:
+                        new_options = existing_options
+
+                    # Return updated options, select the new file, and show success message
+                    return new_options, uploaded_filename, f"Uploaded: {uploaded_filename}"
+
+                except Exception as e:
+                    print(f"Error processing upload with handler: {e}")
+                    return existing_options, no_update, f"Error processing: {uploaded_filename}"
+            else:
+                # File saving failed
+                return existing_options, no_update, f"Error uploading: {uploaded_filename}"
+        else:
+            # Callback triggered without content (e.g., initial load, clearing upload)
+            return existing_options, no_update, "" # No change, clear message
+
+    # --- Callback to update Parameter Explanation Box ---
     @app.callback(
         Output("parameter-explanation-box", "children"),
-        Input("detection-model-dropdown", "value")
+        Input("detection-model-dropdown", "value"),
+        prevent_initial_call=True
     )
     def update_parameter_explanations(selected_model):
         if not selected_model or selected_model == 'none':
@@ -104,55 +236,85 @@ def get_index_callbacks(app):
 
         return explanation_children
     
+    # --- Callback 1: Update Store when Dropdown changes ---
     @app.callback(
-    Output("xai-explanation-box", "children"),
-    Input("xai-method-dropdown", "value"),
-    # Assuming XAI_METHOD_DESCRIPTIONS is available in this scope
-    # (either defined in callbacks.py or imported)
+        Output('xai-method-state-store', 'data'),
+        Input("xai-method-dropdown", "value"),
+        prevent_initial_call=True
     )
-    def update_xai_explanations(selected_methods):
-        if not selected_methods or 'none' in selected_methods:
-            # Handle case where no method or only 'none' is selected
-            # Check if only 'none' is selected if 'none' is a valid option
-            active_methods = [m for m in selected_methods if m != 'none']
-            if not active_methods:
-                return [html.P("Select an XAI method to see its description.", style={'color':'#b0b0b0'})]
+    def update_xai_method_store(selected_methods):
+        if selected_methods is None:
+            active_methods = []
         else:
-            # If multiple methods are selected, perhaps show the first one? Or allow selecting one?
-            # For simplicity, let's show the description for the first selected active method
-            active_methods = [m for m in selected_methods if m != 'none']
-            if not active_methods: # Should not happen if we passed the first check, but for safety
-                return [html.P("Select an XAI method to see its description.", style={'color':'#b0b0b0'})]
-            
-            first_method = active_methods[0]
-            descriptions = XAI_METHOD_DESCRIPTIONS.get(first_method, {})
+            # Filter out 'none' and any potential falsy values
+            active_methods = [m for m in selected_methods if m and m != 'none']
 
-        if not descriptions:
-            return [html.P(f"No description available for method: {first_method}", style={'color':'#ffcc00'})]
-
-        explanation_children = [
-            html.H5(f"{first_method} Description:", style={'color':'#ffffff', 'marginBottom':'10px', 'borderBottom': '1px solid #555', 'paddingBottom':'5px'}),
-            html.P(descriptions.get("description", "N/A")),
-            html.H6("Capabilities:", style={'color':'#cccccc', 'marginTop':'10px'}),
-            html.P(descriptions.get("capabilities", "N/A")),
-            html.H6("Limitations:", style={'color':'#cccccc', 'marginTop':'10px'}),
-            html.P(descriptions.get("limitations", "N/A")),
-            html.H6("Parameters:", style={'color':'#cccccc', 'marginTop':'10px', 'marginBottom':'5px'}),
-        ]
-
-        params_dict = descriptions.get("parameters", {})
-        if not params_dict:
-            explanation_children.append(html.P("No specific parameters listed.", style={'fontStyle': 'italic', 'color':'#aaaaaa'}))
+        if not active_methods:
+            # Store empty data if no valid methods are selected
+            return {'methods': [], 'index': 0}
         else:
-            for param, desc in params_dict.items():
-                explanation_children.append(
-                    html.Div([
-                        html.Strong(f"{param}:", style={'color':'#ffffff'}),
-                        html.P(desc, style={'color':'#d0d0d0', 'marginTop':'2px', 'marginBottom':'10px', 'fontSize':'14px'})
-                    ], style={'marginLeft':'15px'}) # Indent parameter descriptions
-                )
+            # Store the list of active methods and reset index to 0
+            return {'methods': active_methods, 'index': 0}
 
-        return explanation_children
+
+    # --- Callback 2: Update Store based on Arrow Clicks ---
+    @app.callback(
+        Output('xai-method-state-store', 'data', allow_duplicate=True), # Allow duplicate needed
+        Input('xai-prev-btn', 'n_clicks'),
+        Input('xai-next-btn', 'n_clicks'),
+        State('xai-method-state-store', 'data'),
+        prevent_initial_call=True
+    )
+    def handle_xai_navigation(prev_clicks, next_clicks, current_state):
+        if not current_state or not current_state.get('methods'):
+            # Should not happen if buttons are only active when state is valid, but safety check
+            return no_update
+
+        methods = current_state.get('methods', [])
+        index = current_state.get('index', 0)
+        total_methods = len(methods)
+
+        # Determine which button was clicked
+        triggered_id = ctx.triggered_id
+
+        if triggered_id == 'xai-prev-btn' and index > 0:
+            index -= 1
+        elif triggered_id == 'xai-next-btn' and index < total_methods - 1:
+            index += 1
+        else:
+            # No valid navigation click occurred
+            return no_update
+
+        return {'methods': methods, 'index': index}
+
+
+    # --- Callback 3: Update Explanation Box based on Store data ---
+    @app.callback(
+        Output("xai-explanation-box", "children"),
+        Input('xai-method-state-store', 'data'),
+        # No prevent_initial_call here, needs to run when store updates
+    )
+    def update_xai_explanations_from_store(state_data):
+        # Handle initial load or empty state
+        if not state_data or not state_data.get('methods'):
+            return [html.P("Select an XAI method to see its description.", style={'color':'#b0b0b0'})]
+
+        methods = state_data.get('methods', [])
+        index = state_data.get('index', 0)
+        total_methods = len(methods)
+
+        # Validate index just in case
+        if index >= total_methods or index < 0:
+            index = 0 # Reset to 0 if index is somehow invalid
+
+        # Check again if methods list became empty after potential validation
+        if not methods:
+            return [html.P("Select an XAI method to see its description.", style={'color':'#b0b0b0'})]
+
+        current_method_name = methods[index]
+
+        # Use the helper function to build the content
+        return build_xai_explanation_content(current_method_name, index, total_methods)
 
     # --- Callback to toggle visibility of Injection panel ---
     @app.callback(
@@ -792,17 +954,17 @@ def get_index_callbacks(app):
             elif selected_xai_method == "DiceExplainer":
                 dice_specific_settings = [
                     html.Div([
-                         html.Label("Indices to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                         dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'n_explain_max'}, type="number", value=10, min=1, step=1, style={'width':'80px'})
-                     ], style={'marginBottom':'8px'}),
-                     html.Div([
-                         html.Label("Num Counterfactuals (total_CFs):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                         dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'total_CFs'}, type="number", value=5, min=1, step=1, style={'width':'80px'})
-                     ], style={'marginBottom':'8px'}),
-                     html.Div([
-                         html.Label("Desired Class (desired_class):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                         dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'desired_class'}, type="text", value="opposite", style={'width':'80px'})
-                     ], style={'marginBottom':'8px'}),
+                        html.Label("Indices to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'n_explain_max'}, type="number", value=10, min=1, step=1, style={'width':'80px'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("Num Counterfactuals (total_CFs):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'total_CFs'}, type="number", value=5, min=1, step=1, style={'width':'80px'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("Desired Class (desired_class):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'desired_class'}, type="text", value="opposite", style={'width':'80px'})
+                    ], style={'marginBottom':'8px'}),
                     # Features to vary dropdown
                     html.Div([
                         html.Label("Features to vary (features_to_vary):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
@@ -816,14 +978,14 @@ def get_index_callbacks(app):
                         )
                     ], style={'marginBottom':'8px'}),
                     # Other DiCE settings
-                     html.Div([
-                          html.Label("Backend (ML model framework):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                          dcc.Dropdown(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'backend'}, options=[{'label': 'SciKit-Learn', 'value': 'sklearn'},{'label': 'Tensorflow 1', 'value': 'TF1'},{'label': 'Tensorflow 2', 'value': 'TF2'},{'label': 'PyTorch', 'value': 'pytorch'}], value='sklearn', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
-                     ], style={'marginBottom':'8px'}),
-                     html.Div([
-                          html.Label("DiCE Method (dice_method):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                          dcc.Dropdown(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'dice_method'}, options=[{'label': 'Random', 'value': 'random'},{'label': 'Genetic', 'value': 'genetic'},{'label': 'KD-Tree', 'value': 'kdtree'}], value='genetic', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
-                     ], style={'marginBottom':'8px'})
+                    html.Div([
+                        html.Label("Backend (ML model framework):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Dropdown(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'backend'}, options=[{'label': 'SciKit-Learn', 'value': 'sklearn'},{'label': 'Tensorflow 1', 'value': 'TF1'},{'label': 'Tensorflow 2', 'value': 'TF2'},{'label': 'PyTorch', 'value': 'pytorch'}], value='sklearn', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("DiCE Method (dice_method):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Dropdown(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'dice_method'}, options=[{'label': 'Random', 'value': 'random'},{'label': 'Genetic', 'value': 'genetic'},{'label': 'KD-Tree', 'value': 'kdtree'}], value='genetic', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
+                    ], style={'marginBottom':'8px'})
                 ]
                 method_settings.extend(dice_specific_settings)
             # Add elif for other methods...
@@ -839,7 +1001,7 @@ def get_index_callbacks(app):
     )
     def toggle_speedup_input(selected_mode):
         if selected_mode == "stream":
-             return {"display": "block", "marginTop": "10px", "textAlign": "center"}
+            return {"display": "block", "marginTop": "10px", "textAlign": "center"}
         return {"display": "none"}
 
     # --- Callback to toggle visibility of Active Jobs section ---
@@ -859,15 +1021,15 @@ def get_index_callbacks(app):
             # This depends on how create_active_jobs returns the message now
             first_child = children[0]
             if isinstance(first_child, html.Div) and getattr(first_child, 'children', None) == no_jobs_message:
-                 return hide_style
+                return hide_style
             else:
-                 return display_style # Assume list contains job divs
+                return display_style # Assume list contains job divs
         elif isinstance(children, str) and children == no_jobs_message:
             return hide_style # Direct string comparison
         elif children: # If children exist and are not the 'no jobs' message
-             return display_style
+            return display_style
         else: # If children are None or empty list
-             return hide_style
+            return hide_style
 
 
     # --- Callback to display confirmation box for stopping a job ---
@@ -906,26 +1068,26 @@ def get_index_callbacks(app):
             # Find which button was clicked
             button_index = -1
             for i, n_clicks in enumerate(submit_n_clicks_list):
-                 # Check if this specific confirmation box was clicked (n_clicks > 0)
-                 # This logic assumes submit_n_clicks resets;
-                 if n_clicks and n_clicks > 0:
-                     # Extract the job name from the ID of the confirmation box that triggered
-                     all_confirm_ids = ctx.inputs_list[1] # Get list of Input dicts for confirm-box
-                     if i < len(all_confirm_ids):
-                          button_index = i
-                          job_to_cancel = all_confirm_ids[i]['id']['index']
-                          print(f"Confirmation received for job: {job_to_cancel}")
-                          try:
-                              response = handler.handle_cancel_job(job_to_cancel)
-                              if response != "success":
-                                   print(f"Backend error cancelling job '{job_to_cancel}': {response}")
-                                   error_message = f"Error cancelling {job_to_cancel}: {response}"
-                              # The callback will proceed to refresh the list anyway
-                          except Exception as cancel_err:
-                              print(f"!!! EXCEPTION during handle_cancel_job for '{job_to_cancel}': {cancel_err}")
-                              traceback.print_exc()
-                              error_message = f"Frontend error cancelling job {job_to_cancel}."
-                          break # Assume only one confirmation can be submitted at a time
+                # Check if this specific confirmation box was clicked (n_clicks > 0)
+                # This logic assumes submit_n_clicks resets;
+                if n_clicks and n_clicks > 0:
+                    # Extract the job name from the ID of the confirmation box that triggered
+                    all_confirm_ids = ctx.inputs_list[1] # Get list of Input dicts for confirm-box
+                    if i < len(all_confirm_ids):
+                        button_index = i
+                        job_to_cancel = all_confirm_ids[i]['id']['index']
+                        print(f"Confirmation received for job: {job_to_cancel}")
+                        try:
+                            response = handler.handle_cancel_job(job_to_cancel)
+                            if response != "success":
+                                print(f"Backend error cancelling job '{job_to_cancel}': {response}")
+                                error_message = f"Error cancelling {job_to_cancel}: {response}"
+                            # The callback will proceed to refresh the list anyway
+                        except Exception as cancel_err:
+                            print(f"!!! EXCEPTION during handle_cancel_job for '{job_to_cancel}': {cancel_err}")
+                            traceback.print_exc()
+                            error_message = f"Frontend error cancelling job {job_to_cancel}."
+                        break # Assume only one confirmation can be submitted at a time
 
         # --- Fetch and Update Active Jobs List ---
         try:

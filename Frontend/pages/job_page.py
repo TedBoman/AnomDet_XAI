@@ -124,8 +124,7 @@ def layout(handler, job_name):
             'padding': '15px',
             'backgroundColor': theme_colors['header_background'],
             'borderRadius': '5px'
-           }
-        ), # --- End Header Div ---
+        }), # --- End Header Div ---
 
         # --- Main Content Area ---
         html.Div([
