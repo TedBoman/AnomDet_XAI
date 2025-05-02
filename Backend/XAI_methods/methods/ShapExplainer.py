@@ -18,6 +18,7 @@ class ShapExplainer(ExplainerMethodAPI):
 
     def __init__(self, model: Any, background_data: np.ndarray, **params: Any):
         print("Initializing ShapExplainer...")
+        print(f"Shap got params: {params}")
         self.model = model
         self.mode = params.get('mode', 'regression').lower()
         self.shap_method = params.get('shap_method', 'kernel').lower()
@@ -373,22 +374,43 @@ class ShapExplainer(ExplainerMethodAPI):
                       print(f"Reshaped SHAP values to list (items: {len(reshaped_shap_values)}, item shape: {target_shape})")
                       return reshaped_shap_values
                  elif isinstance(shap_values_flat, np.ndarray):
-                      # Regression or binary classification: Reshape the single array
-                      # Ensure the flat shape is compatible before reshaping
-                      if shap_values_flat.shape[0] != n_instances or shap_values_flat.shape[1] != self._num_flat_features:
-                           warnings.warn(f"SHAP values have unexpected flat shape {shap_values_flat.shape}. Expected ({n_instances}, {self._num_flat_features}). Skipping reshape.", RuntimeWarning)
-                           return shap_values_flat # Return raw if shape doesn't match
+                    # Handles Regression or Binary Classification returning a single array
+                    print(f"DEBUG: Handling ndarray output with shape: {shap_values_flat.shape}")
+                    selected_shap_values = None
+                    n_classes_output = shap_values_flat.shape[-1] if shap_values_flat.ndim == 3 else 1
+                    expected_flat_features = np.prod(self._original_sequence_shape) # e.g., 1*29 = 29
 
-                      try:
-                           reshaped_shap_values = shap_values_flat.reshape(target_shape)
-                      except ValueError as e:
-                           raise ValueError(f"Failed to reshape SHAP values. "
-                                            f"Flat shape: {shap_values_flat.shape}, Target shape: {target_shape}. Error: {e}") from e
-                      print(f"Reshaped SHAP values to array shape: {reshaped_shap_values.shape}")
-                      return reshaped_shap_values
-                 else:
-                      warnings.warn(f"Unexpected type returned by shap_values: {type(shap_values_flat)}. Returning raw output.", RuntimeWarning)
-                      return shap_values_flat
+                    # Check for (N, F, C) format from classification (e.g., Decision Tree output)
+                    if shap_values_flat.ndim == 3 and n_classes_output > 1 and shap_values_flat.shape == (n_instances, expected_flat_features, n_classes_output):
+                        class_index_to_use = 1 # Assume want SHAP values for class 1
+                        print(f"DEBUG: Selecting class {class_index_to_use} from shape {shap_values_flat.shape}")
+                        selected_shap_values = shap_values_flat[:, :, class_index_to_use] # Get shape (N, F) -> (1000, 29)
+
+                    # Check for (N, F) format (e.g., Regression output, or maybe specific binary case)
+                    elif shap_values_flat.ndim == 2 and shap_values_flat.shape == (n_instances, expected_flat_features):
+                        print(f"DEBUG: Assuming 2D array output is for the target class. Shape: {shap_values_flat.shape}")
+                        selected_shap_values = shap_values_flat # Already (N, F) -> (1000, 29)
+                    else:
+                        # Unexpected shape
+                        raise ValueError(f"SHAP values ndarray has unexpected shape {shap_values_flat.shape}. Expected ({n_instances}, {expected_flat_features}, [n_classes]) or ({n_instances}, {expected_flat_features}).")
+
+                    # --- Now reshape the selected (N, F) array ---
+                    if selected_shap_values is None:
+                        raise RuntimeError("Internal error: selected_shap_values is None after checks.")
+
+                    print(f"DEBUG: Shape of selected SHAP values before reshape: {selected_shap_values.shape}")
+                    # Basic sanity check on selected shape
+                    if selected_shap_values.shape != (n_instances, expected_flat_features):
+                        raise ValueError(f"Internal error: Shape of selected SHAP values {selected_shap_values.shape} doesn't match expected ({n_instances}, {expected_flat_features}).")
+
+                    # Reshape the (N, F) array into the original sequence structure (N, Seq, Feat)
+                    try:
+                        reshaped_shap_values = selected_shap_values.reshape(target_shape) # Reshape (1000, 29) -> (1000, 1, 29)
+                    except ValueError as e:
+                        raise ValueError(f"Failed to reshape SELECTED SHAP values. Flat shape: {selected_shap_values.shape}, Target shape: {target_shape}. Error: {e}") from e
+
+                    print(f"Reshaped SHAP values (selected class) to array shape: {reshaped_shap_values.shape}")
+                    return reshaped_shap_values
             else:
                  # If original data was 2D (samples x features), the flat output is already the desired shape
                  print("Returning 2D SHAP values (original data was 2D/tabular).")

@@ -101,13 +101,16 @@ class XAIRunner:
                 feature_cols=self.feature_columns
             )
 
+            shap_method = 'kernel'
             # Determine SHAP method (needed before sampling background)
             # Assuming only one SHAP config for now, might need adjustment if multiple SHAP runs are allowed
-            shap_method = 'kernel' # Default
             for config in self.xai_params:
+                print(config)
                 if config.get("method") == 'ShapExplainer':
-                    shap_method = config.get("settings", {}).get('shap_method', 'kernel')
-                    break # Use first found SHAP config for method type
+                    settings = config.get('settings', {})
+                    print(settings)
+                    shap_method = settings.get('shap_method', 'kernel')
+                    print(f"Using shap method: {shap_method} for background samples")
 
             max_bg_samples = MAX_BG_SAMPLES
             if shap_method == 'tree' and background_data_np.shape[0] > 0:

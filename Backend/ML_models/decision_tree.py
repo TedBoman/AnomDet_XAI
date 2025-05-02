@@ -345,7 +345,6 @@ class DecisionTreeModel(model_interface.ModelInterface):
         (Code from original question - unchanged logic, relies on self.model trained on train split)
         """
         # --- Existing get_anomaly_score code remains unchanged ---
-        # ... (keep the exact code from your original question here) ...
         if self.model is None or self.scaler is None or self.imputer is None or self.input_type is None or self.processed_feature_names is None:
             raise RuntimeError("Model is not trained or ready for scoring.")
 

@@ -770,7 +770,6 @@ def get_xai_methods() -> list:
 
     # Removing the __init__, setup files and the .env file
     methods.remove("__init__")
-    methods.remove("dice_builder")
 
     return methods
 

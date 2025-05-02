@@ -4,8 +4,7 @@ import json
 import sys
 from time import sleep
 from datetime import datetime
-from typing import Optional, Dict, List, Any # Add necessary imports
-
+from typing import Optional, Dict, List, Any
 
 class BackendAPI:
     # Constructor setting host adress and port for the the backend container
