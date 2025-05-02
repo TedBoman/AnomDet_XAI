@@ -1,5 +1,6 @@
 # callbacks.py (Complete and Updated File)
 
+import base64
 import sys
 import traceback
 from dash import Dash, dcc, html, Input, Output, State, ALL, MATCH, callback, callback_context, no_update
@@ -9,6 +10,8 @@ import os
 from ml_model_hyperparameters import HYPERPARAMETER_DESCRIPTIONS
 from ml_model_hyperparameters import XAI_METHOD_DESCRIPTIONS
 from pages.job_page import get_display_job_name
+
+UPLOAD_DIRECTORY = "/app/Datasets"
 
 # --- Create_active_jobs FUNCTION ---
 def create_active_jobs(active_jobs):
@@ -71,10 +74,86 @@ def create_active_jobs(active_jobs):
         html.Div(job_divs) # The list of job divs is the second child
     ])
 
+# Define a function to handle saving and processing (outside the callback for clarity)
+def save_file(name, content):
+    """Decode and save a file uploaded with dcc.Upload."""
+    data = content.encode("utf8").split(b";base64,")[1]
+    filepath = os.path.join(UPLOAD_DIRECTORY, name)
+    try:
+        with open(filepath, "wb") as fp:
+            fp.write(base64.decodebytes(data))
+        print(f"Saved file: {filepath}")
+        return filepath # Return the path where the file was saved
+    except Exception as e:
+        print(f"Error saving file {name}: {e}")
+        return None
+
 # --- Callbacks for index page ---
 def get_index_callbacks(app):
 
-# --- Callback to update Parameter Explanation Box ---
+    # The actual callback
+    @callback(
+        Output('dataset-dropdown', 'options'),
+        Output('dataset-dropdown', 'value'),
+        Output('output-upload-state', 'children'),
+        Input('upload-dataset', 'contents'),
+        State('upload-dataset', 'filename'),
+        State('dataset-dropdown', 'options'), # Get current options to append
+        prevent_initial_call=True # Don't run on page load
+    )
+    def update_output(uploaded_contents, uploaded_filename, existing_options):
+        if uploaded_contents is not None:
+            # Save the uploaded file
+            filepath = save_file(uploaded_filename, uploaded_contents)
+
+            if filepath:
+                # --- Important: Inform your backend handler ---
+                # This step depends HEAVILY on how your `handler` object works.
+                # Ideally, the handler has a method to register/add datasets.
+                # Example (replace with your actual handler logic):
+                try:
+                    # Assuming handler has a method like this:
+                    # handler.register_uploaded_dataset(filepath, uploaded_filename)
+                    # OR maybe it just needs to know to rescan a directory.
+                    # For now, we'll just update the dropdown directly,
+                    # but the handler *needs* to know about the file eventually.
+                    print(f"File {uploaded_filename} saved. Handler should be notified.")
+
+                    # --- Refresh dataset list (Option 1: Ask handler) ---
+                    # try:
+                    #     updated_datasets = handler.handle_get_datasets() # Ideal way
+                    #     new_options = [{"label": ds, "value": ds} for ds in updated_datasets]
+                    # except Exception as e:
+                    #     print(f"Error refreshing datasets via handler: {e}")
+                    #     # Fallback to manual update if handler fails
+                    #     new_options = existing_options + [{"label": uploaded_filename, "value": uploaded_filename}]
+
+                    # --- Refresh dataset list (Option 2: Manual Update - Simpler but less robust) ---
+                    # Check if the dataset is already in the options to avoid duplicates
+                    is_new = True
+                    for option in existing_options:
+                        if option['value'] == uploaded_filename:
+                            is_new = False
+                            break
+                    if is_new:
+                        new_options = existing_options + [{"label": uploaded_filename, "value": uploaded_filename}]
+                    else:
+                        new_options = existing_options
+
+                    # Return updated options, select the new file, and show success message
+                    return new_options, uploaded_filename, f"Uploaded: {uploaded_filename}"
+
+                except Exception as e:
+                    print(f"Error processing upload with handler: {e}")
+                    return existing_options, no_update, f"Error processing: {uploaded_filename}"
+            else:
+                # File saving failed
+                return existing_options, no_update, f"Error uploading: {uploaded_filename}"
+        else:
+            # Callback triggered without content (e.g., initial load, clearing upload)
+            return existing_options, no_update, "" # No change, clear message
+
+    # --- Callback to update Parameter Explanation Box ---
     @app.callback(
         Output("parameter-explanation-box", "children"),
         Input("detection-model-dropdown", "value")

@@ -6,6 +6,12 @@ import dash
 from dash import dcc, html, Input, Output, State, callback, ctx
 from dash.dependencies import ALL
 from callbacks import create_active_jobs
+import base64 # Needed for decoding uploaded file content
+import io     # Needed for reading decoded content if using pandas
+
+UPLOAD_DIRECTORY = "/app/Datasets"
+if not os.path.exists(UPLOAD_DIRECTORY):
+    os.makedirs(UPLOAD_DIRECTORY) # Create the directory if it doesn't exist
 
 def layout(handler):
     try:
@@ -74,8 +80,40 @@ def layout(handler):
                 # --- NEW: Parent Div for settings and explanations ---
                 html.Div([
                     html.Div([
+
+                        # *** NEW: Dataset Upload Component ***
                         html.Div([
-                            html.Label("Select Dataset:", style={"fontSize": "22px", "color": "#ffffff"}),
+                             html.Label("Upload Dataset:", style={"fontSize": "22px", "color": "#ffffff", "display": "block", "marginBottom": "5px"}),
+                             dcc.Upload(
+                                id='upload-dataset',
+                                children=html.Div([
+                                    'Drag and Drop or ',
+                                    html.A('Select Files')
+                                ]),
+                                style={
+                                    'width': '350px',
+                                    'height': '60px',
+                                    'lineHeight': '60px',
+                                    'borderWidth': '1px',
+                                    'borderStyle': 'dashed',
+                                    'borderRadius': '5px',
+                                    'textAlign': 'center',
+                                    'margin': '10px auto',
+                                    'color': '#e0e0e0',
+                                    'backgroundColor': '#145E88'
+                                },
+                                # Allow multiple files to be uploaded? Set False if only one.
+                                multiple=False,
+                                # Define accepted file types (example: CSV)
+                                accept='.csv,.parquet,.json,.txt' # Adjust as needed
+                             ),
+                             # *** NEW: Div to show upload status/filename ***
+                             html.Div(id='output-upload-state', style={'color': '#4CAF50', 'marginTop': '10px', 'textAlign': 'center', 'minHeight': '20px'}),
+                        ], style={"textAlign": "center", "marginBottom": "20px"}),
+                        # --- END Dataset Upload Component ---
+
+                        html.Div([
+                            html.Label("Or Select Existing Dataset:", style={"fontSize": "22px", "color": "#ffffff"}),
                             dcc.Dropdown(
                                 id="dataset-dropdown",
                                 options=[{"label": dataset, "value": dataset} for dataset in datasets],
