@@ -3,6 +3,7 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.calibration import CalibratedClassifierCV
+from sklearn.model_selection import train_test_split # Added for validation split
 from ML_models import model_interface 
 from typing import List, Dict, Optional, Tuple, Union
 import warnings
@@ -48,28 +49,49 @@ class XGBoostModel(model_interface.ModelInterface):
         self.sequence_length: Optional[int] = None
         self.n_original_features: Optional[int] = None
         self.label_col: Optional[str] = None
+        self.best_score: Optional[float] = None # Store best validation score
+        self.best_iteration: Optional[int] = None # Store best iteration
 
         # --- Store configuration from kwargs ---
+        self.random_state = kwargs.get('random_state', 42)
+        self.validation_set_size = kwargs.get('validation_set_size', 0.15) # Default 15%
+        if not 0 < self.validation_set_size < 1:
+            raise ValueError("validation_set_size must be between 0 and 1.")
+
         # Base XGBoost parameters (excluding scale_pos_weight, calculated later)
         self.model_params = {
-            'n_estimators': kwargs.get('n_estimators', 100), # Default changed
+            'n_estimators': kwargs.get('n_estimators', 100),
             'learning_rate': kwargs.get('learning_rate', 0.1),
             'max_depth': kwargs.get('max_depth', 6),
             'objective': kwargs.get('objective', 'binary:logistic'),
-            'eval_metric': kwargs.get('eval_metric', 'logloss'),
-            'random_state': kwargs.get('random_state', 42),
+            'eval_metric': kwargs.get('eval_metric', 'logloss'), # Important for early stopping
+            'random_state': self.random_state,
             'n_jobs': kwargs.get('n_jobs', -1)
             # Add other relevant base params here if needed
         }
         # Add any other valid kwargs intended for XGBClassifier
         allowed_xgb_params = set(xgb.XGBClassifier().get_params().keys())
-        extra_xgb_params = {k: v for k, v in kwargs.items() if k in allowed_xgb_params and k not in self.model_params and k != 'scale_pos_weight'}
+        print(allowed_xgb_params)
+        # Exclude params managed separately
+        managed_params = {'scale_pos_weight', 'early_stopping_rounds'} 
+        extra_xgb_params = {
+            k: v for k, v in kwargs.items() 
+            if k in allowed_xgb_params 
+            and k not in self.model_params 
+            and k not in managed_params
+        }
         self.model_params.update(extra_xgb_params)
+
+        # Store early stopping and verbosity settings
+        self.early_stopping_rounds = kwargs.get('early_stopping_rounds', None) # Default off
+        self.verbose_eval = kwargs.get('verbose_eval', False) # Default quiet
 
         # Store calibration method if provided, default to isotonic
         self.calibration_method = kwargs.get('calibration_method', 'isotonic') # 'isotonic' or 'sigmoid'
 
-        print(f"XGBoostModel Initialized with base params: {self.model_params}, Calibration: {self.calibration_method}")
+        print(f"XGBoostModel Initialized with base params: {self.model_params}")
+        print(f"Validation split: {self.validation_set_size*100}%, Early Stopping Rounds: {self.early_stopping_rounds}")
+        print(f"Calibration Method: {self.calibration_method}, Verbose Eval: {self.verbose_eval}")
         # Note: scale_pos_weight is calculated and added during run()
 
     def _prepare_data_for_model(
@@ -122,7 +144,7 @@ class XGBoostModel(model_interface.ModelInterface):
 
             else: # Detection for DataFrame (convert to 2D NumPy)
                 if self.scaler is None or self.processed_feature_names is None or self.n_original_features is None:
-                     raise RuntimeError("Model (trained on DataFrame) not ready.")
+                    raise RuntimeError("Model (trained on DataFrame) not ready.")
                 missing_cols = set(self.processed_feature_names) - set(X.columns)
                 if missing_cols: raise ValueError(f"Missing required columns: {missing_cols}")
 
@@ -150,14 +172,14 @@ class XGBoostModel(model_interface.ModelInterface):
                 n_samples_2d, n_feat_2d = temp_X.shape
                 # Check if feature count matches expected original features
                 if self.n_original_features is not None and n_feat_2d != self.n_original_features:
-                     raise ValueError(f"Inference 2D NumPy input has {n_feat_2d} features, expected {self.n_original_features}.")
+                    raise ValueError(f"Inference 2D NumPy input has {n_feat_2d} features, expected {self.n_original_features}.")
                 temp_X = temp_X[:, np.newaxis, :] # Reshape to (samples, 1, features)
                 print(f"DEBUG _prepare_data: Reshaped 2D NumPy input to 3D {temp_X.shape} for inference.")
 
             # Now proceed assuming temp_X is 3D (either originally or after reshape)
             if temp_X.ndim != 3:
-                 # This check should now primarily catch invalid initial shapes other than 2D during inference
-                 raise ValueError(f"NumPy X must be 3D (or 2D during inference), got {original_ndim}D initially.")
+                # This check should now primarily catch invalid initial shapes other than 2D during inference
+                raise ValueError(f"NumPy X must be 3D (or 2D during inference), got {original_ndim}D initially.")
 
             n_samples, seq_len, n_feat = temp_X.shape
 
@@ -188,8 +210,8 @@ class XGBoostModel(model_interface.ModelInterface):
                 n_flattened_features = seq_len * n_feat
                 self.processed_feature_names = [f"feature_{i}_step_{j}" for j in range(seq_len) for i in range(n_feat)]
                 if len(self.processed_feature_names) != n_flattened_features:
-                     warnings.warn("Feature name generation mismatch.")
-                     self.processed_feature_names = [f"flat_feature_{k}" for k in range(n_flattened_features)]
+                    warnings.warn("Feature name generation mismatch.")
+                    self.processed_feature_names = [f"flat_feature_{k}" for k in range(n_flattened_features)]
 
                 y_aligned = y
                 # Return 2D scaled data for XGBoost training
@@ -206,9 +228,9 @@ class XGBoostModel(model_interface.ModelInterface):
                 # For now, we allow seq_len=1 if input was 2D.
                 if self.input_type == 'numpy' and seq_len != self.sequence_length:
                     # Only strictly enforce seq_len if model was trained on numpy
-                     raise ValueError(f"Input seq len {seq_len} != train seq len {self.sequence_length} for NumPy-trained model.")
+                    raise ValueError(f"Input seq len {seq_len} != train seq len {self.sequence_length} for NumPy-trained model.")
                 if n_feat != self.n_original_features:
-                     raise ValueError(f"Input features {n_feat} != train features {self.n_original_features}.")
+                    raise ValueError(f"Input features {n_feat} != train features {self.n_original_features}.")
 
                 # Flatten 3D -> 2D for XGBoost prediction
                 X_flattened = temp_X.reshape(n_samples, seq_len * n_feat)
@@ -222,7 +244,7 @@ class XGBoostModel(model_interface.ModelInterface):
                 return X_processed_scaled, None, self.processed_feature_names # No labels
 
         else:
-             raise TypeError("Input 'X' must be pandas DataFrame or NumPy array.")
+            raise TypeError("Input 'X' must be pandas DataFrame or NumPy array.")
 
 
     def run(self, X: Union[pd.DataFrame, np.ndarray], y: Optional[np.ndarray] = None, label_col: str = 'label'):
@@ -246,12 +268,12 @@ class XGBoostModel(model_interface.ModelInterface):
                 X, y=y, label_col=None, is_training=True
             )
         else:
-             raise TypeError("Input 'X' must be pandas DataFrame or 3D NumPy array.")
+            raise TypeError("Input 'X' must be pandas DataFrame or 3D NumPy array.")
 
         if X_processed_scaled.shape[0] == 0:
-             warnings.warn("No data for training after preprocessing.", RuntimeWarning)
-             self.model = None
-             return
+            warnings.warn("No data for training after preprocessing.", RuntimeWarning)
+            self.model = None
+            return
 
         # Handle Class Imbalance
         n_neg = np.sum(y_aligned == 0); n_pos = np.sum(y_aligned == 1)
@@ -275,7 +297,7 @@ class XGBoostModel(model_interface.ModelInterface):
         try:
             base_xgb_model.fit(X_processed_scaled, y_aligned)
         except Exception as e:
-             raise RuntimeError(f"Base XGBoost fitting failed: {e}") from e
+            raise RuntimeError(f"Base XGBoost fitting failed: {e}") from e
         print("Base model training complete.")
 
         # Optional: Print base model probability stats for debugging
@@ -297,7 +319,7 @@ class XGBoostModel(model_interface.ModelInterface):
         try:
             calibrated_model.fit(X_processed_scaled, y_aligned)
         except Exception as e:
-             raise RuntimeError(f"Probability calibration fitting failed: {e}") from e
+            raise RuntimeError(f"Probability calibration fitting failed: {e}") from e
         print("Calibration complete.")
 
         # --- Step 3: Store the CALIBRATED Model ---
@@ -307,7 +329,7 @@ class XGBoostModel(model_interface.ModelInterface):
     def detect(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """ Detects anomalies (predicts class 1). """
         if self.model is None or self.scaler is None or self.input_type is None or self.processed_feature_names is None:
-             raise RuntimeError("Model is not trained or ready.")
+            raise RuntimeError("Model is not trained or ready.")
 
         n_input_samples = len(detection_data) if isinstance(detection_data, pd.DataFrame) else detection_data.shape[0]
         if n_input_samples == 0: return np.array([], dtype=bool)
@@ -329,12 +351,12 @@ class XGBoostModel(model_interface.ModelInterface):
 
         # Result directly corresponds to input order
         if len(anomalies) != n_input_samples:
-             warnings.warn(f"Output detection length ({len(anomalies)}) mismatch vs input ({n_input_samples}).", RuntimeWarning)
-             # Pad with False if shorter?
-             final_anomalies = np.zeros(n_input_samples, dtype=bool)
-             len_to_copy = min(len(anomalies), n_input_samples)
-             final_anomalies[:len_to_copy] = anomalies[:len_to_copy]
-             return final_anomalies
+            warnings.warn(f"Output detection length ({len(anomalies)}) mismatch vs input ({n_input_samples}).", RuntimeWarning)
+            # Pad with False if shorter?
+            final_anomalies = np.zeros(n_input_samples, dtype=bool)
+            len_to_copy = min(len(anomalies), n_input_samples)
+            final_anomalies[:len_to_copy] = anomalies[:len_to_copy]
+            return final_anomalies
 
         return anomalies
     
@@ -362,8 +384,8 @@ class XGBoostModel(model_interface.ModelInterface):
 
         # Handle case where preprocessing results in no data
         if X_processed_scaled.shape[0] == 0:
-             warnings.warn("No data to predict probabilities after preprocessing.", RuntimeWarning)
-             return np.empty((0, 2)) # Return shape (0, 2)
+            warnings.warn("No data to predict probabilities after preprocessing.", RuntimeWarning)
+            return np.empty((0, 2)) # Return shape (0, 2)
 
         print(f"Input shape to calibrated model's predict_proba: {X_processed_scaled.shape}")
         try:
@@ -373,7 +395,7 @@ class XGBoostModel(model_interface.ModelInterface):
             raise RuntimeError(f"Probability prediction failed: {e}") from e
 
         if probabilities.shape[1] != 2:
-             warnings.warn(f"Expected 2 columns in probability output, but got {probabilities.shape[1]}. Returning as is.", RuntimeWarning)
+            warnings.warn(f"Expected 2 columns in probability output, but got {probabilities.shape[1]}. Returning as is.", RuntimeWarning)
 
         print(f"Predicted probabilities shape: {probabilities.shape}")
         return probabilities

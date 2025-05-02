@@ -129,24 +129,29 @@ def get_balanced_anomaly_sample(
     each group.
 
     Args:
-        data (pd.DataFrame): The input DataFrame containing the data and labels.
-                             Assumes data is already sorted by time/index.
-        total_rows (int): The desired total number of rows in the output DataFrame.
-                          Must be a non-negative integer.
+        data (pd.DataFrame): 
+                            The input DataFrame containing the data and labels.
+                            Assumes data is already sorted by time/index.
+        total_rows (int): 
+                        The desired total number of rows in the output DataFrame.
+                        Must be a non-negative integer.
         label_column (str): The name of the column containing the anomaly labels.
                             Defaults to 'label'.
-        anomaly_value (Any): The value within the `label_column` that signifies
-                             an anomaly. Defaults to 1.
-        random_state (Optional[int]): Seed for any potential internal random
-                                      operations (though primary sampling is
-                                      now temporal).
+        anomaly_value (Any): 
+                            The value within the `label_column` that signifies
+                            an anomaly. Defaults to 1.
+        random_state (Optional[int]): 
+                                    Seed for any potential internal random
+                                    operations (though primary sampling is
+                                    now temporal).
 
     Returns:
-        pd.DataFrame: A new DataFrame containing the sampled rows, preserving
-                      temporal order within each class and concatenating them.
-                      Preserves original columns. Returns an empty DataFrame
-                      with the same columns if the input is empty, total_rows
-                      is 0, or no instances of a required class are available.
+        pd.DataFrame: 
+                A new DataFrame containing the sampled rows, preserving
+                temporal order within each class and concatenating them.
+                Preserves original columns. Returns an empty DataFrame
+                with the same columns if the input is empty, total_rows
+                is 0, or no instances of a required class are available.
 
     Raises:
         TypeError: If 'data' is not a pandas DataFrame or total_rows is not an int.
@@ -194,24 +199,24 @@ def get_balanced_anomaly_sample(
 
     # Check if any class is empty before proceeding
     if n_anomalies == 0 and n_non_anomalies == 0:
-         print("Input DataFrame contains no rows. Returning empty DataFrame.")
-         return pd.DataFrame(columns=data.columns).astype(data.dtypes)
+        print("Input DataFrame contains no rows. Returning empty DataFrame.")
+        return pd.DataFrame(columns=data.columns).astype(data.dtypes)
     elif n_anomalies == 0:
-         print("No anomaly instances found. Returning up to total_rows from the end of non-anomalies.")
-         # If no anomalies, return up to total_rows from the end of non-anomalies
-         num_non_anomalies_to_sample = min(total_rows, n_non_anomalies)
-         # Use .tail() to get the last rows
-         sampled_df = non_anomaly_df.tail(n=num_non_anomalies_to_sample)
-         # Reset index but DO NOT shuffle
-         return sampled_df.reset_index(drop=True)
+        print("No anomaly instances found. Returning up to total_rows from the end of non-anomalies.")
+        # If no anomalies, return up to total_rows from the end of non-anomalies
+        num_non_anomalies_to_sample = min(total_rows, n_non_anomalies)
+        # Use .tail() to get the last rows
+        sampled_df = non_anomaly_df.tail(n=num_non_anomalies_to_sample)
+        # Reset index but DO NOT shuffle
+        return sampled_df.reset_index(drop=True)
     elif n_non_anomalies == 0:
-         print("No non-anomaly instances found. Returning up to total_rows from the end of anomalies.")
-         # If no non-anomalies, return up to total_rows from the end of anomalies
-         num_anomalies_to_sample = min(total_rows, n_anomalies)
-         # Use .tail() to get the last rows
-         sampled_df = anomaly_df.tail(n=num_anomalies_to_sample)
-         # Reset index but DO NOT shuffle
-         return sampled_df.reset_index(drop=True)
+        print("No non-anomaly instances found. Returning up to total_rows from the end of anomalies.")
+        # If no non-anomalies, return up to total_rows from the end of anomalies
+        num_anomalies_to_sample = min(total_rows, n_anomalies)
+        # Use .tail() to get the last rows
+        sampled_df = anomaly_df.tail(n=num_anomalies_to_sample)
+        # Reset index but DO NOT shuffle
+        return sampled_df.reset_index(drop=True)
 
 
     # 3. Determine Actual Number of Rows to Return
@@ -386,13 +391,13 @@ def run_batch(
         
         # --- Data Splitting ---
         try:
-             training_data, testing_data = split_data(df)
-             if training_data.empty or testing_data.empty:
-                 warnings.warn("Training or testing data split resulted in empty DataFrame.", RuntimeWarning)
-                 # Handle fallback? Maybe use whole df for training if test is empty? Requires care.
+            training_data, testing_data = split_data(df)
+            if training_data.empty or testing_data.empty:
+                warnings.warn("Training or testing data split resulted in empty DataFrame.", RuntimeWarning)
+                # Handle fallback? Maybe use whole df for training if test is empty? Requires care.
         except Exception as e:
-             print(f"Error during data splitting: {e}")
-             return # Cannot proceed without data splits
+            print(f"Error during data splitting: {e}")
+            return # Cannot proceed without data splits
 
         # --- Feature Column Definition ---
         # Define default feature columns (adjust slicing as needed!)
@@ -413,12 +418,12 @@ def run_batch(
                 else:
                     raise ValueError("DataFrame has too few columns to determine features.")
         except Exception as e:
-             print(f"Error determining feature columns: {e}")
-             return
+            print(f"Error determining feature columns: {e}")
+            return
 
         if not feature_columns:
-             print("Error: No feature columns identified. Stopping.")
-             return
+            print("Error: No feature columns identified. Stopping.")
+            return
         
         actual_label_col = 'label' # Use provided label or default
         anomaly_features = feature_columns + [actual_label_col]
@@ -452,18 +457,18 @@ def run_batch(
         print(f"Attempting to use '{actual_label_col}' as the label column for anomaly extraction.")
         if actual_label_col in df.columns:
             try:
-                 anomaly_rows = get_anomaly_rows(df, label_column=actual_label_col, anomaly_value=1)
-                 if not anomaly_rows.empty:
-                      # Select only the defined feature columns if they exist in anomaly rows
-                      cols_in_anomaly = [col for col in feature_columns if col in anomaly_rows.columns]
-                      if cols_in_anomaly:
-                           anomaly_feature_df = anomaly_rows[cols_in_anomaly]
-                      else: print("Warning: Feature columns not present in found anomaly rows.")
-                 print(f"Found {len(anomaly_feature_df)} anomaly rows with valid features.")
+                anomaly_rows = get_anomaly_rows(df, label_column=actual_label_col, anomaly_value=1)
+                if not anomaly_rows.empty:
+                    # Select only the defined feature columns if they exist in anomaly rows
+                    cols_in_anomaly = [col for col in feature_columns if col in anomaly_rows.columns]
+                    if cols_in_anomaly:
+                        anomaly_feature_df = anomaly_rows[cols_in_anomaly]
+                    else: print("Warning: Feature columns not present in found anomaly rows.")
+                print(f"Found {len(anomaly_feature_df)} anomaly rows with valid features.")
             except Exception as e:
-                 print(f"Error getting/processing anomaly rows using label '{actual_label_col}': {e}")
+                print(f"Error getting/processing anomaly rows using label '{actual_label_col}': {e}")
         else:
-             print(f"Warning: Specified label column '{actual_label_col}' not found in DataFrame. Cannot extract specific anomaly rows.")
+            print(f"Warning: Specified label column '{actual_label_col}' not found in DataFrame. Cannot extract specific anomaly rows.")
         # --- End Anomaly Row Extraction ---
 
         # --- Model Training ---
@@ -497,14 +502,14 @@ def run_batch(
         # --- Sequence Length Determination ---
         sequence_length = getattr(model_instance, 'sequence_length', None)
         if not isinstance(sequence_length, int) or sequence_length <= 0:
-             # If model isn't sequential or attr missing, set default for XAI framework IF XAI is requested
-             if xai_params:
-                 default_xai_seq_len = 10 # Default sequence length for XAI framework if model is non-sequential
-                 warnings.warn(f"Model doesn't provide positive integer 'sequence_length'. Using default={default_xai_seq_len} for XAI data preparation.", RuntimeWarning)
-                 sequence_length = default_xai_seq_len # Use default ONLY for XAI prep
-             else:
-                 sequence_length = 1 # Or None if XAI isn't running anyway
-                 print("Model does not appear sequential or sequence_length missing. Proceeding without sequence assumption for padding.")
+            # If model isn't sequential or attr missing, set default for XAI framework IF XAI is requested
+            if xai_params:
+                default_xai_seq_len = 10 # Default sequence length for XAI framework if model is non-sequential
+                warnings.warn(f"Model doesn't provide positive integer 'sequence_length'. Using default={default_xai_seq_len} for XAI data preparation.", RuntimeWarning)
+                sequence_length = default_xai_seq_len # Use default ONLY for XAI prep
+            else:
+                sequence_length = 1 # Or None if XAI isn't running anyway
+                print("Model does not appear sequential or sequence_length missing. Proceeding without sequence assumption for padding.")
         else:
             print(f"Determined sequence_length from model: {sequence_length}")
 
@@ -521,7 +526,7 @@ def run_batch(
             else: warnings.warn(f"Unknown model type '{model}' for score interpretation. Assuming higher score is anomaly.", RuntimeWarning)
 
             if sequence_length is None: # Should have been set above if XAI is running
-                 print("ERROR: sequence_length required for XAI wrapper but is None. Skipping XAI.")
+                print("ERROR: sequence_length required for XAI wrapper but is None. Skipping XAI.")
             else:
                 try:
                     print(f"Wrapping trained model instance ({type(model_instance).__name__}) for XAI...")
@@ -944,12 +949,12 @@ def run_batch(
 
 # Starts processing of dataset as a stream
 def run_stream(db_conn_params, 
-               model: str, 
-               path: str, 
-               name: str, 
-               speedup: int, 
-               inj_params: dict=None, 
-               debug=False) -> None:
+            model: str, 
+            path: str, 
+            name: str, 
+            speedup: int, 
+            inj_params: dict=None, 
+            debug=False) -> None:
     print("Starting Stream-job!")
     sys.stdout.flush()
 

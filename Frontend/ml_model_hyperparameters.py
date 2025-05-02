@@ -13,7 +13,8 @@ HYPERPARAMETER_DESCRIPTIONS = {
         "reg_lambda": "L2 regularization term on weights. Makes model weights smaller.",
         "booster": "Which booster to use: 'gbtree' (tree-based), 'gblinear' (linear function), or 'dart'.",
         "random_state": "Random number seed for reproducibility.",
-        "calibration_method": "Method ('isotonic' or 'sigmoid') used to calibrate predicted probabilities after base model training."
+        "calibration_method": "Method ('isotonic' or 'sigmoid') used to calibrate predicted probabilities after base model training.",
+        "n_jobs": "Number of CPU threads XGBoost will use. More = Faster but heavier load..",
         # Add others as needed
     },
     "lstm": {
@@ -85,7 +86,7 @@ XAI_METHOD_DESCRIPTIONS = {
         "capabilities": "Provides global and local explanations, theoretically sound (Shapley values), consistent, handles feature interactions to some extent.",
         "limitations": "Can be computationally expensive, especially KernelSHAP (model-agnostic version). TreeSHAP is faster but specific to tree models. Interpretation of interaction effects can be complex.",
         "parameters": {
-            "n_explain_max": "Maximum number of instances (predictions) to explain.",
+            "n_explain_max": "Maximum number of instances (predictions) to explain. Should be larger since it gives a global explanation",
             "nsamples": "(KernelSHAP) Number of times to sample perturbations for each explanation. Higher values increase accuracy but also computation time.",
             "k_summary": "(KernelSHAP) Number of samples from the background dataset used to summarize it (e.g., using k-means).",
             "l1_reg_k": "(KernelSHAP) Number of features to select using L1 regularization (Lasso) when approximating Shapley values. Controls sparsity.",

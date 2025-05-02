@@ -16,7 +16,6 @@ input[type="number"] {
     /* width: 150px; /* You might set this inline if widths need to vary */
   }
 
-  
 /* Style for text inputs (add if you have them, e.g., Job Name) */
 input[type="text"] {
   padding: 8px 10px;

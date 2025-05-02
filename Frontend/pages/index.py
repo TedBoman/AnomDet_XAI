@@ -109,7 +109,7 @@ def layout(handler):
                                 # Allow multiple files to be uploaded? Set False if only one.
                                 multiple=False,
                                 # Define accepted file types (example: CSV)
-                                accept='.csv,.parquet,.json,.txt' # Adjust as needed
+                                accept='.csv,.json,' # Adjust as needed
                             ),
                              # *** NEW: Div to show upload status/filename ***
                             html.Div(id='output-upload-state', style={'color': '#4CAF50', 'marginTop': '10px', 'textAlign': 'center', 'minHeight': '20px'}),
