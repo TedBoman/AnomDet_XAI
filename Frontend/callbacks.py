@@ -107,7 +107,7 @@ def build_xai_explanation_content(method_name, current_index, total_methods):
                             disabled=(current_index == 0), # Disable if first item
                             style={'marginRight': '10px', 'padding': '5px 10px'}),
                 html.Span(f"Method {current_index + 1} of {total_methods}",
-                          style={'color': '#ffffff', 'fontWeight': 'bold'}),
+                        style={'color': '#ffffff', 'fontWeight': 'bold'}),
                 html.Button('Next ➡️', id='xai-next-btn', n_clicks=0,
                             disabled=(current_index >= total_methods - 1), # Disable if last item
                             style={'marginLeft': '10px', 'padding': '5px 10px'}),
@@ -116,13 +116,13 @@ def build_xai_explanation_content(method_name, current_index, total_methods):
 
     # --- Description Content ---
     explanation_children = [
-        html.H5(f"{method_name} Description:", style={'color':'#ffffff', 'marginBottom':'10px', 'borderBottom': '1px solid #555', 'paddingBottom':'5px'}),
-        html.P(descriptions.get("description", "No description provided."), style={'color':'#d0d0d0'}),
-        html.H6("Capabilities:", style={'color':'#cccccc', 'marginTop':'15px'}),
-        html.P(descriptions.get("capabilities", "Not specified."), style={'color':'#d0d0d0'}),
-        html.H6("Limitations:", style={'color':'#cccccc', 'marginTop':'15px'}),
-        html.P(descriptions.get("limitations", "Not specified."), style={'color':'#d0d0d0'}),
-        html.H6("Parameters:", style={'color':'#cccccc', 'marginTop':'15px', 'marginBottom':'5px'}),
+        html.H4(f"{method_name} Description:",),
+        html.P(descriptions.get("description", "No description provided."),),
+        html.H5("Capabilities:",),
+        html.P(descriptions.get("capabilities", "Not specified."),),
+        html.H5("Limitations:",),
+        html.P(descriptions.get("limitations", "Not specified."),),
+        html.H5("Parameters:",),
     ]
 
     params_dict = descriptions.get("parameters", {})
@@ -954,17 +954,17 @@ def get_index_callbacks(app):
             elif selected_xai_method == "DiceExplainer":
                 dice_specific_settings = [
                     html.Div([
-                         html.Label("Indices to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                         dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'n_explain_max'}, type="number", value=10, min=1, step=1, style={'width':'80px'})
-                     ], style={'marginBottom':'8px'}),
-                     html.Div([
-                         html.Label("Num Counterfactuals (total_CFs):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                         dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'total_CFs'}, type="number", value=5, min=1, step=1, style={'width':'80px'})
-                     ], style={'marginBottom':'8px'}),
-                     html.Div([
-                         html.Label("Desired Class (desired_class):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                         dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'desired_class'}, type="text", value="opposite", style={'width':'80px'})
-                     ], style={'marginBottom':'8px'}),
+                        html.Label("Indices to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'n_explain_max'}, type="number", value=10, min=1, step=1, style={'width':'80px'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("Num Counterfactuals (total_CFs):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'total_CFs'}, type="number", value=5, min=1, step=1, style={'width':'80px'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("Desired Class (desired_class):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'desired_class'}, type="text", value="opposite", style={'width':'80px'})
+                    ], style={'marginBottom':'8px'}),
                     # Features to vary dropdown
                     html.Div([
                         html.Label("Features to vary (features_to_vary):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
@@ -978,14 +978,14 @@ def get_index_callbacks(app):
                         )
                     ], style={'marginBottom':'8px'}),
                     # Other DiCE settings
-                     html.Div([
-                          html.Label("Backend (ML model framework):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                          dcc.Dropdown(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'backend'}, options=[{'label': 'SciKit-Learn', 'value': 'sklearn'},{'label': 'Tensorflow 1', 'value': 'TF1'},{'label': 'Tensorflow 2', 'value': 'TF2'},{'label': 'PyTorch', 'value': 'pytorch'}], value='sklearn', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
-                     ], style={'marginBottom':'8px'}),
-                     html.Div([
-                          html.Label("DiCE Method (dice_method):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                          dcc.Dropdown(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'dice_method'}, options=[{'label': 'Random', 'value': 'random'},{'label': 'Genetic', 'value': 'genetic'},{'label': 'KD-Tree', 'value': 'kdtree'}], value='genetic', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
-                     ], style={'marginBottom':'8px'})
+                    html.Div([
+                        html.Label("Backend (ML model framework):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Dropdown(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'backend'}, options=[{'label': 'SciKit-Learn', 'value': 'sklearn'},{'label': 'Tensorflow 1', 'value': 'TF1'},{'label': 'Tensorflow 2', 'value': 'TF2'},{'label': 'PyTorch', 'value': 'pytorch'}], value='sklearn', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
+                    ], style={'marginBottom':'8px'}),
+                    html.Div([
+                        html.Label("DiCE Method (dice_method):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
+                        dcc.Dropdown(id={'type': 'xai-setting', 'method': 'DiceExplainer', 'param': 'dice_method'}, options=[{'label': 'Random', 'value': 'random'},{'label': 'Genetic', 'value': 'genetic'},{'label': 'KD-Tree', 'value': 'kdtree'}], value='genetic', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
+                    ], style={'marginBottom':'8px'})
                 ]
                 method_settings.extend(dice_specific_settings)
             # Add elif for other methods...
@@ -1001,7 +1001,7 @@ def get_index_callbacks(app):
     )
     def toggle_speedup_input(selected_mode):
         if selected_mode == "stream":
-             return {"display": "block", "marginTop": "10px", "textAlign": "center"}
+            return {"display": "block", "marginTop": "10px", "textAlign": "center"}
         return {"display": "none"}
 
     # --- Callback to toggle visibility of Active Jobs section ---
@@ -1021,15 +1021,15 @@ def get_index_callbacks(app):
             # This depends on how create_active_jobs returns the message now
             first_child = children[0]
             if isinstance(first_child, html.Div) and getattr(first_child, 'children', None) == no_jobs_message:
-                 return hide_style
+                return hide_style
             else:
-                 return display_style # Assume list contains job divs
+                return display_style # Assume list contains job divs
         elif isinstance(children, str) and children == no_jobs_message:
             return hide_style # Direct string comparison
         elif children: # If children exist and are not the 'no jobs' message
-             return display_style
+            return display_style
         else: # If children are None or empty list
-             return hide_style
+            return hide_style
 
 
     # --- Callback to display confirmation box for stopping a job ---
@@ -1068,26 +1068,26 @@ def get_index_callbacks(app):
             # Find which button was clicked
             button_index = -1
             for i, n_clicks in enumerate(submit_n_clicks_list):
-                 # Check if this specific confirmation box was clicked (n_clicks > 0)
-                 # This logic assumes submit_n_clicks resets;
-                 if n_clicks and n_clicks > 0:
-                     # Extract the job name from the ID of the confirmation box that triggered
-                     all_confirm_ids = ctx.inputs_list[1] # Get list of Input dicts for confirm-box
-                     if i < len(all_confirm_ids):
-                          button_index = i
-                          job_to_cancel = all_confirm_ids[i]['id']['index']
-                          print(f"Confirmation received for job: {job_to_cancel}")
-                          try:
-                              response = handler.handle_cancel_job(job_to_cancel)
-                              if response != "success":
-                                   print(f"Backend error cancelling job '{job_to_cancel}': {response}")
-                                   error_message = f"Error cancelling {job_to_cancel}: {response}"
-                              # The callback will proceed to refresh the list anyway
-                          except Exception as cancel_err:
-                              print(f"!!! EXCEPTION during handle_cancel_job for '{job_to_cancel}': {cancel_err}")
-                              traceback.print_exc()
-                              error_message = f"Frontend error cancelling job {job_to_cancel}."
-                          break # Assume only one confirmation can be submitted at a time
+                # Check if this specific confirmation box was clicked (n_clicks > 0)
+                # This logic assumes submit_n_clicks resets;
+                if n_clicks and n_clicks > 0:
+                    # Extract the job name from the ID of the confirmation box that triggered
+                    all_confirm_ids = ctx.inputs_list[1] # Get list of Input dicts for confirm-box
+                    if i < len(all_confirm_ids):
+                        button_index = i
+                        job_to_cancel = all_confirm_ids[i]['id']['index']
+                        print(f"Confirmation received for job: {job_to_cancel}")
+                        try:
+                            response = handler.handle_cancel_job(job_to_cancel)
+                            if response != "success":
+                                print(f"Backend error cancelling job '{job_to_cancel}': {response}")
+                                error_message = f"Error cancelling {job_to_cancel}: {response}"
+                            # The callback will proceed to refresh the list anyway
+                        except Exception as cancel_err:
+                            print(f"!!! EXCEPTION during handle_cancel_job for '{job_to_cancel}': {cancel_err}")
+                            traceback.print_exc()
+                            error_message = f"Frontend error cancelling job {job_to_cancel}."
+                        break # Assume only one confirmation can be submitted at a time
 
         # --- Fetch and Update Active Jobs List ---
         try:

@@ -81,6 +81,9 @@ def layout(handler):
                 # --- NEW: Parent Div for settings and explanations ---
                 html.Div([
                     html.Div([
+                        
+                        # --- SEPARATOR ---
+                        html.Hr(style={'borderColor': '#446e92', }),
 
                         # *** NEW: Dataset Upload Component ***
                         html.Div([
@@ -110,7 +113,7 @@ def layout(handler):
                             ),
                              # *** NEW: Div to show upload status/filename ***
                             html.Div(id='output-upload-state', style={'color': '#4CAF50', 'marginTop': '10px', 'textAlign': 'center', 'minHeight': '20px'}),
-                        ], style={"textAlign": "center", "marginBottom": "20px"}),
+                        ], style={"textAlign": "center", "marginBottom": "5px"}),
                         # --- END Dataset Upload Component ---
 
                         html.Div([
@@ -120,9 +123,9 @@ def layout(handler):
                                 options=[{"label": dataset, "value": dataset} for dataset in datasets],
                                 value=None,
                                 placeholder="Select a dataset",
-                                style={"width": "350px", "fontSize": "18px", "margin": "auto", "border": "0.05rem solid black"}
+                                style={"width": "350px", "fontSize": "18px", "margin": "auto",}
                             )
-                        ], style={"textAlign": "center", "marginBottom": "30px"}),
+                        ], style={"textAlign": "center", "marginBottom": "5px"}),
 
                         # --- Labeled Dataset Section ---
                         html.Div([
@@ -130,7 +133,7 @@ def layout(handler):
                                 id="labeled-check",
                                 options=[{"label": "Is dataset labeled for anomalies?", "value": "is_labeled"}],
                                 value=[], # Initially unchecked
-                                style={"fontSize": "20px", "color": "#ffffff", "marginBottom": "10px"}
+                                style={"fontSize": "20px", "color": "#ffffff", "marginBottom": "10px",}
                             ),
                             # Div to hold the conditional label column dropdown
                             html.Div(
@@ -143,13 +146,16 @@ def layout(handler):
                                         value=None, # Reset by callback
                                         placeholder="Select label column",
                                         multi=False, # Select only ONE label column
-                                        style={"width": "300px", "margin": "5px auto", "border": "0.05rem solid black"}
+                                        style={"width": "300px", "margin": "5px auto",}
                                     )
                                 ],
                                 # Initially hidden, shown by callback
                                 style={"display": "none", "marginTop": "10px", "textAlign": "center"}
                             )
-                        ], style={"textAlign": "center", "marginBottom": "20px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px"}),
+                        ], style={"textAlign": "center", "marginBottom": "20px", "padding": "10px", 'borderStyle': 'none', "borderRadius": "5px"}),
+
+                        # --- SEPARATOR ---
+                        html.Hr(style={'borderColor': '#446e92', }),
 
                         # --- Detection Model Selection ---
                         html.Div([
@@ -158,7 +164,7 @@ def layout(handler):
                                 id="detection-model-dropdown",
                                 options=[{"label": model, "value": model} for model in models],
                                 placeholder="Select a detection model",
-                                style={"width": "350px", "fontSize": "18px", "margin": "auto", "border": "0.05rem solid black"}
+                                style={"width": "350px", "fontSize": "18px", "margin": "auto",}
                             )
                         ], style={"textAlign": "center", "marginTop": "30px"}),
 
@@ -204,12 +210,15 @@ def layout(handler):
                                 # Initially hidden, shown by callback
                                 style={"display": "none", "marginTop": "10px", "textAlign": "center"}
                             )
-                        ], style={"textAlign": "center", "marginBottom": "20px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px"}),
+                        ], style={"textAlign": "center", "marginBottom": "5px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px", 'borderStyle': 'none', "marginTop": "10px"}),
+                        
+                        # --- SEPARATOR ---
+                        html.Hr(style={'borderColor': '#446e92', }),
 
                         # --- Injection Section ---
                         html.Div([
                             dcc.Checklist( id="injection-check", options=[{"label": "Inject Anomalies?", "value": "use_injection"}], value=[],
-                                        style={"fontSize": "20px", "color": "#ffffff", "marginBottom": "10px"} ),
+                                        style={"fontSize": "20px", "color": "#ffffff", "marginBottom": "5px"} ),
                             html.Div( id="injection-panel", children=[
                                 html.Label("Select Injection Method:", style={"fontSize": "18px", "color": "#e0e0e0", "display":"block"}),
                                 dcc.Dropdown( id="injection-method-dropdown", options=[{"label": method, "value": method} for method in injection_methods], value="None", placeholder="Select a method",
@@ -268,8 +277,11 @@ def layout(handler):
                                 ], style={"marginTop": "20px", "textAlign": "center"})
                             ], style={"display": "none"} # injection-panel starts hidden
                             )
-                        ], style={"textAlign": "center", "marginBottom": "20px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px"}),
-                            
+                        ], style={"textAlign": "center", "marginBottom": "5px", "padding": "10px", "border": "1px dashed #555", "borderRadius": "5px", 'borderStyle': 'none',}),
+                        
+                        # --- SEPARATOR ---
+                        html.Hr(style={'borderColor': '#446e92', }),
+                        
                         # --- Job Naming ---
                         html.Div([
                             html.Label("Job name: ", style={"fontSize": "22px", "color": "#ffffff"}),
@@ -281,6 +293,9 @@ def layout(handler):
                                         style={"width": "200px", "marginTop": "10px"}
                                     )
                         ], style={"display": "block", "marginTop": "15px", "textAlign": "center"}),
+
+                        # --- SEPARATOR ---
+                        html.Hr(style={'borderColor': '#446e92', }),
 
                         # --- Mode Selection (Batch/Stream) ---
                         html.Div([
@@ -364,6 +379,8 @@ def layout(handler):
             "margin": "30px",
         }),
 
+        # --- SEPARATOR ---
+        html.Hr(style={'borderColor': '#446e92', }),
 
             # --- Active Jobs ---
             html.Div(
