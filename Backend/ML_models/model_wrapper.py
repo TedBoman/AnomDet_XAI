@@ -14,16 +14,16 @@ class ModelWrapperForXAI:
     of anomaly P(anomaly) between 0 and 1.
     """
     def __init__(self,
-                 actual_model_instance: Any,
-                 feature_names: List[str],
-                 # score_interpretation is kept for potential future use or info,
-                 # but predict_proba now relies on predict_proba returning P(anomaly) directly.
-                 score_interpretation: Literal['lower_is_anomaly', 'higher_is_anomaly'] = 'higher_is_anomaly'
-                 ):
+                actual_model_instance: Any,
+                feature_names: List[str],
+                # score_interpretation is kept for potential future use or info,
+                # but predict_proba now relies on predict_proba returning P(anomaly) directly.
+                score_interpretation: Literal['lower_is_anomaly', 'higher_is_anomaly'] = 'higher_is_anomaly'
+                ):
         """
         Args:
-            actual_model_instance: Trained model instance with callable 'detect' & 'predict_proba'.
-                                   'predict_proba' MUST return P(anomaly) in [0, 1].
+            actual_model_instance:  Trained model instance with callable 'detect' & 'predict_proba'.
+                                    'predict_proba' MUST return P(anomaly) in [0, 1].
             feature_names (List[str]): Feature names list corresponding to the last dim of input data.
             score_interpretation (str): Informational about how the original score was interpreted
                                         BEFORE being converted to P(anomaly) by predict_proba.
@@ -37,17 +37,17 @@ class ModelWrapperForXAI:
 
         # --- Checks ---
         if not all(hasattr(self._model, meth) and callable(getattr(self._model, meth))
-                   for meth in ['detect', 'predict_proba']):
+                for meth in ['detect', 'predict_proba']):
             raise AttributeError("Provided model must have callable 'detect' and 'predict_proba' methods.")
         # Ensure predict_proba exists and is callable
         if not hasattr(self._model, 'predict_proba') or not callable(getattr(self._model, 'predict_proba')):
-             raise AttributeError("The wrapped model MUST have a callable 'predict_proba' method that returns P(anomaly).")
+            raise AttributeError("The wrapped model MUST have a callable 'predict_proba' method that returns P(anomaly).")
 
         if len(self._feature_names) == 0: raise ValueError("Feature names list cannot be empty.")
         if self._score_interpretation not in ['lower_is_anomaly', 'higher_is_anomaly']:
             raise ValueError("score_interpretation must be 'lower_is_anomaly' or 'higher_is_anomaly'")
         if not hasattr(self._model, 'sequence_length'):
-             warnings.warn("Wrapped model lacks 'sequence_length' attribute. Assuming sequence length of 1 if input is 2D.", RuntimeWarning)
+            warnings.warn("Wrapped model lacks 'sequence_length' attribute. Assuming sequence length of 1 if input is 2D.", RuntimeWarning)
         # --- End Checks ---
 
         print(f"ModelWrapperForXAI initialized for model type: {type(self._model).__name__}")
@@ -88,14 +88,14 @@ class ModelWrapperForXAI:
             elif isinstance(results, np.ndarray):
                 results_np = results
             elif isinstance(results, (int, float, bool)): # Handle single value output
-                 results_np = np.array([results])
+                results_np = np.array([results])
             else:
-                 warnings.warn(f"Internal method '{internal_method_name}' returned unexpected type {type(results)}. Attempting conversion.", RuntimeWarning)
-                 try:
-                     results_np = np.array(results)
-                 except Exception as conv_err:
-                     print(f"ERROR: Could not convert result of internal method '{internal_method_name}' to NumPy array: {conv_err}")
-                     raise TypeError(f"Internal method '{internal_method_name}' failed to return convertible type.") from conv_err
+                warnings.warn(f"Internal method '{internal_method_name}' returned unexpected type {type(results)}. Attempting conversion.", RuntimeWarning)
+                try:
+                    results_np = np.array(results)
+                except Exception as conv_err:
+                    # print(f"ERROR: Could not convert result of internal method '{internal_method_name}' to NumPy array: {conv_err}")
+                    raise TypeError(f"Internal method '{internal_method_name}' failed to return convertible type.") from conv_err
 
             # print(f"Wrapper: Internal '{internal_method_name}' returned array shape {results_np.shape}") # Debug print
             return results_np
@@ -120,7 +120,7 @@ class ModelWrapperForXAI:
             np.ndarray: Binary predictions (0 or 1), reshaped to (samples, 1).
         """
         if X_np_3d.ndim != 3:
-             warnings.warn(f"Wrapper 'predict' received input with {X_np_3d.ndim} dimensions. Expected 3D. Proceeding, but internal model might fail.", RuntimeWarning)
+            warnings.warn(f"Wrapper 'predict' received input with {X_np_3d.ndim} dimensions. Expected 3D. Proceeding, but internal model might fail.", RuntimeWarning)
 
         # Call internal 'detect'
         raw_predictions = self._call_internal_method(X_np_3d, 'detect')
@@ -130,20 +130,20 @@ class ModelWrapperForXAI:
         results_np = np.array(raw_predictions, dtype=float)
         nan_mask = np.isnan(results_np)
         if np.any(nan_mask):
-             warnings.warn(f"'detect' method returned NaNs. Filling with 0.", RuntimeWarning)
-             results_np[nan_mask] = 0 # Default non-anomaly prediction for NaNs
+            warnings.warn(f"'detect' method returned NaNs. Filling with 0.", RuntimeWarning)
+            results_np[nan_mask] = 0 # Default non-anomaly prediction for NaNs
 
         # Convert boolean results to int (True->1, False->0) if necessary
         # Check the type *after* handling NaNs
         if pd.api.types.is_bool_dtype(results_np):
             results_np = results_np.astype(int)
         elif not pd.api.types.is_numeric_dtype(results_np):
-             warnings.warn(f"'detect' method returned non-numeric, non-boolean type {results_np.dtype} after NaN handling. Attempting conversion to int, might fail.", RuntimeWarning)
-             try:
-                 results_np = results_np.astype(int)
-             except ValueError:
-                 warnings.warn(f"Could not convert 'detect' results to int. Filling with 0.", RuntimeWarning)
-                 results_np.fill(0) # Fallback if conversion fails
+            warnings.warn(f"'detect' method returned non-numeric, non-boolean type {results_np.dtype} after NaN handling. Attempting conversion to int, might fail.", RuntimeWarning)
+            try:
+                results_np = results_np.astype(int)
+            except ValueError:
+                warnings.warn(f"Could not convert 'detect' results to int. Filling with 0.", RuntimeWarning)
+                results_np.fill(0) # Fallback if conversion fails
 
         # Ensure output is 2D (samples, 1)
         if results_np.ndim == 1:
@@ -151,12 +151,12 @@ class ModelWrapperForXAI:
         elif results_np.ndim == 0: # Handle scalar output
             results_np = np.array([[results_np.item()]])
         elif results_np.ndim > 2 or (results_np.ndim == 2 and results_np.shape[1] != 1):
-             warnings.warn(f"'detect' method returned unexpected shape {results_np.shape} after processing. Attempting to reshape/select first column.", RuntimeWarning)
-             # Attempt to recover if possible, e.g., take first column if multiple outputs
-             if results_np.ndim >= 2 and results_np.shape[1] > 1:
-                 results_np = results_np[:, 0:1] # Take first column, keep 2D
-             else: # Cannot easily recover, return default shape
-                 results_np = np.zeros((X_np_3d.shape[0], 1), dtype=int)
+            warnings.warn(f"'detect' method returned unexpected shape {results_np.shape} after processing. Attempting to reshape/select first column.", RuntimeWarning)
+            # Attempt to recover if possible, e.g., take first column if multiple outputs
+            if results_np.ndim >= 2 and results_np.shape[1] > 1:
+                results_np = results_np[:, 0:1] # Take first column, keep 2D
+            else: # Cannot easily recover, return default shape
+                results_np = np.zeros((X_np_3d.shape[0], 1), dtype=int)
 
 
         # print(f"ModelWrapper.predict: Returning shape {results_np.shape}") # Debug print
@@ -180,18 +180,18 @@ class ModelWrapperForXAI:
                         P(normal) and column 1 is P(anomaly). Returns neutral
                         probabilities [0.5, 0.5] for invalid inputs or internal errors.
         """
-        print(f"\n--- Wrapper predict_proba called with input type {type(X_input)} ---")
+        # print(f"\n--- Wrapper predict_proba called with input type {type(X_input)} ---")
 
         # -----------------------------------
         # Input Conversion and Reshaping 
         # -----------------------------------
         if isinstance(X_input, pd.DataFrame):
-            print(f"DEBUG Wrapper predict_proba: Received DataFrame shape {X_input.shape}. Converting to NumPy.")
+            # print(f"DEBUG Wrapper predict_proba: Received DataFrame shape {X_input.shape}. Converting to NumPy.")
             X_np_input = X_input.to_numpy()
-            print(f"DEBUG Wrapper predict_proba: Converted DataFrame to NumPy shape {X_np_input.shape}.")
+            # print(f"DEBUG Wrapper predict_proba: Converted DataFrame to NumPy shape {X_np_input.shape}.")
         elif isinstance(X_input, np.ndarray):
             X_np_input = X_input  # Already a NumPy array
-            print(f"DEBUG Wrapper predict_proba: Received NumPy input shape {X_np_input.shape}.")
+            # print(f"DEBUG Wrapper predict_proba: Received NumPy input shape {X_np_input.shape}.")
         else:
             raise TypeError(f"ModelWrapperForXAI.predict_proba expects NumPy array or pandas DataFrame, got {type(X_input)}")
 
@@ -206,14 +206,14 @@ class ModelWrapperForXAI:
         if not hasattr(self._model, 'input_type'):
             warnings.warn(f"Wrapper: Underlying model {type(self._model).__name__} lacks 'input_type' attribute. Assuming 'dataframe' (2D) input for XAI predict_proba.", RuntimeWarning)
 
-        print(f"DEBUG Wrapper predict_proba: Underlying model type is '{underlying_input_type}'. Shaping input accordingly.")
+        # print(f"DEBUG Wrapper predict_proba: Underlying model type is '{underlying_input_type}'. Shaping input accordingly.")
 
         # --- Input Shape Handling (Conditional) ---
         if X_np_input.ndim == 3:
             # Input is already 3D. Pass as is, internal method should validate.
             if X_np_input.shape[-1] == expected_features:
                 X_to_pass_internally = X_np_input
-                print(f"DEBUG Wrapper predict_proba: Using provided 3D input shape {X_np_input.shape}.")
+                # print(f"DEBUG Wrapper predict_proba: Using provided 3D input shape {X_np_input.shape}.")
             else:
                 warnings.warn(f"Wrapper predict_proba: 3D input feature mismatch ({X_np_input.shape[-1]} vs {expected_features}). Returning neutral.", RuntimeWarning)
                 return np.full((n_samples_in, 2), 0.5)
@@ -224,27 +224,27 @@ class ModelWrapperForXAI:
                 if underlying_input_type == 'numpy':
                     # XGBoost (when trained on numpy) needs 3D for its internal predict_proba pathway
                     X_to_pass_internally = X_np_input[:, np.newaxis, :] # Reshape to (samples, 1, features)
-                    print(f"DEBUG Wrapper predict_proba: Reshaped 2D input ({X_np_input.shape}) to 3D ({X_to_pass_internally.shape}) for numpy-based model.")
+                    #print(f"DEBUG Wrapper predict_proba: Reshaped 2D input ({X_np_input.shape}) to 3D ({X_to_pass_internally.shape}) for numpy-based model.")
                 else: # Assume 'dataframe' underlying type (like DecisionTree)
                     # Decision Tree (when trained on dataframe) needs 2D for its XAI predict_proba
                     X_to_pass_internally = X_np_input
-                    print(f"DEBUG Wrapper predict_proba: Passing 2D input ({X_np_input.shape}) as is for dataframe-based model.")
+                    #print(f"DEBUG Wrapper predict_proba: Passing 2D input ({X_np_input.shape}) as is for dataframe-based model.")
             else:
                 warnings.warn(f"Wrapper predict_proba: 2D input feature mismatch ({X_np_input.shape[1]} vs {expected_features}). Returning neutral.", RuntimeWarning)
                 return np.full((n_samples_in, 2), 0.5)
 
         elif X_np_input.ndim == 1:
-             # Input is 1D (single sample). Shape depends on underlying model.
+            # Input is 1D (single sample). Shape depends on underlying model.
             if len(X_np_input) == expected_features:
                 if underlying_input_type == 'numpy':
                     X_to_pass_internally = X_np_input.reshape(1, 1, -1) # (1, 1, features)
-                    print(f"DEBUG Wrapper predict_proba: Reshaped 1D input ({X_np_input.shape}) to 3D ({X_to_pass_internally.shape}) for numpy-based model.")
+                    #print(f"DEBUG Wrapper predict_proba: Reshaped 1D input ({X_np_input.shape}) to 3D ({X_to_pass_internally.shape}) for numpy-based model.")
                 else: # Assume 'dataframe'
                     X_to_pass_internally = X_np_input.reshape(1, -1) # (1, features)
-                    print(f"DEBUG Wrapper predict_proba: Reshaped 1D input ({X_np_input.shape}) to 2D ({X_to_pass_internally.shape}) for dataframe-based model.")
+                    #print(f"DEBUG Wrapper predict_proba: Reshaped 1D input ({X_np_input.shape}) to 2D ({X_to_pass_internally.shape}) for dataframe-based model.")
             else:
-                 warnings.warn(f"Wrapper predict_proba: 1D input feature mismatch ({len(X_np_input)} vs {expected_features}). Returning neutral.", RuntimeWarning)
-                 return np.full((n_samples_in, 2), 0.5)
+                warnings.warn(f"Wrapper predict_proba: 1D input feature mismatch ({len(X_np_input)} vs {expected_features}). Returning neutral.", RuntimeWarning)
+                return np.full((n_samples_in, 2), 0.5)
         else:
             # Handle other unexpected dimensions
             warnings.warn(f"Wrapper predict_proba received unexpected input shape {X_np_input.shape}. Expected 1D, 2D or 3D. Returning neutral probabilities.", RuntimeWarning)
@@ -252,17 +252,17 @@ class ModelWrapperForXAI:
 
         # Ensure X_to_pass_internally is assigned
         if X_to_pass_internally is None:
-             warnings.warn("Wrapper predict_proba: Failed to process input shape. Returning neutral probabilities.", RuntimeWarning)
-             return np.full((n_samples_in, 2), 0.5)
+            warnings.warn("Wrapper predict_proba: Failed to process input shape. Returning neutral probabilities.", RuntimeWarning)
+            return np.full((n_samples_in, 2), 0.5)
 
         # ----------------------------------------------------------------------
         # Call Internal Model's predict_proba
         # ----------------------------------------------------------------------
-        print(f"DEBUG Wrapper predict_proba: Calling internal 'predict_proba' with processed shape {X_to_pass_internally.shape}")
+        # print(f"DEBUG Wrapper predict_proba: Calling internal 'predict_proba' with processed shape {X_to_pass_internally.shape}")
         try:
             # Assuming the internal method now returns shape (n_samples, 2) -> [P(normal), P(anomaly)]
             internal_probabilities = self._call_internal_method(X_to_pass_internally, 'predict_proba')
-            print(f"DEBUG Wrapper predict_proba: Internal 'predict_proba' returned shape {internal_probabilities.shape}")
+            #print(f"DEBUG Wrapper predict_proba: Internal 'predict_proba' returned shape {internal_probabilities.shape}")
         except Exception as e:
             warnings.warn(f"Wrapper predict_proba: Error calling internal 'predict_proba': {e}. Returning neutral probabilities.", RuntimeWarning)
             # Use n_samples_in here as internal call failed before producing output
@@ -307,7 +307,7 @@ class ModelWrapperForXAI:
         # Process only valid (non-NaN/Inf) rows
         valid_row_mask = ~invalid_row_mask
         if np.any(valid_row_mask):
-            print(f"DEBUG Wrapper predict_proba: Assigning {np.sum(valid_row_mask)} valid probability rows directly.")
+            #print(f"DEBUG Wrapper predict_proba: Assigning {np.sum(valid_row_mask)} valid probability rows directly.")
 
             # --- THIS IS THE KEY CHANGE ---
             # Directly assign the valid probabilities from the internal result
@@ -331,10 +331,10 @@ class ModelWrapperForXAI:
             if not np.allclose(final_sums, 1.0, atol=1e-6):
                 warnings.warn("Wrapper predict_proba: Final probabilities do not sum close to 1 for some valid rows after processing. Check calculations.", RuntimeWarning)
 
-        print(f"DEBUG Wrapper predict_proba: Returning final probabilities shape: {probabilities.shape}")
+        #print(f"DEBUG Wrapper predict_proba: Returning final probabilities shape: {probabilities.shape}")
         # Print min/max/mean of final P(anomaly) column
-        if probabilities.size > 0:
-            print(f"DEBUG Wrapper predict_proba: Final P(anomaly) stats: min={np.min(probabilities[:, 1]):.4f}, max={np.max(probabilities[:, 1]):.4f}, mean={np.mean(probabilities[:, 1]):.4f}")
+        #if probabilities.size > 0:
+            #print(f"DEBUG Wrapper predict_proba: Final P(anomaly) stats: min={np.min(probabilities[:, 1]):.4f}, max={np.max(probabilities[:, 1]):.4f}, mean={np.mean(probabilities[:, 1]):.4f}")
 
         # Ensure return shape matches n_samples_in
         if probabilities.shape[0] != n_samples_in:

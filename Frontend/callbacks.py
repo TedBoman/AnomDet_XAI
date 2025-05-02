@@ -367,11 +367,11 @@ def get_index_callbacks(app):
                 html.Div([
                     html.Label("Learning Rate (learning_rate):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
                         dcc.Input(id={**setting_id_base, 'param': 'learning_rate'},
-                                  type="number",
-                                  value=0.1,
-                                  min=0.0,  # Changed min to 0.0
-                                  step=0.01,
-                                  )
+                                type="number",
+                                value=0.1,
+                                min=0.0,  # Changed min to 0.0
+                                step=0.01,
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 html.Div([
                     html.Label("Max Depth (max_depth):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
@@ -452,6 +452,12 @@ def get_index_callbacks(app):
                                     options=[{'label': m, 'value': m} for m in ['isotonic', 'sigmoid']],
                                     value='isotonic', clearable=False, # Default isotonic from backend
                                     style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+                html.Div([
+                    html.Label("Number of jobs (-1 for all available):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'n_jobs'},
+                                type="number", value=-1, min=-1, step=1, # Default -1 (all threads)
+                                )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 # Note: scale_pos_weight is handled automatically in the backend XGBoostModel run method based on labels
                 # Note: objective and eval_metric are fixed in the backend XGBoostModel __init__ for now ('binary:logistic', 'logloss')
@@ -901,11 +907,11 @@ def get_index_callbacks(app):
                 method_settings.extend([
                     html.Div([
                         html.Label("Indices to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                        dcc.Input(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'n_explain_max'}, type="number", value=100, min=10, step=1, style={'width':'80px'})
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'n_explain_max'}, type="number", value=1000, min=100, step=100, style={'width':'80px'})
                     ], style={'marginBottom':'8px'}),
                     html.Div([
                         html.Label("Num Samples (nsamples):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                        dcc.Input(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'nsamples'}, type="number", value=100, min=10, step=1, style={'width':'80px'})
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'nsamples'}, type="number", value=50, min=10, step=10, style={'width':'80px'})
                     ], style={'marginBottom':'8px'}),
                     html.Div([
                         html.Label("K for Background Summary (k_summary):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),

@@ -2,14 +2,16 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.calibration import CalibratedClassifierCV
-from ML_models import model_interface 
+from sklearn.model_selection import train_test_split # Added for validation split
+from ML_models import model_interface # Assuming this interface exists
 from typing import List, Dict, Optional, Tuple, Union
 import warnings
 
 class XGBoostModel(model_interface.ModelInterface):
     """
     Supervised XGBoost classification model for anomaly detection using labeled data.
+
+    Trains a base XGBClassifier directly, without probability calibration.
 
     Handles input as:
     1.  Pandas DataFrame: Converts features directly to a 2D NumPy array.
@@ -22,7 +24,7 @@ class XGBoostModel(model_interface.ModelInterface):
 
     Trains an XGBClassifier to predict the anomaly label.
     Handles class imbalance using 'scale_pos_weight'.
-    Provides compatibility with SHAP/LIME via the `predict_proba_xai` method,
+    Provides compatibility with SHAP/LIME via the `predict_proba` method,
     which handles preprocessing internally based on the training input type.
     """
 
@@ -41,36 +43,55 @@ class XGBoostModel(model_interface.ModelInterface):
             scale_pos_weight (float): Controls balance of positive/negative weights (calculated in run).
             ... other XGBClassifier parameters ...
         """
-        self.model: Optional[CalibratedClassifierCV] = None # Stores the calibrated model
+        # --- CHANGE: Model type is now XGBClassifier ---
+        self.model: Optional[xgb.XGBClassifier] = None # Stores the BASE XGBoost model
         self.scaler: Optional[MinMaxScaler] = None
         self.input_type: Optional[str] = None
         self.processed_feature_names: Optional[List[str]] = None
         self.sequence_length: Optional[int] = None
         self.n_original_features: Optional[int] = None
         self.label_col: Optional[str] = None
+        self.best_score: Optional[float] = None # Store best validation score
+        self.best_iteration: Optional[int] = None # Store best iteration
 
         # --- Store configuration from kwargs ---
+        self.random_state = kwargs.get('random_state', 42)
+        self.validation_set_size = kwargs.get('validation_set_size', 0.15) # Default 15%
+        if not 0 < self.validation_set_size < 1:
+            raise ValueError("validation_set_size must be between 0 and 1.")
+
         # Base XGBoost parameters (excluding scale_pos_weight, calculated later)
         self.model_params = {
-            'n_estimators': kwargs.get('n_estimators', 100), # Default changed
+            'n_estimators': kwargs.get('n_estimators', 100),
             'learning_rate': kwargs.get('learning_rate', 0.1),
             'max_depth': kwargs.get('max_depth', 6),
             'objective': kwargs.get('objective', 'binary:logistic'),
-            'eval_metric': kwargs.get('eval_metric', 'logloss'),
-            'random_state': kwargs.get('random_state', 42),
+            'eval_metric': kwargs.get('eval_metric', 'logloss'), # Important for early stopping
+            'random_state': self.random_state,
             'n_jobs': kwargs.get('n_jobs', -1)
             # Add other relevant base params here if needed
         }
         # Add any other valid kwargs intended for XGBClassifier
         allowed_xgb_params = set(xgb.XGBClassifier().get_params().keys())
-        extra_xgb_params = {k: v for k, v in kwargs.items() if k in allowed_xgb_params and k not in self.model_params and k != 'scale_pos_weight'}
+        # print(allowed_xgb_params) # Optional: print if needed for debugging
+        # Exclude params managed separately
+        managed_params = {'scale_pos_weight', 'early_stopping_rounds'}
+        extra_xgb_params = {
+            k: v for k, v in kwargs.items()
+            if k in allowed_xgb_params
+            and k not in self.model_params
+            and k not in managed_params
+        }
         self.model_params.update(extra_xgb_params)
 
-        # Store calibration method if provided, default to isotonic
-        self.calibration_method = kwargs.get('calibration_method', 'isotonic') # 'isotonic' or 'sigmoid'
+        # Store early stopping and verbosity settings
+        self.early_stopping_rounds = kwargs.get('early_stopping_rounds', None) # Default off
+        self.verbose_eval = kwargs.get('verbose_eval', False) # Default quiet
 
-        print(f"XGBoostModel Initialized with base params: {self.model_params}, Calibration: {self.calibration_method}")
-        # Note: scale_pos_weight is calculated and added during run()
+
+        print(f"XGBoostModel Initialized with base params: {self.model_params}")
+        print(f"Validation split: {self.validation_set_size*100}%, Early Stopping Rounds: {self.early_stopping_rounds}")
+        print(f"Verbose Eval: {self.verbose_eval}") # Updated print
 
     def _prepare_data_for_model(
         self, X: Union[pd.DataFrame, np.ndarray],
@@ -122,7 +143,7 @@ class XGBoostModel(model_interface.ModelInterface):
 
             else: # Detection for DataFrame (convert to 2D NumPy)
                 if self.scaler is None or self.processed_feature_names is None or self.n_original_features is None:
-                     raise RuntimeError("Model (trained on DataFrame) not ready.")
+                    raise RuntimeError("Model (trained on DataFrame) not ready.")
                 missing_cols = set(self.processed_feature_names) - set(X.columns)
                 if missing_cols: raise ValueError(f"Missing required columns: {missing_cols}")
 
@@ -138,7 +159,6 @@ class XGBoostModel(model_interface.ModelInterface):
                 return X_processed_scaled, None, self.processed_feature_names # No labels
 
         elif isinstance(X, np.ndarray):
-            # --- MODIFICATION STARTS HERE ---
             # Handle both 3D and 2D NumPy input, especially for inference
             print(f"DEBUG _prepare_data: Processing NumPy input shape {X.shape}")
 
@@ -150,14 +170,14 @@ class XGBoostModel(model_interface.ModelInterface):
                 n_samples_2d, n_feat_2d = temp_X.shape
                 # Check if feature count matches expected original features
                 if self.n_original_features is not None and n_feat_2d != self.n_original_features:
-                     raise ValueError(f"Inference 2D NumPy input has {n_feat_2d} features, expected {self.n_original_features}.")
+                    raise ValueError(f"Inference 2D NumPy input has {n_feat_2d} features, expected {self.n_original_features}.")
                 temp_X = temp_X[:, np.newaxis, :] # Reshape to (samples, 1, features)
                 print(f"DEBUG _prepare_data: Reshaped 2D NumPy input to 3D {temp_X.shape} for inference.")
 
             # Now proceed assuming temp_X is 3D (either originally or after reshape)
             if temp_X.ndim != 3:
-                 # This check should now primarily catch invalid initial shapes other than 2D during inference
-                 raise ValueError(f"NumPy X must be 3D (or 2D during inference), got {original_ndim}D initially.")
+                # This check should now primarily catch invalid initial shapes other than 2D during inference
+                raise ValueError(f"NumPy X must be 3D (or 2D during inference), got {original_ndim}D initially.")
 
             n_samples, seq_len, n_feat = temp_X.shape
 
@@ -188,8 +208,8 @@ class XGBoostModel(model_interface.ModelInterface):
                 n_flattened_features = seq_len * n_feat
                 self.processed_feature_names = [f"feature_{i}_step_{j}" for j in range(seq_len) for i in range(n_feat)]
                 if len(self.processed_feature_names) != n_flattened_features:
-                     warnings.warn("Feature name generation mismatch.")
-                     self.processed_feature_names = [f"flat_feature_{k}" for k in range(n_flattened_features)]
+                    warnings.warn("Feature name generation mismatch.")
+                    self.processed_feature_names = [f"flat_feature_{k}" for k in range(n_flattened_features)]
 
                 y_aligned = y
                 # Return 2D scaled data for XGBoost training
@@ -206,9 +226,9 @@ class XGBoostModel(model_interface.ModelInterface):
                 # For now, we allow seq_len=1 if input was 2D.
                 if self.input_type == 'numpy' and seq_len != self.sequence_length:
                     # Only strictly enforce seq_len if model was trained on numpy
-                     raise ValueError(f"Input seq len {seq_len} != train seq len {self.sequence_length} for NumPy-trained model.")
+                    raise ValueError(f"Input seq len {seq_len} != train seq len {self.sequence_length} for NumPy-trained model.")
                 if n_feat != self.n_original_features:
-                     raise ValueError(f"Input features {n_feat} != train features {self.n_original_features}.")
+                    raise ValueError(f"Input features {n_feat} != train features {self.n_original_features}.")
 
                 # Flatten 3D -> 2D for XGBoost prediction
                 X_flattened = temp_X.reshape(n_samples, seq_len * n_feat)
@@ -222,15 +242,15 @@ class XGBoostModel(model_interface.ModelInterface):
                 return X_processed_scaled, None, self.processed_feature_names # No labels
 
         else:
-             raise TypeError("Input 'X' must be pandas DataFrame or NumPy array.")
+            raise TypeError("Input 'X' must be pandas DataFrame or NumPy array.")
 
 
     def run(self, X: Union[pd.DataFrame, np.ndarray], y: Optional[np.ndarray] = None, label_col: str = 'label'):
         """
-        Trains the XGBoost classifier and applies calibration, using parameters set during __init__.
+        Trains the base XGBoost classifier with validation split (NO CALIBRATION).
 
         Args:
-            X: Input data (DataFrame or 3D NumPy).
+            X: Input data (DataFrame or 3D NumPy). The *entire* training dataset.
             y: Target labels (required if X is NumPy array).
             label_col: Name of the target label column (used if X is DataFrame).
         """
@@ -246,20 +266,55 @@ class XGBoostModel(model_interface.ModelInterface):
                 X, y=y, label_col=None, is_training=True
             )
         else:
-             raise TypeError("Input 'X' must be pandas DataFrame or 3D NumPy array.")
+            raise TypeError("Input 'X' must be pandas DataFrame or 3D NumPy array.")
 
-        if X_processed_scaled.shape[0] == 0:
-             warnings.warn("No data for training after preprocessing.", RuntimeWarning)
-             self.model = None
-             return
+        if X_processed_scaled.shape[0] == 0 or y_aligned is None:
+            warnings.warn("No data or labels available for training after preprocessing.", RuntimeWarning)
+            self.model = None
+            return
 
-        # Handle Class Imbalance
-        n_neg = np.sum(y_aligned == 0); n_pos = np.sum(y_aligned == 1)
+        if X_processed_scaled.shape[0] < 10: # Arbitrary small number
+            warnings.warn(f"Very small dataset ({X_processed_scaled.shape[0]} samples), validation split might be ineffective.", RuntimeWarning)
+            # Decide if you want to proceed without validation or raise error
+            # For now, we proceed but validation might be empty or tiny
+
+        # --- Step 0: Split data into Training and Validation Sets ---
+        # Stratify ensures proportion of labels is maintained in train/val splits
+        # Validation set is primarily used for early stopping now.
+        try:
+            X_train, X_val, y_train, y_val = train_test_split(
+                X_processed_scaled,
+                y_aligned,
+                test_size=self.validation_set_size,
+                random_state=self.random_state,
+                stratify=y_aligned # Important for imbalanced datasets
+            )
+            print(f"Data split: Train shape={X_train.shape}, Validation shape={X_val.shape}")
+            if X_val.shape[0] == 0:
+                warnings.warn("Validation set is empty after split. Disabling early stopping.", RuntimeWarning)
+                effective_early_stopping_rounds = None
+                eval_set = None
+                # We no longer need X_val/y_val for calibration, so we don't need to reassign them here
+            else:
+                effective_early_stopping_rounds = self.early_stopping_rounds
+                eval_set = [(X_val, y_val)] # XGBoost expects a list of tuples
+
+        except ValueError as e:
+            warnings.warn(f"Could not stratify split (maybe only one class present?): {e}. Training without validation set for early stopping.", RuntimeWarning)
+            # Fallback: Train on all data, no early stopping
+            X_train, y_train = X_processed_scaled, y_aligned
+            # X_val, y_val are not needed anymore here
+            effective_early_stopping_rounds = None
+            eval_set = None
+
+
+        # Handle Class Imbalance (using the new TRAINING split labels)
+        n_neg_train = np.sum(y_train == 0); n_pos_train = np.sum(y_train == 1)
         scale_pos_weight = 1.0 # Default to float
-        if n_pos == 0: warnings.warn("No positive samples (label=1) found in training data.", RuntimeWarning)
-        elif n_neg == 0: warnings.warn("No negative samples (label=0) found in training data.", RuntimeWarning)
-        else: scale_pos_weight = float(n_neg) / float(n_pos) # Ensure float division
-        print(f"Calculated scale_pos_weight: {scale_pos_weight:.4f}")
+        if n_pos_train == 0: warnings.warn("No positive samples (label=1) found in the TRAINING split.", RuntimeWarning)
+        elif n_neg_train == 0: warnings.warn("No negative samples (label=0) found in the TRAINING split.", RuntimeWarning)
+        else: scale_pos_weight = float(n_neg_train) / float(n_pos_train) # Ensure float division
+        print(f"Calculated scale_pos_weight based on TRAINING split: {scale_pos_weight:.4f}")
 
         # --- Use base parameters stored during __init__ and add scale_pos_weight ---
         current_model_params = self.model_params.copy()
@@ -267,47 +322,59 @@ class XGBoostModel(model_interface.ModelInterface):
         # Add max_delta_step if needed for stability with imbalance
         current_model_params.setdefault('max_delta_step', 1)
 
-        # --- Step 1: Train the Base XGBoost Classifier ---
-        print(f"Training BASE XGBClassifier with {X_processed_scaled.shape[0]} samples, {X_processed_scaled.shape[1]} features...")
+        # --- Step 1: Train the Base XGBoost Classifier with Validation (for early stopping) ---
+        print(f"Training BASE XGBClassifier with {X_train.shape[0]} train samples, using {X_val.shape[0] if X_val is not None else 0} validation samples for potential early stopping...")
         print(f"Using effective XGBoost parameters: {current_model_params}")
+        print(f"Early stopping rounds: {effective_early_stopping_rounds}, Verbose: {self.verbose_eval}")
+
         base_xgb_model = xgb.XGBClassifier(**current_model_params)
 
+        fit_params = {}
+        if eval_set and effective_early_stopping_rounds is not None and effective_early_stopping_rounds > 0:
+            fit_params['early_stopping_rounds'] = effective_early_stopping_rounds
+            fit_params['eval_set'] = eval_set
+            fit_params['verbose'] = self.verbose_eval
+        elif self.verbose_eval and eval_set: # If verbose is True but no early stopping, still show eval if possible
+            fit_params['eval_set'] = eval_set
+            fit_params['verbose'] = self.verbose_eval
+
+
         try:
-            base_xgb_model.fit(X_processed_scaled, y_aligned)
+            # Fit using the TRAINING split, validate on the VALIDATION split (if available)
+            base_xgb_model.fit(X_train, y_train, **fit_params)
+
+            # Store best score and iteration if early stopping was used
+            if 'early_stopping_rounds' in fit_params and eval_set: # Check eval_set as well
+                # XGBoost >= 1.6 stores results directly
+                if hasattr(base_xgb_model, 'best_score') and hasattr(base_xgb_model, 'best_iteration'):
+                    self.best_score = base_xgb_model.best_score
+                    self.best_iteration = base_xgb_model.best_iteration
+                    print(f"Early stopping triggered. Best iteration: {self.best_iteration}, Best score ({base_xgb_model.eval_metric}): {self.best_score:.4f}")
+                else: # Older versions might require accessing results differently, TBD if needed
+                    print("Early stopping was enabled, but couldn't retrieve best_score/best_iteration (check XGBoost version compatibility if needed).")
+
         except Exception as e:
-             raise RuntimeError(f"Base XGBoost fitting failed: {e}") from e
+            raise RuntimeError(f"Base XGBoost fitting failed: {e}") from e
         print("Base model training complete.")
 
-        # Optional: Print base model probability stats for debugging
-        try:
-            base_probs = base_xgb_model.predict_proba(X_processed_scaled)
-            if base_probs.shape[1] > 1:
-                print(f"DEBUG: Base P(anomaly) stats: min={np.min(base_probs[:, 1]):.4f}, max={np.max(base_probs[:, 1]):.4f}, mean={np.mean(base_probs[:, 1]):.4f}")
-        except Exception as prob_e: print(f"Debug predict_proba failed: {prob_e}")
+        # Optional: Print base model probability stats on VALIDATION set for debugging
+        if eval_set: # Check if validation set exists
+            try:
+                base_probs_val = base_xgb_model.predict_proba(X_val)
+                if base_probs_val.shape[1] > 1:
+                    print(f"DEBUG: Base (Uncalibrated) P(anomaly) on VAL set stats: min={np.min(base_probs_val[:, 1]):.4f}, max={np.max(base_probs_val[:, 1]):.4f}, mean={np.mean(base_probs_val[:, 1]):.4f}")
+            except Exception as prob_e: print(f"Debug predict_proba on validation set failed: {prob_e}")
 
-        # --- Step 2: Apply Probability Calibration ---
-        calibration_method = self.calibration_method # Use stored method
-        print(f"Applying probability calibration (method='{calibration_method}')...")
-        calibrated_model = CalibratedClassifierCV(
-            estimator=base_xgb_model,
-            method=calibration_method,
-            cv='prefit' # Base estimator is already fitted
-        )
+        # --- Step 3 (Now Step 2): Store the BASE XGBoost Model ---
+        self.model = base_xgb_model # Store the base model directly
+        print(f"Stored BASE XGBoost model of type: {type(self.model)}")
 
-        try:
-            calibrated_model.fit(X_processed_scaled, y_aligned)
-        except Exception as e:
-             raise RuntimeError(f"Probability calibration fitting failed: {e}") from e
-        print("Calibration complete.")
-
-        # --- Step 3: Store the CALIBRATED Model ---
-        self.model = calibrated_model
-        print(f"Stored calibrated model of type: {type(self.model)}")
 
     def detect(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """ Detects anomalies (predicts class 1). """
+        # --- This method remains largely the same, now uses the base model ---
         if self.model is None or self.scaler is None or self.input_type is None or self.processed_feature_names is None:
-             raise RuntimeError("Model is not trained or ready.")
+            raise RuntimeError("Model is not trained or ready.")
 
         n_input_samples = len(detection_data) if isinstance(detection_data, pd.DataFrame) else detection_data.shape[0]
         if n_input_samples == 0: return np.array([], dtype=bool)
@@ -320,7 +387,7 @@ class XGBoostModel(model_interface.ModelInterface):
         if X_processed_scaled.shape[0] == 0:
             return np.zeros(n_input_samples, dtype=bool) # Return all False
 
-        # Prediction
+        # Prediction using the base XGBoost model's predict method
         try:
             predictions = self.model.predict(X_processed_scaled)
         except Exception as e:
@@ -329,18 +396,19 @@ class XGBoostModel(model_interface.ModelInterface):
 
         # Result directly corresponds to input order
         if len(anomalies) != n_input_samples:
-             warnings.warn(f"Output detection length ({len(anomalies)}) mismatch vs input ({n_input_samples}).", RuntimeWarning)
-             # Pad with False if shorter?
-             final_anomalies = np.zeros(n_input_samples, dtype=bool)
-             len_to_copy = min(len(anomalies), n_input_samples)
-             final_anomalies[:len_to_copy] = anomalies[:len_to_copy]
-             return final_anomalies
+            warnings.warn(f"Output detection length ({len(anomalies)}) mismatch vs input ({n_input_samples}).", RuntimeWarning)
+            # Pad with False if shorter?
+            final_anomalies = np.zeros(n_input_samples, dtype=bool)
+            len_to_copy = min(len(anomalies), n_input_samples)
+            final_anomalies[:len_to_copy] = anomalies[:len_to_copy]
+            return final_anomalies
 
         return anomalies
-    
+
     def predict_proba(self, X_input: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """
-        Predicts class probabilities for the input data using the calibrated model.
+        Predicts class probabilities for the input data using the BASE XGBoost model.
+        NOTE: These probabilities are NOT calibrated.
 
         Handles DataFrame or 3D NumPy input consistent with training.
 
@@ -349,12 +417,13 @@ class XGBoostModel(model_interface.ModelInterface):
 
         Returns:
             np.ndarray: Array of shape (n_samples, 2) with probabilities for class 0 and class 1.
-                        Returns empty array shape (0, 2) if no data after processing.
+                      Returns empty array shape (0, 2) if no data after processing.
         """
+        # --- This method remains largely the same, now uses the base model ---
         if self.model is None or self.scaler is None or self.input_type is None or self.processed_feature_names is None or self.n_original_features is None:
             raise RuntimeError("Model is not trained or ready for predict_proba.")
 
-        print(f"Predicting probabilities for input type: {type(X_input)}")
+        print(f"Predicting UNCALIBRATED probabilities for input type: {type(X_input)}")
         # Prepare data (returns 2D NumPy array suitable for the model)
         X_processed_scaled, _, _ = self._prepare_data_for_model(
             X_input, is_training=False, label_col=self.label_col
@@ -362,18 +431,18 @@ class XGBoostModel(model_interface.ModelInterface):
 
         # Handle case where preprocessing results in no data
         if X_processed_scaled.shape[0] == 0:
-             warnings.warn("No data to predict probabilities after preprocessing.", RuntimeWarning)
-             return np.empty((0, 2)) # Return shape (0, 2)
+            warnings.warn("No data to predict probabilities after preprocessing.", RuntimeWarning)
+            return np.empty((0, 2)) # Return shape (0, 2)
 
-        print(f"Input shape to calibrated model's predict_proba: {X_processed_scaled.shape}")
+        print(f"Input shape to base model's predict_proba: {X_processed_scaled.shape}")
         try:
-            # Use the predict_proba method of the CalibratedClassifierCV model
+            # Use the predict_proba method of the base XGBoost model
             probabilities = self.model.predict_proba(X_processed_scaled)
         except Exception as e:
             raise RuntimeError(f"Probability prediction failed: {e}") from e
 
         if probabilities.shape[1] != 2:
-             warnings.warn(f"Expected 2 columns in probability output, but got {probabilities.shape[1]}. Returning as is.", RuntimeWarning)
+            warnings.warn(f"Expected 2 columns in probability output, but got {probabilities.shape[1]}. Returning as is.", RuntimeWarning)
 
         print(f"Predicted probabilities shape: {probabilities.shape}")
         return probabilities

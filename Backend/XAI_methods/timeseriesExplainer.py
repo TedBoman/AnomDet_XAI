@@ -49,7 +49,6 @@ class TimeSeriesExplainer:
              print("Warning: Classification mode but model lacks 'predict_proba'. Some explainers might behave unexpectedly.")
 
         self._model = model
-        # Optional: Add validation for background_data shape/type
         self._background_data = background_data
         self._sequence_length = background_data.shape[1]
         self._n_features = background_data.shape[2]
@@ -122,6 +121,11 @@ class TimeSeriesExplainer:
             try:
                 # Call the external factory, passing all necessary context
                 # get_method should handle which params are needed for which method
+                
+                if method_name == 'ShapExplainer':
+                    explainer_params_for_factory.update({
+                        'shap_method': self.shap_method
+                    })
                 explainer_object = xai_factory(
                     method_name=method_key,
                     ml_model=self._model,

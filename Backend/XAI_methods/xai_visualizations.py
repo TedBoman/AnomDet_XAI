@@ -18,6 +18,7 @@ def process_and_plot_shap(
     results: Any,                       # Expect np.ndarray or list[np.ndarray] from ShapExplainer.explain
     explainer_object: Any,              # The specific ShapExplainer instance (to get expected_value)
     instances_explained: np.ndarray,    # 3D numpy array (n, seq, feat) that was explained
+    original_labels: Union[np.ndarray, pd.Series],
     feature_names: List[str],           # Base feature names (e.g., ['Temp', 'Pressure'])
     sequence_length: int,
     output_dir: str,
@@ -156,6 +157,7 @@ def process_and_plot_lime(
      results: Any,                       # Expect LIME Explanation object
      explainer_object: Any,              # The specific LimeExplainer instance
      instances_explained: np.ndarray,    # Should be shape (1, seq, feat) for LIME
+     original_labels: Union[np.ndarray, pd.Series],
      feature_names: List[str],           # Base feature names
      sequence_length: int,
      output_dir: str,

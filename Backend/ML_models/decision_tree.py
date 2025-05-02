@@ -3,38 +3,42 @@ import pandas as pd
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.impute import SimpleImputer 
+from sklearn.model_selection import train_test_split # Added for validation split
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score # Added for evaluation
 from ML_models import model_interface 
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 import warnings
 
-class DecisionTreeModel(model_interface.ModelInterface):
+class DecisionTreeModel(model_interface.ModelInterface): 
     """
-    Supervised Decision Tree classification model for anomaly detection using labeled data.
+    Supervised Decision Tree classification model for anomaly detection using labeled data,
+    with internal validation split for performance estimation.
 
     Handles input as:
     1.  Pandas DataFrame: Converts features directly to a 2D NumPy array. NO LAGGING.
     2.  3D NumPy array (X) and 1D NumPy array (y): Assumes X has shape
         (samples, sequence_length, features). Flattens the last two dimensions.
 
-    Includes internal scaling (MinMaxScaler) and imputation (SimpleImputer) 
-    to handle potential NaN values before feeding data to the Decision Tree.
-    
-    Trains a DecisionTreeClassifier to predict the anomaly label.
+    Includes internal scaling (MinMaxScaler) and imputation (SimpleImputer).
+    Trains a DecisionTreeClassifier on a subset of the training data and evaluates 
+    on a held-out validation subset.
     Handles class imbalance using the 'class_weight' parameter.
-    Provides compatibility with SHAP/LIME via the `predict_proba_xai` method.
     """
     
     def __init__(self, **kwargs):
         """Initializes the Decision Tree classifier model.
 
         Args:
-            criterion (str): Function to measure the quality of a split.
-            max_depth (int, optional): Maximum depth of the tree.
-            min_samples_split (int): Minimum number of samples required to split an internal node.
-            min_samples_leaf (int): Minimum number of samples required to be at a leaf node.
-            random_state (int): Controls the randomness of the estimator.
-            class_weight (dict, 'balanced', optional): Weights associated with classes.
-            imputer_strategy (str): Strategy for SimpleImputer ('mean', 'median', 'most_frequent', 'constant').
+            criterion (str): Function to measure the quality of a split (default: 'gini').
+            max_depth (int, optional): Maximum depth of the tree (default: None).
+            min_samples_split (int): Minimum samples to split node (default: 2).
+            min_samples_leaf (int): Minimum samples at leaf node (default: 1).
+            random_state (int): Controls randomness (default: 42).
+            class_weight (dict, 'balanced', optional): Class weights (default: 'balanced').
+            imputer_strategy (str): Strategy for SimpleImputer ('mean', 'median', etc., default: 'mean').
+            validation_set_size (float): Proportion of training data for validation (default: 0.15).
+            validation_metrics (list):  Metrics to compute on validation set 
+                                        (e.g., ['accuracy', 'f1', 'roc_auc'], default: ['accuracy', 'f1']).
             **kwargs: Additional parameters passed to DecisionTreeClassifier.
         """
         self.model: Optional[DecisionTreeClassifier] = None
@@ -45,38 +49,48 @@ class DecisionTreeModel(model_interface.ModelInterface):
         self.sequence_length: Optional[int] = None
         self.n_original_features: Optional[int] = None
         self.label_col: Optional[str] = None
+        
+        # --- Validation related attributes ---
+        self.validation_scores_: Dict[str, float] = {} # Stores validation metrics
+        self.validation_set_size = kwargs.get('validation_set_size', 0.15) # Default 15%
+        if not 0 < self.validation_set_size < 1:
+            raise ValueError("validation_set_size must be between 0 and 1.")
+        self.validation_metrics = kwargs.get('validation_metrics', ['accuracy', 'f1']) # Default metrics
 
         # --- Extract parameters from kwargs with defaults ---
-        # Core Decision Tree parameters
-        criterion = kwargs.get('criterion', 'gini')
-        max_depth = kwargs.get('max_depth', None) # Default changed to None
-        min_samples_split = kwargs.get('min_samples_split', 2)
-        min_samples_leaf = kwargs.get('min_samples_leaf', 1)
         random_state = kwargs.get('random_state', 42)
-        class_weight = kwargs.get('class_weight', 'balanced')
-
+        
+        # Core Decision Tree parameters
+        self.model_params = {
+            'criterion': kwargs.get('criterion', 'gini'),
+            'max_depth': kwargs.get('max_depth', None),
+            'min_samples_split': kwargs.get('min_samples_split', 2),
+            'min_samples_leaf': kwargs.get('min_samples_leaf', 1),
+            'class_weight': kwargs.get('class_weight', 'balanced'),
+            'random_state': random_state, # Use the stored random_state
+        }
         # Imputer strategy
         self._imputer_strategy = kwargs.get('imputer_strategy', 'mean')
 
-        # Store all parameters passed to the underlying model
-        self.model_params = {
-            'criterion': criterion,
-            'max_depth': max_depth,
-            'min_samples_split': min_samples_split,
-            'min_samples_leaf': min_samples_leaf,
-            'class_weight': class_weight,
-            'random_state': random_state,
-        }
-        # Add any other kwargs intended for DecisionTreeClassifier
+        # Add any other kwargs intended for DecisionTreeClassifier, excluding validation ones
         allowed_dt_params = set(DecisionTreeClassifier().get_params().keys())
-        extra_dt_params = {k: v for k, v in kwargs.items() if k in allowed_dt_params and k not in self.model_params}
+        excluded_params = {'validation_set_size', 'validation_metrics', 'imputer_strategy'}
+        extra_dt_params = {
+            k: v for k, v in kwargs.items() 
+            if k in allowed_dt_params 
+            and k not in self.model_params 
+            and k not in excluded_params
+        }
         self.model_params.update(extra_dt_params)
 
         if self.model_params.get('class_weight') is None:
             warnings.warn("class_weight was None, setting to 'balanced' by default.", UserWarning)
             self.model_params['class_weight'] = 'balanced'
 
-        print(f"DecisionTreeModel Initialized with params: {self.model_params}, Imputer Strategy: {self._imputer_strategy}")
+        print(f"DecisionTreeModel Initialized with params: {self.model_params}")
+        print(f"Imputer Strategy: {self._imputer_strategy}")
+        print(f"Validation split: {self.validation_set_size*100}%, Metrics: {self.validation_metrics}")
+
 
     def _prepare_data_for_model(
         self, X: Union[pd.DataFrame, np.ndarray],
@@ -85,13 +99,9 @@ class DecisionTreeModel(model_interface.ModelInterface):
         is_training: bool = True
     ) -> Tuple[np.ndarray, Optional[np.ndarray], List[str]]:
         """
-        Internal helper to preprocess data: reshape (if NumPy), scale, and impute NaNs.
-
-        Returns:
-        - X_processed_imputed: Processed, scaled, and imputed features (2D NumPy array).
-        - y_aligned: Aligned labels (1D NumPy array, only if y is provided & is_training).
-        - feature_names: List of feature names for the columns in X_processed_imputed.
+            Internal helper to preprocess data: reshape (if NumPy), scale, and impute NaNs.
         """
+        
         X_processed_scaled = None
         y_aligned = None
         current_feature_names = None
@@ -166,6 +176,9 @@ class DecisionTreeModel(model_interface.ModelInterface):
                 current_feature_names = self.processed_feature_names
 
             else: # Detection/Scoring for NumPy
+                if self.input_type != 'numpy' or self.scaler is None or self.imputer is None or self.processed_feature_names is None or self.n_original_features is None or self.sequence_length is None:
+                    raise RuntimeError("Model was not trained on NumPy or is not ready.")
+
                 if seq_len != self.sequence_length: raise ValueError(f"Input sequence length {seq_len} != train sequence length {self.sequence_length}.")
                 if n_feat != self.n_original_features: raise ValueError(f"Input feature count {n_feat} != train feature count {self.n_original_features}.")
 
@@ -196,65 +209,142 @@ class DecisionTreeModel(model_interface.ModelInterface):
             
         # Check for remaining NaNs after imputation (should ideally be zero)
         if np.isnan(X_processed_imputed).any():
-             warnings.warn("NaN values detected *after* imputation. Check input data or imputer strategy.", RuntimeWarning)
-             # Optionally, apply nan_to_num as a final fallback, though fixing the root cause is better
-             # X_processed_imputed = np.nan_to_num(X_processed_imputed, nan=0.0) 
+            warnings.warn("NaN values detected *after* imputation. Check input data or imputer strategy.", RuntimeWarning)
+            # Optionally, apply nan_to_num as a final fallback, though fixing the root cause is better
+            # X_processed_imputed = np.nan_to_num(X_processed_imputed, nan=0.0) 
 
         return X_processed_imputed, y_aligned, current_feature_names
 
 
     def run(self, X: Union[pd.DataFrame, np.ndarray], y: Optional[np.ndarray] = None, label_col: str = 'label'):
         """
-        Trains the Decision Tree classifier after preparing the data (scaling, imputation).
+        Prepares data, splits into train/validation, trains the Decision Tree 
+        classifier on the training split, and evaluates on the validation split.
 
         Args:
-            X: Input data (DataFrame or 3D NumPy).
+            X: Input data (DataFrame or 3D NumPy). The *entire* training dataset.
             y: Target labels (required if X is NumPy array). Ignored if X is DataFrame.
             label_col: Name of the target label column (used if X is DataFrame).
         """
-        # print(f"Running training for DecisionTreeModel (Input type: {'DataFrame' if isinstance(X, pd.DataFrame) else 'NumPy'})...")
+        print(f"Running training for DecisionTreeModel (Input type: {'DataFrame' if isinstance(X, pd.DataFrame) else 'NumPy'})...")
         
-        # Prepare data (scaling and imputation happens inside)
+        # --- Step 1: Prepare data (scaling and imputation happens inside) ---
         X_processed_imputed, y_aligned, _ = self._prepare_data_for_model(
             X, y=y, label_col=label_col, is_training=True
         )
 
-        if X_processed_imputed.shape[0] == 0:
-            warnings.warn("No data available for training after preprocessing.", RuntimeWarning)
+        if X_processed_imputed.shape[0] == 0 or y_aligned is None:
+            warnings.warn("No data or labels available for training after preprocessing.", RuntimeWarning)
             self.model = None
             return
+            
+        if X_processed_imputed.shape[0] < 10: # Arbitrary small number
+            warnings.warn(f"Very small dataset ({X_processed_imputed.shape[0]} samples), validation split might be ineffective.", RuntimeWarning)
+            # Decide if you want to proceed without validation or raise error
+            # For now, we proceed but validation might be empty or tiny
 
-        # Check labels after alignment
-        n_neg = np.sum(y_aligned == 0); n_pos = np.sum(y_aligned == 1)
-        if n_pos == 0: warnings.warn(f"No positive samples ({self.label_col or 'label'}=1) found in training data.", RuntimeWarning)
-        if n_neg == 0: warnings.warn(f"No negative samples ({self.label_col or 'label'}=0) found in training data.", RuntimeWarning)
+        # --- Step 2: Split data into Training and Validation Sets ---
+        X_train, X_val, y_train, y_val = None, None, None, None
+        try:
+            # Use random_state from model_params for reproducibility
+            current_random_state = self.model_params.get('random_state') 
+            
+            X_train, X_val, y_train, y_val = train_test_split(
+                X_processed_imputed,
+                y_aligned,
+                test_size=self.validation_set_size,
+                random_state=current_random_state, 
+                stratify=y_aligned # Important for imbalanced datasets
+            )
+            print(f"Data split: Train shape={X_train.shape}, Validation shape={X_val.shape}")
+            if X_val.shape[0] == 0:
+                warnings.warn("Validation set is empty after split. Training on full data, no validation scores.", RuntimeWarning)
+                # Fallback: Train on all data if validation set is empty
+                X_train, y_train = X_processed_imputed, y_aligned
+                X_val, y_val = None, None # No validation possible
+
+        except ValueError as e:
+            warnings.warn(f"Could not stratify split (maybe only one class present?): {e}. Training on full data, no validation scores.", RuntimeWarning)
+            # Fallback: Train on all data, no validation
+            X_train, y_train = X_processed_imputed, y_aligned
+            X_val, y_val = None, None # No validation possible
+
+
+        # Check labels in the *final* training split
+        n_neg_train = np.sum(y_train == 0); n_pos_train = np.sum(y_train == 1)
+        if n_pos_train == 0: warnings.warn(f"No positive samples ({self.label_col or 'label'}=1) found in the FINAL training split.", RuntimeWarning)
+        if n_neg_train == 0: warnings.warn(f"No negative samples ({self.label_col or 'label'}=0) found in the FINAL training split.", RuntimeWarning)
         
-        # Training the Classifier
-        # print(f"Training DecisionTreeClassifier with {X_processed_imputed.shape[0]} samples, {X_processed_imputed.shape[1]} features...")
-        # print(f"Using model parameters: {self.model_params}")
+        # --- Step 3: Training the Classifier on the Training Split ---
+        print(f"Training DecisionTreeClassifier with {X_train.shape[0]} samples, {X_train.shape[1]} features...")
+        print(f"Using model parameters: {self.model_params}")
+        
         self.model = DecisionTreeClassifier(**self.model_params)
 
         try:
-            self.model.fit(X_processed_imputed, y_aligned)
+            # Fit ONLY on the training part
+            self.model.fit(X_train, y_train)
         except Exception as e:
             raise RuntimeError(f"Decision Tree fitting failed: {e}") from e
             
-        # print("Model training complete.")
-        # if hasattr(self.model, 'classes_'): print(f"Model trained with classes: {self.model.classes_}")
+        print("Model training complete.")
+        if hasattr(self.model, 'classes_'): print(f"Model trained with classes: {self.model.classes_}")
+
+        # --- Step 4: Evaluate on the Validation Split (if available) ---
+        self.validation_scores_ = {} # Reset scores
+        if X_val is not None and y_val is not None and X_val.shape[0] > 0:
+            print(f"Evaluating model on validation set ({X_val.shape[0]} samples)...")
+            try:
+                y_pred_val = self.model.predict(X_val)
+                y_proba_val = self.model.predict_proba(X_val)
+
+                for metric_name in self.validation_metrics:
+                    score = np.nan # Default score if calculation fails
+                    try:
+                        if metric_name == 'accuracy':
+                            score = accuracy_score(y_val, y_pred_val)
+                        elif metric_name == 'f1':
+                            score = f1_score(y_val, y_pred_val, zero_division=0)
+                        elif metric_name == 'roc_auc':
+                            # Check if multiple classes exist in validation predictions for AUC
+                            if len(np.unique(y_pred_val)) > 1 and len(np.unique(y_val)) > 1: 
+                                # Ensure probabilities for positive class exist
+                                pos_class_idx = np.where(self.model.classes_ == 1)[0]
+                                if len(pos_class_idx) > 0:
+                                    score = roc_auc_score(y_val, y_proba_val[:, pos_class_idx[0]])
+                                else: # Should not happen if trained correctly, but handle defensively
+                                    warnings.warn("Positive class (1) not found in model.classes_ for ROC AUC calculation.", RuntimeWarning)
+                            else:
+                                warnings.warn(f"ROC AUC score is not defined for validation set (y_val unique: {np.unique(y_val)}, y_pred_val unique: {np.unique(y_pred_val)}).", RuntimeWarning)
+                                score = np.nan # AUC undefined for single class
+                        # Add other metrics here if needed (precision, recall, etc.)
+                        # elif metric_name == 'precision': 
+                        #     score = precision_score(y_val, y_pred_val, zero_division=0)
+                        # elif metric_name == 'recall':
+                        #     score = recall_score(y_val, y_pred_val, zero_division=0)
+                        else:
+                            warnings.warn(f"Unsupported validation metric '{metric_name}'. Skipping.", UserWarning)
+                            continue # Skip unsupported metric
+                            
+                        self.validation_scores_[metric_name] = score
+                        print(f"  Validation {metric_name}: {score:.4f}")
+                        
+                    except Exception as metric_e:
+                        print(f"  Failed to calculate validation metric '{metric_name}': {metric_e}")
+                        self.validation_scores_[metric_name] = np.nan # Store NaN on error
+                        
+            except Exception as eval_e:
+                print(f"Failed during validation set evaluation: {eval_e}")
+        else:
+            print("Skipping validation set evaluation (validation set not available or empty).")
 
 
     def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """
         Calculates anomaly scores (probability of class 1) for new data.
-        Handles scaling and imputation internally.
-
-        Args:
-            detection_data: Input data (DataFrame or 3D NumPy).
-
-        Returns:
-            np.ndarray: 1D float array of anomaly scores (probability of class 1), 
-                        matching input length. Contains NaN where prediction failed or for empty input.
+        (Code from original question - unchanged logic, relies on self.model trained on train split)
         """
+        # --- Existing get_anomaly_score code remains unchanged ---
         if self.model is None or self.scaler is None or self.imputer is None or self.input_type is None or self.processed_feature_names is None:
             raise RuntimeError("Model is not trained or ready for scoring.")
 
@@ -291,22 +381,22 @@ class DecisionTreeModel(model_interface.ModelInterface):
             else:
                 warnings.warn("Model classes_ attribute not found. Assuming class 1 is the second column for probabilities.", RuntimeWarning)
                 if probabilities.shape[1] < 2:
-                     raise RuntimeError("Cannot determine anomaly score: predict_proba returned fewer than 2 columns and classes_ attribute is missing.")
+                    raise RuntimeError("Cannot determine anomaly score: predict_proba returned fewer than 2 columns and classes_ attribute is missing.")
                 anomaly_scores = probabilities[:, 1] # Fallback assumption
 
             # Assign scores - length should match processed data length
             if len(anomaly_scores) == X_processed_imputed.shape[0]:
-                 # If processed length matches input length (usual case unless input was empty)
-                 if len(anomaly_scores) == n_input_samples:
-                     final_scores = anomaly_scores
-                 else: # Should only happen if X_processed_imputed became empty when n_input_samples > 0
-                      len_to_copy = min(len(anomaly_scores), n_input_samples) 
-                      final_scores[:len_to_copy] = anomaly_scores[:len_to_copy]
+                # If processed length matches input length (usual case unless input was empty)
+                if len(anomaly_scores) == n_input_samples:
+                    final_scores = anomaly_scores
+                else: # Should only happen if X_processed_imputed became empty when n_input_samples > 0
+                    len_to_copy = min(len(anomaly_scores), n_input_samples) 
+                    final_scores[:len_to_copy] = anomaly_scores[:len_to_copy]
             else:
-                 # This indicates an unexpected internal mismatch, pad just in case
-                 warnings.warn(f"Internal mismatch: Score length ({len(anomaly_scores)}) != processed data length ({X_processed_imputed.shape[0]}). Padding.", RuntimeWarning)
-                 len_to_copy = min(len(anomaly_scores), n_input_samples) 
-                 final_scores[:len_to_copy] = anomaly_scores[:len_to_copy]
+                # This indicates an unexpected internal mismatch, pad just in case
+                warnings.warn(f"Internal mismatch: Score length ({len(anomaly_scores)}) != processed data length ({X_processed_imputed.shape[0]}). Padding.", RuntimeWarning)
+                len_to_copy = min(len(anomaly_scores), n_input_samples) 
+                final_scores[:len_to_copy] = anomaly_scores[:len_to_copy]
 
         except Exception as e:
             warnings.warn(f"Anomaly score calculation failed: {e}. Returning NaNs for affected samples.", RuntimeWarning)
@@ -318,15 +408,10 @@ class DecisionTreeModel(model_interface.ModelInterface):
     def detect(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """
         Detects anomalies (predicts class 1) in new data.
-        Handles scaling and imputation internally.
-
-        Args:
-            detection_data: Input data (DataFrame or 3D NumPy).
-
-        Returns:
-            np.ndarray: 1D bool array indicating anomalies (True for class 1), 
-                        matching input length. False where prediction failed or for empty input.
+        (Code from original question - unchanged logic, relies on self.model trained on train split)
         """
+        # --- Existing detect code remains unchanged ---
+        # ... (keep the exact code from your original question here) ...
         if self.model is None or self.scaler is None or self.imputer is None or self.input_type is None or self.processed_feature_names is None:
             raise RuntimeError("Model is not trained or ready for detection.")
 
@@ -361,16 +446,13 @@ class DecisionTreeModel(model_interface.ModelInterface):
                     final_anomalies[:len_to_copy] = anomalies[:len_to_copy]
             else:
                 # This indicates an unexpected internal mismatch, pad just in case
-                 warnings.warn(f"Internal mismatch: Detection length ({len(anomalies)}) != processed data length ({X_processed_imputed.shape[0]}). Padding.", RuntimeWarning)
-                 len_to_copy = min(len(anomalies), n_input_samples) 
-                 final_anomalies[:len_to_copy] = anomalies[:len_to_copy]
-                 
+                warnings.warn(f"Internal mismatch: Detection length ({len(anomalies)}) != processed data length ({X_processed_imputed.shape[0]}). Padding.", RuntimeWarning)
+                len_to_copy = min(len(anomalies), n_input_samples) 
+                final_anomalies[:len_to_copy] = anomalies[:len_to_copy]
         except Exception as e:
             warnings.warn(f"Anomaly detection failed: {e}. Returning False for affected samples.", RuntimeWarning)
             # final_anomalies is already initialized with False
 
-        # num_anomalies = final_anomalies.sum()
-        # print(f"Detection complete. Found {num_anomalies} anomalies.")
         return final_anomalies
 
 
@@ -378,19 +460,12 @@ class DecisionTreeModel(model_interface.ModelInterface):
     def predict_proba(self, X_xai: np.ndarray) -> np.ndarray:
         """
         Prediction function for XAI methods (SHAP/LIME).
-        Accepts input in the *original* format expected during training and
-        performs internal scaling and imputation.
-
-        Args:
-            X_xai: Input data in the original format.
-                - If trained on DataFrame: MUST be 2D NumPy (n_instances, n_original_features).
-                - If trained on 3D NumPy: MUST be 3D NumPy (n_instances, seq_len, n_original_features).
-
-        Returns:
-            np.ndarray: Predicted probabilities with shape (n_instances, n_classes).
+        (Code from original question - unchanged logic, relies on self.model trained on train split)
         """
+        # --- Existing predict_proba code remains unchanged ---
+        # ... (keep the exact code from your original question here) ...
         if self.model is None or self.scaler is None or self.imputer is None or self.input_type is None \
-           or self.n_original_features is None:
+            or self.n_original_features is None:
             raise RuntimeError("Model is not trained or ready for XAI prediction.")
         
         if not isinstance(X_xai, np.ndarray):
@@ -417,7 +492,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
                 X_scaled = self.scaler.transform(X_xai)
                 
                 if not hasattr(self.imputer, 'statistics_') : # Check if imputer is fitted
-                     raise RuntimeError("Imputer has not been fitted.")
+                    raise RuntimeError("Imputer has not been fitted.")
                 X_imputed = self.imputer.transform(X_scaled)
 
             elif self.input_type == 'numpy':
@@ -436,7 +511,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
                 X_scaled = self.scaler.transform(X_reshaped)
 
                 if not hasattr(self.imputer, 'statistics_') : # Check if imputer is fitted
-                     raise RuntimeError("Imputer has not been fitted.")
+                    raise RuntimeError("Imputer has not been fitted.")
                 X_imputed = self.imputer.transform(X_scaled)
                 
             else:
@@ -448,8 +523,8 @@ class DecisionTreeModel(model_interface.ModelInterface):
             
             # Final check for NaNs before prediction in XAI context
             if np.isnan(X_imputed).any():
-                 warnings.warn("NaNs detected in XAI input *after* imputation. Check input or imputer.", RuntimeWarning)
-                 X_imputed = np.nan_to_num(X_imputed, nan=0.0) # Fallback for XAI
+                warnings.warn("NaNs detected in XAI input *after* imputation. Check input or imputer.", RuntimeWarning)
+                X_imputed = np.nan_to_num(X_imputed, nan=0.0) # Fallback for XAI
 
             probabilities = self.model.predict_proba(X_imputed)
 
@@ -458,3 +533,35 @@ class DecisionTreeModel(model_interface.ModelInterface):
             raise RuntimeError(f"XAI prediction failed during preprocessing or model prediction. Error: {e}") from e
 
         return probabilities
+
+    # --- Optional: Method to get validation scores ---
+    def get_validation_scores(self) -> Dict[str, float]:
+        """Returns the computed validation scores."""
+        if not self.validation_scores_:
+            print("Validation scores not available (model not run or validation failed).")
+        return self.validation_scores_
+        
+    # --- Optional: Method to get feature importances ---
+    def get_feature_importances(self) -> Optional[Dict[str, float]]:
+        """Returns feature importances from the trained decision tree."""
+        if self.model is None:
+            print("Model not trained yet.")
+            return None
+            
+        if not hasattr(self.model, 'feature_importances_'):
+            print("Model does not have feature_importances_ attribute.")
+            return None
+
+        if self.processed_feature_names is None:
+            print("Feature names not available.")
+            # Return importances without names
+            return {f"feature_{i}": imp for i, imp in enumerate(self.model.feature_importances_)}
+
+        importances = self.model.feature_importances_
+        if len(importances) != len(self.processed_feature_names):
+            warnings.warn("Mismatch between number of importances and feature names.")
+            # Try to return anyway, might be misaligned
+            max_len = min(len(importances), len(self.processed_feature_names))
+            return {self.processed_feature_names[i]: importances[i] for i in range(max_len)}
+            
+        return dict(zip(self.processed_feature_names, importances))

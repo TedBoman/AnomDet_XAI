@@ -63,7 +63,7 @@ class LSTMModel(model_interface.ModelInterface):
             df (pd.DataFrame): Input DataFrame containing features for training.
         """
         if not isinstance(df, pd.DataFrame):
-             raise TypeError("Input 'df' must be a pandas DataFrame.")
+            raise TypeError("Input 'df' must be a pandas DataFrame.")
 
         # --- Use parameters from self.config ---
         time_steps = self.config['time_steps']
@@ -79,22 +79,22 @@ class LSTMModel(model_interface.ModelInterface):
         # ---
 
         if time_steps <= 0:
-             raise ValueError("Configured 'time_steps' must be positive.")
+            raise ValueError("Configured 'time_steps' must be positive.")
         self.sequence_length = time_steps # Ensure instance variable is set
 
         print(f"Running LSTMModel training with time_steps={self.sequence_length}, epochs={epochs}, batch_size={batch_size}...")
 
         features = df.shape[1]
         if features == 0:
-             raise ValueError("Input DataFrame has no columns (features).")
+            raise ValueError("Input DataFrame has no columns (features).")
 
         # --- Define Keras Model using config ---
         inputs = Input(shape=(self.sequence_length, features))
         encoded = LSTM(units, activation=activation, return_sequences=False,
-                       dropout=dropout_rate, recurrent_dropout=rec_dropout_rate)(inputs) # Add params
+                    dropout=dropout_rate, recurrent_dropout=rec_dropout_rate)(inputs) # Add params
         decoded = RepeatVector(self.sequence_length)(encoded)
         decoded = LSTM(units, activation=activation, return_sequences=True,
-                       dropout=dropout_rate, recurrent_dropout=rec_dropout_rate)(decoded) # Add params
+                    dropout=dropout_rate, recurrent_dropout=rec_dropout_rate)(decoded) # Add params
         outputs = TimeDistributed(Dense(features))(decoded)
 
         autoencoder = Model(inputs, outputs)
@@ -123,7 +123,7 @@ class LSTMModel(model_interface.ModelInterface):
         print(f"Creating sequences with length {self.sequence_length}...")
         X = self.__create_sequences(data_normalized, self.sequence_length)
         if X.size == 0:
-             raise ValueError(f"Data is too short ({len(df)} rows) to create sequences of length {self.sequence_length}.")
+            raise ValueError(f"Data is too short ({len(df)} rows) to create sequences of length {self.sequence_length}.")
         print(f"Created {X.shape[0]} sequences with shape {X.shape[1:]}")
         # --- End Data Preprocessing ---
 
@@ -134,9 +134,9 @@ class LSTMModel(model_interface.ModelInterface):
         X_test_threshold = X[train_size:]
 
         if X_train.size == 0:
-             warnings.warn("Training split is empty, model cannot be trained.", RuntimeWarning)
-             self.threshold = np.inf
-             return
+            warnings.warn("Training split is empty, model cannot be trained.", RuntimeWarning)
+            self.threshold = np.inf
+            return
 
         print(f"Fitting model on {X_train.shape[0]} training sequences...")
         self.model.fit(
@@ -152,21 +152,21 @@ class LSTMModel(model_interface.ModelInterface):
 
         # --- Threshold Calculation ---
         if X_test_threshold.size > 0:
-             print(f"Calculating threshold on {X_test_threshold.shape[0]} test sequences...")
-             reconstructed = self.model.predict(X_test_threshold)
-             reconstruction_error = np.mean(np.square(X_test_threshold - reconstructed), axis=(1, 2))
-             self.threshold = np.percentile(reconstruction_error, 95)
-             print(f"Anomaly threshold set to: {self.threshold:.6f}")
+            print(f"Calculating threshold on {X_test_threshold.shape[0]} test sequences...")
+            reconstructed = self.model.predict(X_test_threshold)
+            reconstruction_error = np.mean(np.square(X_test_threshold - reconstructed), axis=(1, 2))
+            self.threshold = np.percentile(reconstruction_error, 95)
+            print(f"Anomaly threshold set to: {self.threshold:.6f}")
         else:
-             warnings.warn("Test split for threshold calculation is empty. Threshold may be unreliable.", RuntimeWarning)
-             if X_train.size > 0:
-                 reconstructed_train = self.model.predict(X_train)
-                 reconstruction_error_train = np.mean(np.square(X_train - reconstructed_train), axis=(1, 2))
-                 self.threshold = np.percentile(reconstruction_error_train, 95)
-                 print(f"Anomaly threshold set from training data: {self.threshold:.6f}")
-             else:
-                  self.threshold = np.inf
-                  print("Error: Cannot set threshold - no data available.")
+            warnings.warn("Test split for threshold calculation is empty. Threshold may be unreliable.", RuntimeWarning)
+            if X_train.size > 0:
+                reconstructed_train = self.model.predict(X_train)
+                reconstruction_error_train = np.mean(np.square(X_train - reconstructed_train), axis=(1, 2))
+                self.threshold = np.percentile(reconstruction_error_train, 95)
+                print(f"Anomaly threshold set from training data: {self.threshold:.6f}")
+            else:
+                self.threshold = np.inf
+                print("Error: Cannot set threshold - no data available.")
 
     def __create_sequences(self, data: np.ndarray, sequence_length: int) -> np.ndarray:
         """ Helper method to create 3D windowed sequences from 2D data. """
@@ -254,14 +254,14 @@ class LSTMModel(model_interface.ModelInterface):
 
         # Handle shape mismatch (optional, but good practice)
         if X.shape != reconstructed.shape:
-             warnings.warn(f"Shape mismatch input {X.shape} vs reconstruction {reconstructed.shape}.", RuntimeWarning)
-             min_samples = min(X.shape[0], reconstructed.shape[0])
-             if min_samples == 0: return np.array([])
-             # Calculate error only on matching samples
-             reconstruction_error = np.mean(np.square(X[:min_samples] - reconstructed[:min_samples]), axis=(1, 2))
+            warnings.warn(f"Shape mismatch input {X.shape} vs reconstruction {reconstructed.shape}.", RuntimeWarning)
+            min_samples = min(X.shape[0], reconstructed.shape[0])
+            if min_samples == 0: return np.array([])
+            # Calculate error only on matching samples
+            reconstruction_error = np.mean(np.square(X[:min_samples] - reconstructed[:min_samples]), axis=(1, 2))
         else:
             # Calculate reconstruction error (MSE per sequence)
-             reconstruction_error = np.mean(np.square(X - reconstructed), axis=(1, 2))
+            reconstruction_error = np.mean(np.square(X - reconstructed), axis=(1, 2))
 
         #print(f"Calculated {len(reconstruction_error)} scores.") # Optional print
         return reconstruction_error # Return 1D scores
@@ -273,10 +273,10 @@ class LSTMModel(model_interface.ModelInterface):
         Accepts DataFrame (features) or 3D NumPy (pre-windowed sequences).
 
         Returns:
-             np.ndarray: A 1D boolean array (True=Anomaly), shape (n_sequences,).
+            np.ndarray: A 1D boolean array (True=Anomaly), shape (n_sequences,).
         """
         if self.threshold is None:
-             raise RuntimeError("Threshold not set. Call run() first.")
+            raise RuntimeError("Threshold not set. Call run() first.")
 
         # Get the reconstruction error scores using the new method
         scores = self.get_anomaly_score(detection_data)
