@@ -456,7 +456,7 @@ def get_index_callbacks(app):
                 html.Div([
                     html.Label("Number of jobs (-1 for all available):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'n_jobs'},
-                                type="number", value=1, min=-1, step=1, # Default 1
+                                type="number", value=-1, min=-1, step=1, # Default -1 (all threads)
                                 )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                 # Note: scale_pos_weight is handled automatically in the backend XGBoostModel run method based on labels
