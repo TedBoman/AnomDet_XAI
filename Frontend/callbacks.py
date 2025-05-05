@@ -1149,7 +1149,7 @@ def get_index_callbacks(app):
             State("magnitude-input", "value"), State("percentage-input", "value"),
             State("duration-input", "value"), State("injection-column-dropdown", "value"),
             State("injection-check", "value"), State("speedup-input", "value"),
-            State("xai-sampling-strategy-dropdown", "value"), State("xai-num-samples-input", "value"),
+            State("xai-sampling-strategy-dropdown", "value"), State("xai-sample-seed", "value"),
             State("popup", "style"),
             State("labeled-check", "value"), State("label-column-dropdown", "value"),
             State("xai-check", "value"), State("xai-method-dropdown", "value"),
@@ -1164,7 +1164,7 @@ def get_index_callbacks(app):
             selected_dataset, selected_detection_model, selected_mode, job_name,
             selected_injection_method, timestamp, magnitude, percentage, duration,
             injection_columns, inj_check, speedup, 
-            xai_sampling_strategy, xai_num_samples, 
+            xai_sampling_strategy, xai_sample_seed,
             style,
             labeled_check_val, selected_label_col,
             # --- ARGS for pattern-matching states ---
@@ -1264,8 +1264,7 @@ def get_index_callbacks(app):
             print(f"DEBUG: Parsed all XAI settings: {all_parsed_settings}")
             
             xai_settings = {}
-            xai_settings.update({"xai_sampling_strategy":xai_sampling_strategy,
-                                 "xai_num_samples": xai_num_samples})
+            xai_settings.update({"xai_sampling_strategy":xai_sampling_strategy, "xai_sample_seed":xai_sample_seed})
             xai_params_list = []
             for method_name in active_methods:
                 if method_name in all_parsed_settings:

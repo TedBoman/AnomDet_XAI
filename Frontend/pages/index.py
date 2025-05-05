@@ -227,17 +227,17 @@ def layout(handler):
                                     # =========================================== #
 
                                     # ========================================= #
-                                    # ***      Number of Samples Input      *** #
+                                    # ***      Seed Input                   *** #
                                     # ========================================= #
                                     html.Div([
                                         html.Label("Number of Local Indicies (overwritten by XAI method settings):", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block", "marginTop": "10px"}),
                                         dcc.Input(
-                                            id="xai-num-samples-input",
+                                            id="xai-sample-seed",
                                             type="number",
                                             min=1,
                                             step=1,
                                             value=100, # Sensible default
-                                            placeholder="Enter number of samples",
+                                            placeholder="Enter seed for reproducability",
                                             # Use required=True maybe, or handle None in callback
                                             style={"width": "150px", "margin": "5px auto", "display": "block", "textAlign": "center"} 
                                         ),

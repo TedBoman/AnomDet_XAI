@@ -66,8 +66,8 @@ class XAIRunner:
         self.output_dir = output_dir
         
         self.xai_settings = xai_settings.get("xai_settings")
-        self.xai_num_samples = xai_settings.get("xai_num_samples", 10)
         self.xai_sampling_strategy = xai_settings.get("xai_sampling_strategy", "random")
+        self.xai_sample_seed = xai_settings.get("xai_sample_seed", None)
 
         os.makedirs(self.output_dir, exist_ok=True)
         print(f"XAIRunner initialized for job '{self.job_name}'. Output directory: '{self.output_dir}'")
@@ -266,13 +266,14 @@ class XAIRunner:
                     else:
                         # Use global strategy defined in __init__
                         current_strategy = settings.get('sampling_strategy', self.xai_sampling_strategy) # Allow override of strategy per method? No, use global.
-                        current_n_samples = settings.get('num_samples', self.xai_num_samples) # Allow override of N per method? No, use global N.
+                        current_n_samples = settings.get('n_explain_max', 10)
                         print(f"Using global sampling strategy '{self.xai_sampling_strategy}' with n={self.xai_num_samples}.")
                         selected_original_indices = ut.select_explanation_indices(
                             data_source_for_explanation, # Sample from the full source
-                            self.xai_sampling_strategy,
-                            self.xai_num_samples,
-                            label_col=self.actual_label_col
+                            current_strategy,
+                            current_n_samples,
+                            label_col=self.actual_label_col,
+                            random_state=self.xai_sample_seed
                         )
 
                     if len(selected_original_indices) == 0:

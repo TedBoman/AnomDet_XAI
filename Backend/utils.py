@@ -7,7 +7,8 @@ def select_explanation_indices(
     df: pd.DataFrame, 
     strategy: str, 
     n: int, 
-    label_col: Optional[str] = None
+    label_col: Optional[str] = None,
+    random_state: Optional[int] = None
 ) -> np.ndarray:
     """
     Selects indices from a DataFrame based on a specified sampling strategy.
@@ -44,6 +45,8 @@ def select_explanation_indices(
     n = min(n, n_total) 
     if n == 0: # Handle case where df might be empty
          return np.array([], dtype=int)
+     
+    rng = np.random.default_rng(random_state)
 
     # Use DataFrame's integer-based index for selection
     possible_indices = df.index.to_numpy() 
@@ -55,7 +58,7 @@ def select_explanation_indices(
         selected_indices = possible_indices[:n]
         
     elif strategy == 'random':
-        selected_indices = np.random.choice(possible_indices, size=n, replace=False)
+        selected_indices = rng.choice(possible_indices, size=n, replace=False)
         
     elif strategy in ['random_anomalies', 'first_n_anomalies', 'last_n_anomalies', 'half_n_half']:
         if label_col is None:
@@ -79,7 +82,7 @@ def select_explanation_indices(
             if n_to_select < n:
                 warnings.warn(f"Requested {n} anomalies, but only {n_anomalies_avail} available. Selecting {n_to_select}.")
             if n_anomalies_avail > 0:
-                selected_indices = np.random.choice(anomaly_indices, size=n_to_select, replace=False)
+                selected_indices = rng.choice(anomaly_indices, size=n_to_select, replace=False)
             else:
                  warnings.warn("No anomalies found in the dataset.")
 
@@ -105,15 +108,15 @@ def select_explanation_indices(
             if n_anom_select < n_anom_target:
                 warnings.warn(f"Requested {n_anom_target} anomalies for half-n-half, but only {n_anomalies_avail} available. Selecting {n_anom_select}.")
             if n_norm_select < n_norm_target:
-                 warnings.warn(f"Requested {n_norm_target} normals for half-n-half, but only {n_normals_avail} available. Selecting {n_norm_select}.")
+                warnings.warn(f"Requested {n_norm_target} normals for half-n-half, but only {n_normals_avail} available. Selecting {n_norm_select}.")
 
             anom_indices_selected = np.array([], dtype=int)
             norm_indices_selected = np.array([], dtype=int)
                  
             if n_anomalies_avail > 0 and n_anom_select > 0:
-                 anom_indices_selected = np.random.choice(anomaly_indices, size=n_anom_select, replace=False)
+                 anom_indices_selected = rng.choice(anomaly_indices, size=n_anom_select, replace=False)
             if n_normals_avail > 0 and n_norm_select > 0:
-                 norm_indices_selected = np.random.choice(normal_indices, size=n_norm_select, replace=False)
+                 norm_indices_selected = rng.choice(normal_indices, size=n_norm_select, replace=False)
                  
             selected_indices = np.concatenate((anom_indices_selected, norm_indices_selected))
             # Optional: Shuffle the combined indices if order doesn't matter
