@@ -1,349 +1,250 @@
+# AnomDet_XAI/Backend/ML_models/model_wrapper.py
 import traceback
 import pandas as pd
 import numpy as np
-from typing import Any, List, Union, Literal # Import Literal
+from typing import Any, List, Union, Literal
 import warnings
+
+# Added basic logging setup - REMOVE if you have global logging configured elsewhere
+import logging
+logging.basicConfig(level=logging.INFO) # Set basic level
+logger = logging.getLogger(__name__)
 
 class ModelWrapperForXAI:
     """
-    Wraps a model with 'detect' and 'predict_proba' methods to provide
-    '.predict()' and '.predict_proba()' interfaces for XAI tools (SHAP, LIME, DiCE).
-
-    Handles different input requirements (DataFrame vs NumPy) of internal model methods
-    and assumes the internal 'predict_proba' method returns a probability
-    of anomaly P(anomaly) between 0 and 1.
+    Wraps a model instance to provide standardized `.predict()` and `.predict_proba()`
+    interfaces for XAI tools (SHAP, LIME, DiCE).
     """
     def __init__(self,
-                actual_model_instance: Any,
-                feature_names: List[str],
-                # score_interpretation is kept for potential future use or info,
-                # but predict_proba now relies on predict_proba returning P(anomaly) directly.
-                score_interpretation: Literal['lower_is_anomaly', 'higher_is_anomaly'] = 'higher_is_anomaly'
-                ):
+                 actual_model_instance: Any,
+                 feature_names: List[str],
+                 score_interpretation: Literal['lower_is_anomaly', 'higher_is_anomaly'] = 'higher_is_anomaly'):
         """
         Args:
-            actual_model_instance:  Trained model instance with callable 'detect' & 'predict_proba'.
-                                    'predict_proba' MUST return P(anomaly) in [0, 1].
-            feature_names (List[str]): Feature names list corresponding to the last dim of input data.
-            score_interpretation (str): Informational about how the original score was interpreted
-                                        BEFORE being converted to P(anomaly) by predict_proba.
-                                        Set to 'lower_is_anomaly' (e.g., OCSVM) or
-                                        'higher_is_anomaly' (e.g., AE reconstruction error).
+            actual_model_instance: Trained model instance. Should have at least 'predict' or 'detect'.
+            feature_names (List[str]): Feature names list corresponding to the base features.
+            score_interpretation (str): How to interpret raw scores ('lower_is_anomaly' or 'higher_is_anomaly').
         """
         self._model = actual_model_instance
         self._feature_names = feature_names
         self._num_classes = 2 # Assuming binary classification (normal vs anomaly)
-        self._score_interpretation = score_interpretation # Store for information
+        self._score_interpretation = score_interpretation
 
-        # --- Checks ---
-        if not all(hasattr(self._model, meth) and callable(getattr(self._model, meth))
-                for meth in ['detect', 'predict_proba']):
-            raise AttributeError("Provided model must have callable 'detect' and 'predict_proba' methods.")
-        # Ensure predict_proba exists and is callable
+        # --- MODIFIED: Relaxed Checks ---
+        # Check for at least one primary prediction method
+        has_predict = hasattr(self._model, 'predict') and callable(getattr(self._model, 'predict'))
+        has_detect = hasattr(self._model, 'detect') and callable(getattr(self._model, 'detect'))
+        if not (has_predict or has_detect):
+             raise AttributeError(f"Provided model {type(self._model).__name__} must have a callable 'predict' or 'detect' method.")
+
+        # Warn if predict_proba is missing, as XAI often needs it
         if not hasattr(self._model, 'predict_proba') or not callable(getattr(self._model, 'predict_proba')):
-            raise AttributeError("The wrapped model MUST have a callable 'predict_proba' method that returns P(anomaly).")
+            warnings.warn(f"Wrapped model {type(self._model).__name__} may lack a callable 'predict_proba' method needed for some XAI techniques (e.g., SHAP with probability output).", RuntimeWarning)
 
-        if len(self._feature_names) == 0: raise ValueError("Feature names list cannot be empty.")
+        # Warn if score/decision functions are missing (useful for some models/XAI)
+        has_score_func = hasattr(self._model, 'decision_function') or hasattr(self._model, 'score_samples')
+        if not has_score_func and not hasattr(self._model, 'predict_proba'):
+             warnings.warn(f"Wrapped model {type(self._model).__name__} lacks predict_proba and score/decision functions. XAI might be limited.", RuntimeWarning)
+        # --- End Modified Checks ---
+
+
+        if not feature_names: raise ValueError("Feature names list cannot be empty.")
         if self._score_interpretation not in ['lower_is_anomaly', 'higher_is_anomaly']:
             raise ValueError("score_interpretation must be 'lower_is_anomaly' or 'higher_is_anomaly'")
         if not hasattr(self._model, 'sequence_length'):
-            warnings.warn("Wrapped model lacks 'sequence_length' attribute. Assuming sequence length of 1 if input is 2D.", RuntimeWarning)
-        # --- End Checks ---
+            warnings.warn(f"Wrapped model {type(self._model).__name__} lacks 'sequence_length' attribute. Input shape handling might rely on defaults.", RuntimeWarning)
 
-        print(f"ModelWrapperForXAI initialized for model type: {type(self._model).__name__}")
-        print(f"Underlying score interpretation (used by predict_proba): '{self._score_interpretation}'")
+
+        logger.info(f"ModelWrapperForXAI initialized for model type: {type(self._model).__name__}")
+        logger.info(f"Underlying score interpretation: '{self._score_interpretation}'")
+        # Removed redundant feature names print
+
+    # --- Keep the rest of your methods (@property, _call_internal_method, predict, predict_proba) ---
+    # --- Make sure the predict_proba method uses the version from my previous response ---
+    # --- that correctly handles the (N, 2) output shape ---
 
     @property
     def sequence_length(self):
         """Returns the sequence length from the underlying model, or None if not defined."""
-        return getattr(self._model, 'sequence_length', None)
+        # Default to 1 if not present, as many models are non-sequential
+        return getattr(self._model, 'sequence_length', 1)
 
     @property
     def model(self) -> Any:
-        """Provides access to the underlying model instance."""
+        """Provides access to the underlying model instance, attempting to get the core estimator."""
+        # Try common attributes for nested models
+        if hasattr(self._model, 'model') and self._model.model is not None:
+            return self._model.model
+        elif hasattr(self._model, 'base_estimator') and self._model.base_estimator is not None:
+            return self._model.base_estimator
+        # Otherwise, return the instance we were given
         return self._model
 
-    # --- Private helper to call internal model method ---
     def _call_internal_method(self, X_input_data: np.ndarray, internal_method_name: str) -> np.ndarray:
-        """
-        Calls the specified method on the wrapped model, ensuring input is NumPy
-        and returning NumPy array. Handles potential errors.
-
-        Args:
-            X_input_data (np.ndarray): The input data (should be 3D for sequence models).
-            internal_method_name (str): The name of the method to call ('detect' or 'predict_proba').
-
-        Returns:
-            np.ndarray: The results from the internal method as a NumPy array.
-        """
-        internal_method = getattr(self._model, internal_method_name)
-        # print(f"Wrapper: Calling internal '{internal_method_name}' with input shape {X_input_data.shape}...") # Debug print
-        try:
-            # Assuming internal methods now correctly handle the 3D NumPy input
-            results = internal_method(X_input_data)
-
-            # Ensure output is a NumPy array
-            if isinstance(results, (list, pd.Series)):
-                results_np = np.array(results)
-            elif isinstance(results, np.ndarray):
-                results_np = results
-            elif isinstance(results, (int, float, bool)): # Handle single value output
-                results_np = np.array([results])
-            else:
-                warnings.warn(f"Internal method '{internal_method_name}' returned unexpected type {type(results)}. Attempting conversion.", RuntimeWarning)
-                try:
-                    results_np = np.array(results)
-                except Exception as conv_err:
-                    # print(f"ERROR: Could not convert result of internal method '{internal_method_name}' to NumPy array: {conv_err}")
-                    raise TypeError(f"Internal method '{internal_method_name}' failed to return convertible type.") from conv_err
-
-            # print(f"Wrapper: Internal '{internal_method_name}' returned array shape {results_np.shape}") # Debug print
-            return results_np
-
-        except Exception as e:
-            print(f"ERROR in ModelWrapper calling internal model.{internal_method_name} with input shape {X_input_data.shape}: {e}")
-            traceback.print_exc() # Print full traceback
-            # Return array of NaNs matching expected output length (number of samples)
+        """Calls the specified method on the wrapped model, handling errors."""
+        if not hasattr(self._model, internal_method_name) or not callable(getattr(self._model, internal_method_name)):
+            logger.error(f"Internal model {type(self._model).__name__} lacks required method '{internal_method_name}'.")
             n_out = X_input_data.shape[0] if X_input_data.ndim >= 1 else 1
-            return np.full(n_out, np.nan)
+            n_cols = self._num_classes if internal_method_name == 'predict_proba' else 1
+            return np.full((n_out, n_cols), np.nan)
+
+        internal_method = getattr(self._model, internal_method_name)
+        logger.debug(f"Wrapper: Calling internal '{internal_method_name}' with input shape {X_input_data.shape}...")
+        try:
+            results = internal_method(X_input_data)
+            results_np = np.array(results) # Ensure NumPy output
+            logger.debug(f"Wrapper: Internal '{internal_method_name}' returned array shape {results_np.shape}")
+            return results_np
+        except Exception as e:
+            logger.error(f"ERROR in ModelWrapper calling internal model.{internal_method_name} with input shape {X_input_data.shape}: {e}")
+            traceback.print_exc()
+            n_out = X_input_data.shape[0] if X_input_data.ndim >= 1 else 1
+            n_cols = self._num_classes if internal_method_name == 'predict_proba' else 1
+            return np.full((n_out, n_cols), np.nan)
 
 
-    def predict(self, X_np_3d: np.ndarray) -> np.ndarray:
-        """
-        Provides the .predict() interface for XAI tools.
-        Calls the internal model's 'detect' method.
+    def predict(self, X_input: Union[np.ndarray, pd.DataFrame]) -> np.ndarray:
+        """Provides the .predict() interface (predicts class labels 0 or 1)."""
+        # Convert input to NumPy first
+        if isinstance(X_input, pd.DataFrame):
+            X_np_input = X_input.to_numpy()
+        elif isinstance(X_input, np.ndarray):
+            X_np_input = X_input
+        else:
+            raise TypeError(f"predict expects NumPy array or pandas DataFrame, got {type(X_input)}")
 
-        Args:
-            X_np_3d (np.ndarray): Input data, expected to be 3D (samples, seq_len, features).
+        if X_np_input.size == 0:
+            logger.warning("Predict called with empty array.")
+            return np.empty((0, 1), dtype=int)
 
-        Returns:
-            np.ndarray: Binary predictions (0 or 1), reshaped to (samples, 1).
-        """
-        if X_np_3d.ndim != 3:
-            warnings.warn(f"Wrapper 'predict' received input with {X_np_3d.ndim} dimensions. Expected 3D. Proceeding, but internal model might fail.", RuntimeWarning)
+        # Decide which method to call (prefer 'detect' if available)
+        method_to_call = 'detect' if hasattr(self._model, 'detect') and callable(getattr(self._model, 'detect')) else 'predict'
+        logger.debug(f"Calling internal method '{method_to_call}' for label prediction.")
 
-        # Call internal 'detect'
-        raw_predictions = self._call_internal_method(X_np_3d, 'detect')
+        raw_predictions = self._call_internal_method(X_np_input, method_to_call)
 
-        # --- Process raw predictions ---
-        # Ensure float type for potential NaN checks, default fill is int 0
-        results_np = np.array(raw_predictions, dtype=float)
+        # Post-process results to ensure (N, 1) integer output
+        results_np = np.array(raw_predictions, dtype=float) # Start as float for NaN checks
         nan_mask = np.isnan(results_np)
         if np.any(nan_mask):
-            warnings.warn(f"'detect' method returned NaNs. Filling with 0.", RuntimeWarning)
-            results_np[nan_mask] = 0 # Default non-anomaly prediction for NaNs
+            warnings.warn(f"'{method_to_call}' method returned NaNs. Filling with 0 (normal label).", RuntimeWarning)
+            results_np[nan_mask] = 0
 
-        # Convert boolean results to int (True->1, False->0) if necessary
-        # Check the type *after* handling NaNs
-        if pd.api.types.is_bool_dtype(results_np):
+        # Convert boolean to int if needed
+        if pd.api.types.is_bool_dtype(results_np.dtype):
             results_np = results_np.astype(int)
-        elif not pd.api.types.is_numeric_dtype(results_np):
-            warnings.warn(f"'detect' method returned non-numeric, non-boolean type {results_np.dtype} after NaN handling. Attempting conversion to int, might fail.", RuntimeWarning)
-            try:
-                results_np = results_np.astype(int)
-            except ValueError:
-                warnings.warn(f"Could not convert 'detect' results to int. Filling with 0.", RuntimeWarning)
-                results_np.fill(0) # Fallback if conversion fails
+        elif not pd.api.types.is_numeric_dtype(results_np.dtype):
+             try: results_np = results_np.astype(int)
+             except ValueError:
+                 warnings.warn(f"Could not convert '{method_to_call}' results to int. Filling with 0.", RuntimeWarning)
+                 results_np.fill(0)
 
-        # Ensure output is 2D (samples, 1)
-        if results_np.ndim == 1:
-            results_np = results_np[:, np.newaxis]
-        elif results_np.ndim == 0: # Handle scalar output
-            results_np = np.array([[results_np.item()]])
-        elif results_np.ndim > 2 or (results_np.ndim == 2 and results_np.shape[1] != 1):
-            warnings.warn(f"'detect' method returned unexpected shape {results_np.shape} after processing. Attempting to reshape/select first column.", RuntimeWarning)
-            # Attempt to recover if possible, e.g., take first column if multiple outputs
-            if results_np.ndim >= 2 and results_np.shape[1] > 1:
-                results_np = results_np[:, 0:1] # Take first column, keep 2D
-            else: # Cannot easily recover, return default shape
-                results_np = np.zeros((X_np_3d.shape[0], 1), dtype=int)
+        # Ensure shape is (N, 1)
+        if results_np.ndim == 0: results_np = np.array([[results_np.item()]])
+        elif results_np.ndim == 1: results_np = results_np[:, np.newaxis]
+        elif results_np.ndim == 2 and results_np.shape[1] > 1:
+            warnings.warn(f"'{method_to_call}' returned shape {results_np.shape}. Taking first column as label.", RuntimeWarning)
+            results_np = results_np[:, 0:1]
+        elif results_np.ndim > 2:
+             raise ValueError(f"Internal '{method_to_call}' returned unexpected shape {results_np.shape}")
 
+        logger.debug(f"ModelWrapper.predict: Returning shape {results_np.shape}")
+        return results_np.astype(int)
 
-        # print(f"ModelWrapper.predict: Returning shape {results_np.shape}") # Debug print
-        return results_np.astype(int) # Ensure integer output
 
     def predict_proba(self, X_input: Union[np.ndarray, pd.DataFrame]) -> np.ndarray:
         """
         Provides the .predict_proba() interface for XAI tools (SHAP, LIME, DiCE).
-        Handles input type (DataFrame/NumPy) and shape (2D/3D), calls the internal
+        Handles input type (DataFrame/NumPy), calls the internal
         model's 'predict_proba' method, and returns the resulting probabilities.
-
-        Args:
-            X_input (Union[np.ndarray, pd.DataFrame]): Input data. Can be:
-                - 3D NumPy array (samples, seq_len, features)
-                - 2D NumPy array (samples, features) -> reshaped to (samples, 1, features)
-                - 2D NumPy array (samples, seq_len * features) -> reshaped to 3D
-                - pandas DataFrame (samples, features or seq_len * features) -> converted to NumPy and reshaped
-
-        Returns:
-            np.ndarray: Probabilities array of shape (samples, 2), where column 0 is
-                        P(normal) and column 1 is P(anomaly). Returns neutral
-                        probabilities [0.5, 0.5] for invalid inputs or internal errors.
+        Ensures output is (N, 2) for binary classification models supporting predict_proba.
         """
-        # print(f"\n--- Wrapper predict_proba called with input type {type(X_input)} ---")
-
-        # -----------------------------------
-        # Input Conversion and Reshaping 
-        # -----------------------------------
+        # --- Input Conversion ---
         if isinstance(X_input, pd.DataFrame):
-            # print(f"DEBUG Wrapper predict_proba: Received DataFrame shape {X_input.shape}. Converting to NumPy.")
             X_np_input = X_input.to_numpy()
-            # print(f"DEBUG Wrapper predict_proba: Converted DataFrame to NumPy shape {X_np_input.shape}.")
         elif isinstance(X_input, np.ndarray):
-            X_np_input = X_input  # Already a NumPy array
-            # print(f"DEBUG Wrapper predict_proba: Received NumPy input shape {X_np_input.shape}.")
+            X_np_input = X_input
         else:
-            raise TypeError(f"ModelWrapperForXAI.predict_proba expects NumPy array or pandas DataFrame, got {type(X_input)}")
+            raise TypeError(f"predict_proba expects NumPy array or pandas DataFrame, got {type(X_input)}")
 
-        expected_features = len(self._feature_names)
-        X_to_pass_internally = None
-        n_samples_in = X_np_input.shape[0] if X_np_input.ndim >= 1 else 1 # Get samples before reshape
+        num_samples_in = X_np_input.shape[0] if X_np_input.ndim > 0 else (1 if X_np_input.size > 0 else 0)
+        if num_samples_in == 0:
+            return np.empty((0, self._num_classes), dtype=float)
 
-        # --- Get underlying model's expected input type for XAI ---
-        # Assumes the underlying model has an 'input_type' attribute ('dataframe' or 'numpy')
-        # Default to 'dataframe' expectation if attribute is missing, with a warning.
-        underlying_input_type = getattr(self._model, 'input_type', 'dataframe')
-        if not hasattr(self._model, 'input_type'):
-            warnings.warn(f"Wrapper: Underlying model {type(self._model).__name__} lacks 'input_type' attribute. Assuming 'dataframe' (2D) input for XAI predict_proba.", RuntimeWarning)
+        # --- Check if predict_proba exists ---
+        if not hasattr(self._model, 'predict_proba') or not callable(getattr(self._model, 'predict_proba')):
+             logger.error(f"Underlying model {type(self._model).__name__} does not have a callable 'predict_proba' method.")
+             return np.full((num_samples_in, self._num_classes), 0.5) # Return neutral probabilities
 
-        # print(f"DEBUG Wrapper predict_proba: Underlying model type is '{underlying_input_type}'. Shaping input accordingly.")
+        # --- Call Internal Model's predict_proba ---
+        logger.debug(f"Calling internal 'predict_proba'. Input shape: {X_np_input.shape}")
+        # Use the helper method which includes error handling and NumPy conversion
+        internal_probabilities = self._call_internal_method(X_np_input, 'predict_proba')
+        logger.debug(f"Internal 'predict_proba' returned shape: {internal_probabilities.shape}")
 
-        # --- Input Shape Handling (Conditional) ---
-        if X_np_input.ndim == 3:
-            # Input is already 3D. Pass as is, internal method should validate.
-            if X_np_input.shape[-1] == expected_features:
-                X_to_pass_internally = X_np_input
-                # print(f"DEBUG Wrapper predict_proba: Using provided 3D input shape {X_np_input.shape}.")
-            else:
-                warnings.warn(f"Wrapper predict_proba: 3D input feature mismatch ({X_np_input.shape[-1]} vs {expected_features}). Returning neutral.", RuntimeWarning)
-                return np.full((n_samples_in, 2), 0.5)
-
-        elif X_np_input.ndim == 2:
-            # Input is 2D. Shape depends on underlying model's expectation.
-            if X_np_input.shape[1] == expected_features:
-                if underlying_input_type == 'numpy':
-                    # XGBoost (when trained on numpy) needs 3D for its internal predict_proba pathway
-                    X_to_pass_internally = X_np_input[:, np.newaxis, :] # Reshape to (samples, 1, features)
-                    #print(f"DEBUG Wrapper predict_proba: Reshaped 2D input ({X_np_input.shape}) to 3D ({X_to_pass_internally.shape}) for numpy-based model.")
-                else: # Assume 'dataframe' underlying type (like DecisionTree)
-                    # Decision Tree (when trained on dataframe) needs 2D for its XAI predict_proba
-                    X_to_pass_internally = X_np_input
-                    #print(f"DEBUG Wrapper predict_proba: Passing 2D input ({X_np_input.shape}) as is for dataframe-based model.")
-            else:
-                warnings.warn(f"Wrapper predict_proba: 2D input feature mismatch ({X_np_input.shape[1]} vs {expected_features}). Returning neutral.", RuntimeWarning)
-                return np.full((n_samples_in, 2), 0.5)
-
-        elif X_np_input.ndim == 1:
-            # Input is 1D (single sample). Shape depends on underlying model.
-            if len(X_np_input) == expected_features:
-                if underlying_input_type == 'numpy':
-                    X_to_pass_internally = X_np_input.reshape(1, 1, -1) # (1, 1, features)
-                    #print(f"DEBUG Wrapper predict_proba: Reshaped 1D input ({X_np_input.shape}) to 3D ({X_to_pass_internally.shape}) for numpy-based model.")
-                else: # Assume 'dataframe'
-                    X_to_pass_internally = X_np_input.reshape(1, -1) # (1, features)
-                    #print(f"DEBUG Wrapper predict_proba: Reshaped 1D input ({X_np_input.shape}) to 2D ({X_to_pass_internally.shape}) for dataframe-based model.")
-            else:
-                warnings.warn(f"Wrapper predict_proba: 1D input feature mismatch ({len(X_np_input)} vs {expected_features}). Returning neutral.", RuntimeWarning)
-                return np.full((n_samples_in, 2), 0.5)
-        else:
-            # Handle other unexpected dimensions
-            warnings.warn(f"Wrapper predict_proba received unexpected input shape {X_np_input.shape}. Expected 1D, 2D or 3D. Returning neutral probabilities.", RuntimeWarning)
-            return np.full((n_samples_in, 2), 0.5)
-
-        # Ensure X_to_pass_internally is assigned
-        if X_to_pass_internally is None:
-            warnings.warn("Wrapper predict_proba: Failed to process input shape. Returning neutral probabilities.", RuntimeWarning)
-            return np.full((n_samples_in, 2), 0.5)
-
-        # ----------------------------------------------------------------------
-        # Call Internal Model's predict_proba
-        # ----------------------------------------------------------------------
-        # print(f"DEBUG Wrapper predict_proba: Calling internal 'predict_proba' with processed shape {X_to_pass_internally.shape}")
-        try:
-            # Assuming the internal method now returns shape (n_samples, 2) -> [P(normal), P(anomaly)]
-            internal_probabilities = self._call_internal_method(X_to_pass_internally, 'predict_proba')
-            #print(f"DEBUG Wrapper predict_proba: Internal 'predict_proba' returned shape {internal_probabilities.shape}")
-        except Exception as e:
-            warnings.warn(f"Wrapper predict_proba: Error calling internal 'predict_proba': {e}. Returning neutral probabilities.", RuntimeWarning)
-            # Use n_samples_in here as internal call failed before producing output
-            return np.full((n_samples_in, 2), 0.5)
-
-        # ----------------------------------------------------------------------
-        # Process the Result from Internal predict_proba
-        # ----------------------------------------------------------------------
+        # --- Process Result (Focus on returning N, 2) ---
         n_samples_out = internal_probabilities.shape[0] if internal_probabilities.ndim >= 1 else 0
-        expected_cols = 2
+        probabilities = np.full((num_samples_in, self._num_classes), 0.5) # Default neutral
 
-        # Initialize final array, defaulting to neutral probabilities [0.5, 0.5]
-        # Use n_samples_in for the initial shape to match input length expectation
-        probabilities = np.full((n_samples_in, expected_cols), 0.5)
-
-        # --- Basic validation of the internal output shape ---
-        if internal_probabilities.ndim != 2 or internal_probabilities.shape[1] != expected_cols:
-            warnings.warn(f"Wrapper predict_proba: Internal 'predict_proba' returned unexpected shape {internal_probabilities.shape}. Expected ({n_samples_out}, {expected_cols}). Returning neutral probabilities.", RuntimeWarning)
-            # Keep the default neutral probabilities initialized above
-
-        # --- Check for length mismatch ---
-        elif n_samples_out != n_samples_in:
-            warnings.warn(f"Wrapper predict_proba: Internal 'predict_proba' returned {n_samples_out} samples, but input had {n_samples_in}. Padding/truncating output.", RuntimeWarning)
-            # Adjust internal_probabilities to match input length before further processing
-            if n_samples_out < n_samples_in:
-                padded_internal = np.full((n_samples_in, expected_cols), 0.5) # Pad with neutral
-                padded_internal[:n_samples_out] = internal_probabilities
-                internal_probabilities = padded_internal
-            elif n_samples_out > n_samples_in:
-                internal_probabilities = internal_probabilities[:n_samples_in]
-            # Now internal_probabilities has shape (n_samples_in, 2)
-
-        # --- Process Valid Probabilities ---
-        # Handle potential NaNs or invalid values from the internal calculation
-        # A row is invalid if *any* value in it is NaN or infinite
+        # Handle NaN/Inf in internal result - _call_internal_method should return NaN array on error
         invalid_row_mask = np.isnan(internal_probabilities).any(axis=1) | np.isinf(internal_probabilities).any(axis=1)
-
         if np.any(invalid_row_mask):
-            warnings.warn("Wrapper predict_proba: NaNs/Infs detected in probabilities returned by internal 'predict_proba'. Corresponding rows set to [0.5, 0.5].", RuntimeWarning)
-            # Rows with NaNs/Infs will keep the default [0.5, 0.5] initialized above
+             warnings.warn("NaNs or Infs detected in internal predict_proba output. Returning neutral for affected rows.", RuntimeWarning)
 
-        # Process only valid (non-NaN/Inf) rows
         valid_row_mask = ~invalid_row_mask
-        if np.any(valid_row_mask):
-            #print(f"DEBUG Wrapper predict_proba: Assigning {np.sum(valid_row_mask)} valid probability rows directly.")
+        valid_internal_probs = internal_probabilities[valid_row_mask]
 
-            # --- THIS IS THE KEY CHANGE ---
-            # Directly assign the valid probabilities from the internal result
-            # No score_interpretation logic needed here anymore.
-            probabilities[valid_row_mask] = internal_probabilities[valid_row_mask]
-            # --- End Key Change ---
+        # Check dimensions and column count of VALID results
+        reconstruction_needed = False
+        if valid_internal_probs.ndim == 2 and valid_internal_probs.shape[1] == self._num_classes:
+             if valid_internal_probs.shape[0] == np.sum(valid_row_mask):
+                 logger.debug(f"Assigning valid (N, {self._num_classes}) probabilities directly.")
+                 probabilities[valid_row_mask] = valid_internal_probs
+             else:
+                 warnings.warn("Length mismatch after filtering NaNs. Check internal predict_proba consistency. Returning neutral.", RuntimeWarning)
+                 probabilities.fill(0.5) # Reset all to neutral if length mismatch
 
-            # Optional: Clip probabilities just in case internal model returns values slightly outside [0,1]
-            np.clip(probabilities[valid_row_mask], 0.0, 1.0, out=probabilities[valid_row_mask])
+        elif valid_internal_probs.ndim == 2 and valid_internal_probs.shape[1] == 1:
+             warnings.warn("Internal predict_proba returned shape (N, 1). Reconstructing to (N, 2).", RuntimeWarning)
+             if valid_internal_probs.shape[0] == np.sum(valid_row_mask):
+                 reconstruction_needed = True
+                 proba_class_1 = valid_internal_probs.flatten()
+             else:
+                 warnings.warn("Length mismatch after filtering NaNs (N, 1 case). Returning neutral.", RuntimeWarning)
+                 probabilities.fill(0.5)
 
-            # Optional: Re-normalize if sums are slightly off due to clipping/precision
-            sums = np.sum(probabilities[valid_row_mask], axis=1, keepdims=True)
-            # Avoid division by zero if sum is zero (shouldn't happen if clipped correctly)
-            sums[sums < 1e-9] = 1.0 # Set sum to 1 if it's near zero
-            probabilities[valid_row_mask] /= sums
+        elif valid_internal_probs.ndim == 1:
+             warnings.warn("Internal predict_proba returned shape (N,). Reconstructing to (N, 2).", RuntimeWarning)
+             if valid_internal_probs.shape[0] == np.sum(valid_row_mask):
+                 reconstruction_needed = True
+                 proba_class_1 = valid_internal_probs
+             else:
+                  warnings.warn("Length mismatch after filtering NaNs (N,) case). Returning neutral.", RuntimeWarning)
+                  probabilities.fill(0.5)
+        else:
+             if np.any(valid_row_mask): # Only warn if there were actually valid rows
+                warnings.warn(f"Internal predict_proba returned unexpected shape {valid_internal_probs.shape} for valid rows. Returning neutral.", RuntimeWarning)
+                probabilities.fill(0.5)
 
-        # --- Final Validation ---
-        # Check if probabilities sum to 1 (within tolerance) for valid rows
-        if np.any(valid_row_mask):
-            final_sums = np.sum(probabilities[valid_row_mask], axis=1)
-            if not np.allclose(final_sums, 1.0, atol=1e-6):
-                warnings.warn("Wrapper predict_proba: Final probabilities do not sum close to 1 for some valid rows after processing. Check calculations.", RuntimeWarning)
+        # Perform reconstruction if needed
+        if reconstruction_needed:
+            proba_class_0 = 1.0 - proba_class_1
+            reconstructed_probs = np.vstack([proba_class_0, proba_class_1]).T
+            probabilities[valid_row_mask] = reconstructed_probs # Assign reconstructed to valid rows
 
-        #print(f"DEBUG Wrapper predict_proba: Returning final probabilities shape: {probabilities.shape}")
-        # Print min/max/mean of final P(anomaly) column
-        #if probabilities.size > 0:
-            #print(f"DEBUG Wrapper predict_proba: Final P(anomaly) stats: min={np.min(probabilities[:, 1]):.4f}, max={np.max(probabilities[:, 1]):.4f}, mean={np.mean(probabilities[:, 1]):.4f}")
+        # --- Final Polish ---
+        np.clip(probabilities, 0.0, 1.0, out=probabilities)
+        sums = np.sum(probabilities, axis=1, keepdims=True)
+        sums[sums < 1e-9] = 1.0
+        probabilities /= sums
 
-        # Ensure return shape matches n_samples_in
-        if probabilities.shape[0] != n_samples_in:
-            warnings.warn(f"Wrapper predict_proba: Final probability array shape {probabilities.shape} doesn't match input samples {n_samples_in}. Adjusting.", RuntimeWarning)
-            # This should ideally not happen after the padding/truncation logic above
-            # But as a final safeguard:
-            final_probs_adjusted = np.full((n_samples_in, 2), 0.5)
-            len_to_copy = min(probabilities.shape[0], n_samples_in)
-            final_probs_adjusted[:len_to_copy] = probabilities[:len_to_copy]
-            probabilities = final_probs_adjusted
+        # Final check on output shape relative to input
+        if probabilities.shape[0] != num_samples_in:
+             warnings.warn(f"Final probability array shape {probabilities.shape} doesn't match input samples {num_samples_in}. Adjusting.", RuntimeWarning)
+             final_probs_adjusted = np.full((num_samples_in, self._num_classes), 0.5)
+             len_to_copy = min(probabilities.shape[0], num_samples_in)
+             final_probs_adjusted[:len_to_copy] = probabilities[:len_to_copy]
+             probabilities = final_probs_adjusted
 
-        return probabilities
+        logger.debug(f"Wrapper predict_proba returning shape: {probabilities.shape}")
+        return probabilities.astype(np.float32)
