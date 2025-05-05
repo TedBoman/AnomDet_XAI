@@ -230,7 +230,7 @@ def layout(handler):
                                     # ***      Seed Input                   *** #
                                     # ========================================= #
                                     html.Div([
-                                        html.Label("Enter seed for reproducability:", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block", "marginTop": "10px"}),
+                                        html.Label("Enter seed for reproducibility:", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block", "marginTop": "10px"}),
                                         dcc.Input(
                                             id="xai-sample-seed",
                                             type="number",

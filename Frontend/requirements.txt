@@ -1,4 +1,4 @@
 dash==3.0.1
-pandas
+pandas==2.2.3
 python-dotenv==1.0.0
 requests

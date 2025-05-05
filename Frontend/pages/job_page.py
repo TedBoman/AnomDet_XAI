@@ -1,7 +1,5 @@
 # pages/job_page.py
-import dash
 from dash import dcc, html
-import plotly.graph_objects as go # Often needed for graph creation
 
 # --- Helper function ---
 def get_display_job_name(full_job_name):
@@ -19,7 +17,6 @@ def get_display_job_name(full_job_name):
     else:
         return full_job_name
 # --- End Helper Function ---
-
 
 # This is the main layout function called by app.py
 def layout(handler, job_name):
@@ -107,7 +104,6 @@ def layout(handler, job_name):
             ], style={'flex': '1 1 auto', 'textAlign': 'center'}),
 
             # --- Right Column (Spacer) ---
-            # <<< Added Spacer Div >>>
             html.Div([
                 # Empty div, its purpose is to take up space equal to the left column
                 # We make it invisible but it still occupies layout space
@@ -136,6 +132,10 @@ def layout(handler, job_name):
                 'backgroundColor': theme_colors['status_background'],
                 'color': theme_colors['text_dark']
                 }),
+            
+            # Meta data            
+            html.Div(id='job-metadata-display', style={'marginBottom': '20px', 'color': 'white'}),
+            
             # Graph Area
             html.Div([
                 html.H3("Time Series Data & Detected Anomalies", style={'color': theme_colors['text_medium']}),
