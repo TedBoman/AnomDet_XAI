@@ -1243,6 +1243,7 @@ def get_index_callbacks(app):
         # Process XAI Info
         use_xai = "use_xai" in xai_check_val
         xai_params_list = None
+        xai_settings = None
         if use_xai:
             active_methods = [m for m in selected_xai_methods if m != 'none'] if selected_xai_methods else []
             if not active_methods:

@@ -230,14 +230,11 @@ def layout(handler):
                                     # ***      Seed Input                   *** #
                                     # ========================================= #
                                     html.Div([
-                                        html.Label("Number of Local Indicies (overwritten by XAI method settings):", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block", "marginTop": "10px"}),
+                                        html.Label("Enter seed for reproducability:", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block", "marginTop": "10px"}),
                                         dcc.Input(
                                             id="xai-sample-seed",
                                             type="number",
-                                            min=1,
-                                            step=1,
-                                            value=100, # Sensible default
-                                            placeholder="Enter seed for reproducability",
+                                            placeholder="Enter a number",
                                             # Use required=True maybe, or handle None in callback
                                             style={"width": "150px", "margin": "5px auto", "display": "block", "textAlign": "center"} 
                                         ),

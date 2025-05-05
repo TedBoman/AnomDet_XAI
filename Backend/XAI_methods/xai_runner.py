@@ -267,7 +267,7 @@ class XAIRunner:
                         # Use global strategy defined in __init__
                         current_strategy = settings.get('sampling_strategy', self.xai_sampling_strategy) # Allow override of strategy per method? No, use global.
                         current_n_samples = settings.get('n_explain_max', 10)
-                        print(f"Using global sampling strategy '{self.xai_sampling_strategy}' with n={self.xai_num_samples}.")
+                        print(f"Using global sampling strategy '{self.xai_sampling_strategy}' with n={current_n_samples}.")
                         selected_original_indices = ut.select_explanation_indices(
                             data_source_for_explanation, # Sample from the full source
                             current_strategy,
