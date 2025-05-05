@@ -200,6 +200,50 @@ def layout(handler):
                                             style={"width": "300px", "margin": "5px auto"}
                                         ),
                                     ], style={"marginTop": "10px"}),
+                                    
+                                    # =========================================== #
+                                    # ***    XAI Sampling Strategy Dropdown   *** #
+                                    # =========================================== #
+                                    html.Div([
+                                        html.Label("Select Instances to Explain:", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block", "marginTop": "15px"}),
+                                        dcc.Dropdown(
+                                            id="xai-sampling-strategy-dropdown",
+                                            options=[
+                                                {'label': 'First N Instances', 'value': 'first_n'},
+                                                {'label': 'Random N Instances', 'value': 'random'},
+                                                {'label': 'Random Anomalies', 'value': 'random_anomalies'},
+                                                {'label': 'First N Anomalies', 'value': 'first_n_anomalies'},
+                                                {'label': 'Last N Anomalies', 'value': 'last_n_anomalies'},
+                                                {'label': 'Half N Half', 'value': 'boundary'},
+                                                # Note: The 'errors' option might be added dynamically by a callback if labels are available
+                                                {'label': 'Misclassified/High-Error N (Needs Labels)', 'value': 'errors', 'disabled': True} # Start disabled, enable via callback
+                                            ],
+                                            value='first_n', # Default strategy
+                                            placeholder="Select sampling strategy",
+                                            clearable=False,
+                                            style={"width": "300px", "margin": "5px auto"}
+                                        ),
+                                    ], style={"marginTop": "10px"}),
+                                    # =========================================== #
+
+                                    # ========================================= #
+                                    # ***      Number of Samples Input      *** #
+                                    # ========================================= #
+                                    html.Div([
+                                        html.Label("Number of Local Indicies (overwritten by XAI method settings):", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block", "marginTop": "10px"}),
+                                        dcc.Input(
+                                            id="xai-num-samples-input",
+                                            type="number",
+                                            min=1,
+                                            step=1,
+                                            value=100, # Sensible default
+                                            placeholder="Enter number of samples",
+                                            # Use required=True maybe, or handle None in callback
+                                            style={"width": "150px", "margin": "5px auto", "display": "block", "textAlign": "center"} 
+                                        ),
+                                    ], style={"marginTop": "10px"}),
+                                    # ========================================= #
+                                    
                                     # Div for Dynamic XAI Settings
                                     html.Div(
                                         id="xai-settings-panel",

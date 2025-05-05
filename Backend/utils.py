@@ -1,9 +1,144 @@
-# --- Put this in a file like 'utils.py' ---
-
 import pandas as pd
 import numpy as np
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 import warnings
+
+def select_explanation_indices(
+    df: pd.DataFrame, 
+    strategy: str, 
+    n: int, 
+    label_col: Optional[str] = None
+) -> np.ndarray:
+    """
+    Selects indices from a DataFrame based on a specified sampling strategy.
+
+    Args:
+        df (pd.DataFrame): The full dataset.
+        strategy (str): The sampling strategy. Valid options:
+            'first_n', 'random', 'random_anomalies', 'first_n_anomalies',
+            'last_n_anomalies', 'half_n_half'.
+        n (int): The desired number of indices.
+        label_col (Optional[str]): The name of the column containing ground truth
+                                   anomaly labels (0=normal, 1=anomaly). 
+                                   Required for anomaly-based strategies.
+
+    Returns:
+        np.ndarray: An array of integer indices selected from the DataFrame's index.
+                    Returns fewer than n indices if insufficient data is available
+                    for the chosen strategy (e.g., fewer than n anomalies).
+                    
+    Raises:
+        ValueError: If an invalid strategy is provided, or if label_col is required
+                    but not provided or not found in the DataFrame.
+        TypeError: If df is not a Pandas DataFrame.
+    """
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("Input 'df' must be a Pandas DataFrame.")
+        
+    n_total = len(df)
+    if n <= 0:
+        warnings.warn("Number of samples 'n' must be positive. Returning empty array.")
+        return np.array([], dtype=int)
+        
+    # Ensure n does not exceed total available samples
+    n = min(n, n_total) 
+    if n == 0: # Handle case where df might be empty
+         return np.array([], dtype=int)
+
+    # Use DataFrame's integer-based index for selection
+    possible_indices = df.index.to_numpy() 
+
+    selected_indices = np.array([], dtype=int)
+
+    # --- Strategy Implementation ---
+    if strategy == 'first_n':
+        selected_indices = possible_indices[:n]
+        
+    elif strategy == 'random':
+        selected_indices = np.random.choice(possible_indices, size=n, replace=False)
+        
+    elif strategy in ['random_anomalies', 'first_n_anomalies', 'last_n_anomalies', 'half_n_half']:
+        if label_col is None:
+            raise ValueError(f"Strategy '{strategy}' requires 'label_col' to be provided.")
+        if label_col not in df.columns:
+             raise ValueError(f"Label column '{label_col}' not found in DataFrame.")
+             
+        try:
+            # Ensure labels are treated as integers/booleans
+            labels = df[label_col].astype(bool) 
+        except Exception as e:
+            raise ValueError(f"Could not interpret label column '{label_col}' as boolean/numeric (0/1). Error: {e}") from e
+            
+        anomaly_indices = possible_indices[labels]
+        normal_indices = possible_indices[~labels]
+        n_anomalies_avail = len(anomaly_indices)
+        n_normals_avail = len(normal_indices)
+
+        if strategy == 'random_anomalies':
+            n_to_select = min(n, n_anomalies_avail)
+            if n_to_select < n:
+                warnings.warn(f"Requested {n} anomalies, but only {n_anomalies_avail} available. Selecting {n_to_select}.")
+            if n_anomalies_avail > 0:
+                selected_indices = np.random.choice(anomaly_indices, size=n_to_select, replace=False)
+            else:
+                 warnings.warn("No anomalies found in the dataset.")
+
+        elif strategy == 'first_n_anomalies':
+            n_to_select = min(n, n_anomalies_avail)
+            if n_to_select < n:
+                warnings.warn(f"Requested {n} first anomalies, but only {n_anomalies_avail} available. Selecting {n_to_select}.")
+            selected_indices = anomaly_indices[:n_to_select]
+
+        elif strategy == 'last_n_anomalies':
+            n_to_select = min(n, n_anomalies_avail)
+            if n_to_select < n:
+                warnings.warn(f"Requested {n} last anomalies, but only {n_anomalies_avail} available. Selecting {n_to_select}.")
+            selected_indices = anomaly_indices[-n_to_select:]
+            
+        elif strategy == 'half_n_half':
+            n_anom_target = n // 2
+            n_norm_target = n - n_anom_target
+            
+            n_anom_select = min(n_anom_target, n_anomalies_avail)
+            n_norm_select = min(n_norm_target, n_normals_avail)
+
+            if n_anom_select < n_anom_target:
+                warnings.warn(f"Requested {n_anom_target} anomalies for half-n-half, but only {n_anomalies_avail} available. Selecting {n_anom_select}.")
+            if n_norm_select < n_norm_target:
+                 warnings.warn(f"Requested {n_norm_target} normals for half-n-half, but only {n_normals_avail} available. Selecting {n_norm_select}.")
+
+            anom_indices_selected = np.array([], dtype=int)
+            norm_indices_selected = np.array([], dtype=int)
+                 
+            if n_anomalies_avail > 0 and n_anom_select > 0:
+                 anom_indices_selected = np.random.choice(anomaly_indices, size=n_anom_select, replace=False)
+            if n_normals_avail > 0 and n_norm_select > 0:
+                 norm_indices_selected = np.random.choice(normal_indices, size=n_norm_select, replace=False)
+                 
+            selected_indices = np.concatenate((anom_indices_selected, norm_indices_selected))
+            # Optional: Shuffle the combined indices if order doesn't matter
+            # np.random.shuffle(selected_indices) 
+
+    # --- Add other strategies like 'boundary' or 'errors' here if needed ---
+    # Example for 'boundary' (needs probabilities):
+    # elif strategy == 'boundary':
+    #     if pred_proba_col is None or pred_proba_col not in df.columns:
+    #         raise ValueError("Strategy 'boundary' requires 'pred_proba_col'.")
+    #     diff_from_half = np.abs(df[pred_proba_col] - 0.5)
+    #     sorted_indices = diff_from_half.sort_values().index.to_numpy()
+    #     selected_indices = sorted_indices[:n]
+
+    else:
+        raise ValueError(f"Unknown sampling strategy: '{strategy}'. Valid options are: "
+                         f"'first_n', 'random', 'random_anomalies', 'first_n_anomalies', "
+                         f"'last_n_anomalies', 'half_n_half'.") # Add others as implemented
+
+    # Ensure unique indices if concatenation happened (e.g., half_n_half)
+    # Although sampling without replacement should prevent duplicates here.
+    # selected_indices = np.unique(selected_indices) 
+    
+    print(f"Selected {len(selected_indices)} indices using strategy '{strategy}'.")
+    return selected_indices.astype(int) # Ensure integer type
 
 def dataframe_to_sequences(
     df: pd.DataFrame,

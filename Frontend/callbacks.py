@@ -1149,6 +1149,7 @@ def get_index_callbacks(app):
             State("magnitude-input", "value"), State("percentage-input", "value"),
             State("duration-input", "value"), State("injection-column-dropdown", "value"),
             State("injection-check", "value"), State("speedup-input", "value"),
+            State("xai-sampling-strategy-dropdown", "value"), State("xai-num-samples-input", "value"),
             State("popup", "style"),
             State("labeled-check", "value"), State("label-column-dropdown", "value"),
             State("xai-check", "value"), State("xai-method-dropdown", "value"),
@@ -1162,7 +1163,9 @@ def get_index_callbacks(app):
             n_clicks, n_intervals,
             selected_dataset, selected_detection_model, selected_mode, job_name,
             selected_injection_method, timestamp, magnitude, percentage, duration,
-            injection_columns, inj_check, speedup, style,
+            injection_columns, inj_check, speedup, 
+            xai_sampling_strategy, xai_num_samples, 
+            style,
             labeled_check_val, selected_label_col,
             # --- ARGS for pattern-matching states ---
             xai_check_val,
@@ -1243,8 +1246,8 @@ def get_index_callbacks(app):
         if use_xai:
             active_methods = [m for m in selected_xai_methods if m != 'none'] if selected_xai_methods else []
             if not active_methods:
-                 style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
-                 return style_copy, False, "Please select at least one XAI method."
+                style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
+                return style_copy, False, "Please select at least one XAI method."
 
             all_parsed_settings = {}
             print(f"DEBUG: Received XAI settings IDs: {xai_settings_ids}")
@@ -1256,12 +1259,13 @@ def get_index_callbacks(app):
                 if not method_name or not param_name or method_name not in active_methods: continue
 
                 if method_name not in all_parsed_settings: all_parsed_settings[method_name] = {}
-                # Handle None values if necessary (user cleared input), similar to original logic
-                # ... (add specific default logic if needed) ...
                 all_parsed_settings[method_name][param_name] = value
 
             print(f"DEBUG: Parsed all XAI settings: {all_parsed_settings}")
-
+            
+            xai_settings = {}
+            xai_settings.update({"xai_sampling_strategy":xai_sampling_strategy,
+                                 "xai_num_samples": xai_num_samples})
             xai_params_list = []
             for method_name in active_methods:
                 if method_name in all_parsed_settings:
@@ -1278,6 +1282,8 @@ def get_index_callbacks(app):
             if not xai_params_list: # Should not happen if active_methods is not empty
                  style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
                  return style_copy, False, "Error constructing XAI parameters."
+             
+            xai_settings.update({"xai_params":xai_params_list})
 
             print(f"DEBUG: Constructed xai_params_list for backend: {xai_params_list}")
             
@@ -1316,7 +1322,7 @@ def get_index_callbacks(app):
             print(f"Sending job '{job_name}' with mode '{selected_mode}'...")
             print(f"  Dataset: {selected_dataset}, Model: {selected_detection_model}")
             print(f"  Label Column: {label_col_to_pass}")
-            print(f"  XAI Params: {xai_params_list}")
+            print(f"  XAI Params: {xai_settings}")
             print(f"  Injection Params: {inj_params_list}")
             print(f"  ML Model Params: {ml_params_dict}") # Print new params
             sys.stdout.flush()
@@ -1327,8 +1333,8 @@ def get_index_callbacks(app):
             if selected_mode == "batch":
                 response = handler.handle_run_batch(
                     selected_dataset, selected_detection_model, job_name,
-                    label_column=label_col_to_pass, xai_params=xai_params_list, inj_params=inj_params_list,
-                    model_params=model_params_to_pass 
+                    label_column=label_col_to_pass, xai_params=xai_settings, inj_params=inj_params_list,
+                    model_params=model_params_to_pass
                 )
             else: # stream
                 # Validate speedup for stream mode
@@ -1341,10 +1347,9 @@ def get_index_callbacks(app):
                      return style_copy, False, "Invalid speedup value for stream mode."
 
                 response = handler.handle_run_stream(
-
-                    selected_dataset, selected_detection_model, job_name, speedup,
-                    label_column=label_col_to_pass, xai_params=xai_params_list, inj_params=inj_params_list,
-                    model_params=model_params_to_pass 
+                    selected_dataset, selected_detection_model, job_name,
+                    label_column=label_col_to_pass, xai_params=xai_settings, inj_params=inj_params_list,
+                    model_params=model_params_to_pass
                 )
 
             if response == "success":

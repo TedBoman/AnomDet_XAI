@@ -351,7 +351,7 @@ def run_batch(
     inj_params: Optional[List[Dict[str, Any]]] = None, 
     debug: bool = False,
     label_column: Optional[str] = None, 
-    xai_params: Optional[Dict[str, Any]] = None,
+    xai_settings: Optional[Dict[str, Any]] = None,
     model_params: Optional[Dict[str, Any]] = None,
 ) -> None:    
     print("Starting Batch-job!")
@@ -505,7 +505,7 @@ def run_batch(
         sequence_length = getattr(model_instance, 'sequence_length', None)
         if not isinstance(sequence_length, int) or sequence_length <= 0:
             # If model isn't sequential or attr missing, set default for XAI framework IF XAI is requested
-            if xai_params:
+            if xai_settings:
                 default_xai_seq_len = 10 # Default sequence length for XAI framework if model is non-sequential
                 warnings.warn(f"Model doesn't provide positive integer 'sequence_length'. Using default={default_xai_seq_len} for XAI data preparation.", RuntimeWarning)
                 sequence_length = default_xai_seq_len # Use default ONLY for XAI prep
@@ -517,7 +517,7 @@ def run_batch(
 
         # --- Create Wrapper (Conditional - only if XAI is running) ---
         model_wrapper = None
-        if xai_params and isinstance(xai_params, list): # Check if XAI is requested
+        if xai_settings and isinstance(xai_settings, dict): # Check if XAI is requested
             interpretation = 'higher_is_anomaly' # Default
             model_type_str = model.lower() # Use the input string for type check
             if 'svm' in model_type_str: interpretation = 'lower_is_anomaly'
@@ -624,12 +624,13 @@ def run_batch(
         # ============================================
         # --- MODULAR XAI INTEGRATION ---
         # ============================================
-        if xai_params and isinstance(xai_params, list) and model_wrapper is not None:
+        if xai_settings and isinstance(xai_settings, dict) and model_wrapper is not None:
             print(f"Preparing to run XAI via XAIRunner...")
             try:
+                
                 # Instantiate the XAIRunner
                 xai_runner_instance = XAIRunner(
-                    xai_params=xai_params,
+                    xai_settings=xai_settings,
                     model_wrapper=model_wrapper,
                     sequence_length=sequence_length, # Ensure sequence_length is determined correctly before this point
                     feature_columns=feature_columns,
@@ -637,7 +638,7 @@ def run_batch(
                     continuous_features_list=continuous_features_list, # Ensure this is defined
                     job_name=name, # Pass the job name
                     mode='classification', # Or determine mode if needed
-                    output_dir="/data" # Or configure as needed
+                    output_dir="/data", # Or configure as needed
                 )
 
                 # Run the explanations
@@ -664,7 +665,7 @@ def run_batch(
         else:
             # This condition remains the same
             skip_reasons = []
-            if not xai_params or not isinstance(xai_params, list):
+            if not xai_settings or not isinstance(xai_settings, dict):
                 skip_reasons.append("XAI parameters not provided or not a list")
             if model_wrapper is None:
                 skip_reasons.append("Model wrapper is None (required for XAI)")
