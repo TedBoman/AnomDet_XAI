@@ -1,4 +1,5 @@
 # job_page_callbacks.py
+import json
 import sys
 import os
 import urllib.parse
@@ -27,6 +28,62 @@ def get_asset_url(job_name, method_name, filename):
     quoted_file = urllib.parse.quote(filename)
     return f"/xai-assets/{quoted_job}/{quoted_method}/{quoted_file}"
 # -------------------------------------------
+
+# --- Helper function to format nested dicts/lists prettily ---
+def create_pretty_dict_list_display(data, indent=0):
+    """Recursively creates html.Divs/Lists to display nested data."""
+    items = []
+    indent_space = "  " * indent # Using non-breaking space for indent
+    if isinstance(data, dict):
+        for key, value in data.items():
+            # Display key
+            item_content = [html.Span(f"{indent_space}{key}: ", style={'fontWeight': 'bold'})]
+            # Display value (recurse if nested)
+            if isinstance(value, (dict, list)):
+                 # Add newline before nested structure for clarity
+                item_content.append(html.Br())
+                item_content.append(create_pretty_dict_list_display(value, indent + 1))
+            else:
+                item_content.append(html.Span(f"{value}"))
+            items.append(html.Div(item_content))
+    elif isinstance(data, list):
+         # Special handling for list of dicts (like xai_params)
+        is_list_of_dicts = all(isinstance(i, dict) for i in data)
+        for index, value in enumerate(data):
+            if is_list_of_dicts:
+                 # Add a separator/header for each item in the list
+                 items.append(html.Div(f"{indent_space}Item {index+1}:", style={'marginTop': '5px', 'fontStyle':'italic'}))
+                 items.append(create_pretty_dict_list_display(value, indent + 1))
+            elif isinstance(value, (dict, list)):
+                items.append(create_pretty_dict_list_display(value, indent + 1))
+            else:
+                items.append(html.Div(f"{indent_space}- {value}"))
+    return html.Div(items)
+
+# --- Helper function to create a simple key-value table section ---
+def create_info_section(title, data_dict, theme_colors, format_floats=True):
+    """Creates a styled Div with H4 title and key-value pairs."""
+    rows = []
+    for key, value in data_dict.items():
+        # Format float values nicely
+        if format_floats and isinstance(value, float):
+            display_value = f"{value:.4f}" # Adjust precision as needed
+        else:
+            display_value = str(value)
+
+        # Improve readability of keys
+        display_key = key.replace('_', ' ').title()
+
+        rows.append(html.Div([
+            html.Span(f"{display_key}:", style={'fontWeight': 'bold', 'minWidth': '200px', 'display': 'inline-block'}),
+            html.Span(display_value)
+        ], style={'marginBottom': '5px'}))
+
+    return html.Div([
+        html.H4(title, style={'borderBottom': f"1px solid {theme_colors.get('border_light', '#555')}", 'paddingBottom': '5px', 'marginTop': '15px', 'marginBottom': '10px', 'color': 'white'}),
+        *rows
+    ], style={'padding': '15px', 'border': f"1px solid {theme_colors.get('border_light', '#444')}", 'borderRadius':'5px', 'backgroundColor': 'rgba(40,40,40,0.3)', 'marginBottom': '15px'}) # Slightly different background
+
 
 # --- Helper Function for CSV Display ---
 def create_datatable(file_path):
@@ -229,6 +286,13 @@ def create_cfe_delta_table(file_path):
 
 def register_job_page_callbacks(app):
     print("Registering job page callbacks...")
+    
+    theme_colors = {
+        'background': '#0D3D66', 'header_background': '#1E3A5F',
+        'content_background': '#104E78', 'status_background': '#145E88',
+        'text_light': '#E0E0E0', 'text_medium': '#C0C0C0',
+        'text_dark': '#FFFFFF', 'border_light': '#444'
+    }
 
     # --- Callback to parse job name from URL ---
     @app.callback(
@@ -257,6 +321,148 @@ def register_job_page_callbacks(app):
             print("(URL Parser CB) Pathname doesn't match expected '/job/...' format.")
             return None # Clear job name if path doesn't match
 
+    @app.callback(
+        Output('job-metadata-display', 'children'),
+        Input('job-page-job-name-store', 'data')
+    )
+    def update_metadata_display(job_name):
+        if not job_name:
+            # Return a styled message consistent with theme
+            return html.Div("Select a job to view metadata.", style={'color': theme_colors['text_medium'], 'padding': '10px'})
+
+        print(f"(Metadata CB) Attempting to load metadata for job: {job_name}")
+
+        # --- Construct the path to the metadata logfile ---
+        metadata_filename = f"logfile"
+        metadata_filepath = os.path.join(XAI_DIR, job_name, metadata_filename)
+        print(f"(Metadata CB) Expecting metadata file at: {metadata_filepath}")
+        # ----------------------------------------------------
+
+        # --- Read metadata from the file ---
+        metadata_json = None
+        try:
+            with open(metadata_filepath, 'r', encoding='utf-8') as f:
+                metadata_json = f.read()
+            print(f"(Metadata CB) Successfully read metadata file: {metadata_filepath}")
+
+        except FileNotFoundError:
+            print(f"(Metadata CB) Metadata file not found: {metadata_filepath}")
+            # Return a clear message if the file is missing
+            return html.Div([
+                html.Strong("Metadata file not found."),
+                html.P(f"Expected location: {metadata_filepath}", style={'fontSize':'small', 'color':theme_colors['text_medium']})
+            ], style={'color': 'orange', 'padding': '10px', 'border': f"1px solid {theme_colors['border_light']}", 'borderRadius':'5px', 'backgroundColor':'rgba(255, 165, 0, 0.1)'}) # Orange theme for warning
+        except Exception as e:
+            print(f"(Metadata CB) Error reading metadata file {metadata_filepath}: {e}")
+            traceback.print_exc()
+            return html.Div(f"Error reading metadata file: {e}", style={'color': 'red', 'padding': '10px'}) # Red theme for error
+        # -----------------------------------
+        
+        # --- If file read successfully, proceed with parsing and display ---
+        if metadata_json:
+            try:
+                metadata = json.loads(metadata_json)
+                print(f"(Metadata CB) Successfully parsed JSON metadata for {job_name}")
+
+                # --- Build Display Components (using helpers defined earlier) ---
+                display_elements = []
+
+                # 1. General Job Info
+                job_info = {
+                    "Run Timestamp (UTC)": metadata.get("run_timestamp_utc"),
+                    "Status": metadata.get("status"),
+                    "Dataset Path": metadata.get("dataset_path"),
+                    "Model Name": metadata.get("model_name"),
+                    "Label Column": metadata.get("label_column_used"),
+                    "Sequence Length": metadata.get("sequence_length")
+                }
+                display_elements.append(create_info_section("Job Summary", {k: v for k, v in job_info.items() if v is not None}, theme_colors, format_floats=False))
+
+                # 2. Data Summary
+                data_summary = {
+                    "Total Rows": metadata.get("data_total_rows"),
+                    "Training Rows": metadata.get("data_training_rows"),
+                    "Testing Rows": metadata.get("data_testing_rows"),
+                    "Features": metadata.get("data_num_features"),
+                    "Anomalies (Ground Truth)": metadata.get("data_num_anomalies_ground_truth"),
+                    "Anomalies (Predicted)": metadata.get("data_num_anomalies_predicted")
+                }
+                data_summary_filtered = {k: v for k, v in data_summary.items() if v is not None}
+                if data_summary_filtered:
+                     display_elements.append(create_info_section("Data Summary", data_summary_filtered, theme_colors, format_floats=False))
+
+                # 3. Performance Metrics
+                metrics = metadata.get("evaluation_metrics", {})
+                if metrics:
+                    display_elements.append(create_info_section("Performance Metrics", metrics, theme_colors))
+
+                # 4. Execution Times
+                exec_times = {
+                    "Total (s)": metadata.get("execution_time_total_seconds"),
+                    "Simulation (s)": metadata.get("execution_time_simulation_seconds"),
+                    "Training (s)": metadata.get("execution_time_training_seconds"),
+                    "Detection (s)": metadata.get("execution_time_detection_seconds"),
+                    "XAI (s)": metadata.get("execution_time_xai_seconds")
+                }
+                exec_times_filtered = {k: v for k, v in exec_times.items() if v is not None}
+                if exec_times_filtered:
+                    display_elements.append(create_info_section("Execution Times", exec_times_filtered, theme_colors))
+
+                # 5. Model Parameters (collapsible)
+                model_params = metadata.get("model_params")
+                if model_params:
+                    display_elements.append(html.Div([
+                         html.Details([
+                             html.Summary("Model Parameters", style={'fontWeight':'bold', 'cursor': 'pointer', 'color': theme_colors.get('text_light', '#eee'), 'marginBottom':'5px'}),
+                             create_pretty_dict_list_display(model_params)
+                         ], style={'padding': '15px', 'border': f"1px solid {theme_colors.get('border_light', '#444')}", 'borderRadius':'5px', 'backgroundColor': 'rgba(40,40,40,0.3)', 'marginBottom': '15px'})
+                    ]))
+
+                # 6. XAI Settings (collapsible)
+                xai_settings = metadata.get("xai_settings")
+                if xai_settings:
+                     display_elements.append(html.Div([
+                         html.Details([
+                             html.Summary("XAI Settings", style={'fontWeight':'bold', 'cursor': 'pointer', 'color': theme_colors.get('text_light', '#eee'), 'marginBottom':'5px'}),
+                            create_pretty_dict_list_display(xai_settings)
+                         ], style={'padding': '15px', 'border': f"1px solid {theme_colors.get('border_light', '#444')}", 'borderRadius':'5px', 'backgroundColor': 'rgba(40,40,40,0.3)', 'marginBottom': '15px'})
+                    ]))
+
+                # 7. Anomaly Injection Params (collapsible, if any)
+                injection_params = metadata.get("anomaly_injection_params")
+                if injection_params: # Check if list is not empty or None
+                    display_elements.append(html.Div([
+                        html.Details([
+                            html.Summary("Anomaly Injection Parameters", style={'fontWeight':'bold', 'cursor': 'pointer', 'color': theme_colors.get('text_light', '#eee'), 'marginBottom':'5px'}),
+                            create_pretty_dict_list_display(injection_params)
+                        ], style={'padding': '15px', 'border': f"1px solid {theme_colors.get('border_light', '#444')}", 'borderRadius':'5px', 'backgroundColor': 'rgba(40,40,40,0.3)', 'marginBottom': '15px'})
+                    ]))
+
+                # --- Create the Grid Container ---
+                grid_container = html.Div(
+                    children=display_elements, # Place all section divs inside the container
+                    style={
+                        'display': 'grid',
+                        'gridTemplateColumns': 'repeat(auto-fit, minmax(350px, 1fr))',
+                        'gap': '20px', # Space between grid items (rows and columns)
+                        'width': '100%' # Ensure container takes full width
+                    }
+                )
+                
+                print(f"(Metadata CB) Successfully generated display components for {job_name} from file.")
+                return grid_container 
+
+            except json.JSONDecodeError as e:
+                print(f"(Metadata CB) Error decoding metadata JSON from file {metadata_filepath}: {e}")
+                return html.Div(f"Error loading metadata: Invalid JSON format in {metadata_filename} - {e}", style={'color': 'red', 'padding': '10px'})
+            except Exception as e:
+                print(f"(Metadata CB) Error generating metadata display for {job_name} from file: {e}")
+                traceback.print_exc()
+                return html.Div(f"An error occurred while displaying metadata: {e}", style={'color': 'red', 'padding': '10px'})
+        else:
+            # This case should theoretically not be reached if file reading failed earlier,
+            # but included for completeness.
+             return html.Div("Failed to load metadata content.", style={'color': 'red', 'padding': '10px'})
 
     # --- Callback 1: Fetch and Store Data ---
     @app.callback(

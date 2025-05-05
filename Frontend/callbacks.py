@@ -765,7 +765,7 @@ def get_index_callbacks(app):
                     dcc.Dropdown(id={**setting_id_base, 'param': 'max_features'},
                                     # Common string options + None (all features)
                                     options=[{'label': mf, 'value': mf} for mf in ['sqrt', 'log2', 'None']],
-                                    value='None', # Default is None (use all features)
+                                    value='sqrt', # Cannot be none
                                     clearable=False,
                                     style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'}),
                     # Optional: Add a number input if user wants specific int/float?
@@ -1099,7 +1099,6 @@ def get_index_callbacks(app):
         try:
             print("Fetching active jobs from backend...")
             raw_response = handler.handle_get_running()
-            print(f"Raw response from handle_get_running: {raw_response}") # Log raw response
 
             if not raw_response: raise ValueError("Received empty response from handle_get_running.")
 
