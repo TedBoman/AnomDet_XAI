@@ -57,6 +57,7 @@ def save_run_summary(summary_dict: Dict[str, Any], job_name: str, output_dir: st
         
         
         output_path = output_dir+'/'+job_name+'/'+'logfile'
+
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
         # Convert complex objects for JSON serialization
