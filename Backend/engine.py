@@ -76,7 +76,6 @@ def discover_existing_jobs(db_api: TimescaleDBAPI):
     backend_data["running-jobs"].extend(discovered_jobs)
     print(f"Finished discovery. Total 'running' jobs now: {len(backend_data['running-jobs'])}")
 
-
 def main():
     # Start a thread listening for requests
     listener_thread = threading.Thread(target=__request_listener)
