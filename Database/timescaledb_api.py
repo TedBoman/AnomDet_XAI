@@ -202,3 +202,24 @@ class TimescaleDBAPI(DBInterface):
 
         finally:
             conn.close()
+            
+    def list_all_tables(self):
+        tables = []
+        query = """
+            SELECT tablename
+            FROM pg_catalog.pg_tables
+            WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema'
+              AND (tablename LIKE 'job_batch_%' OR tablename LIKE 'job_stream_%');
+        """
+        # Or query without the LIKE filter and filter in Python if preferred
+        try:
+            conn = psycopg2.connect(self.connection_string)
+            cursor = conn.cursor()
+            cursor.execute(query)
+            results = cursor.fetchall()
+            tables = [row[0] for row in results]
+            conn.close()
+        except Exception as e:
+            print(f"Error listing tables: {e}")
+            # Handle error appropriately, maybe reconnect?
+        return tables

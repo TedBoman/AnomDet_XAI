@@ -556,7 +556,6 @@ def register_job_page_callbacks(app):
                                 method_file_components.append(component_with_header)
                                 found_any_results = True # Mark that we found at least one displayable file
 
-                            print(f"method_file_components (after each file): {method_file_components}")
                             sys.stdout.flush()
 
                 except Exception as e:

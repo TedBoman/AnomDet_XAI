@@ -29,11 +29,59 @@ backend_data = {
     "running-jobs": []
 }
 
+def discover_existing_jobs(db_api: TimescaleDBAPI):
+    print("Discovering existing job tables...")
+    discovered_jobs = []
+    try:
+        # Assumes db_api has a method to list tables.
+        # Replace with actual implementation, might involve querying
+        # information_schema.tables LIKE 'job_batch_%' OR 'job_stream_%'
+        all_tables = db_api.list_all_tables() # You'll need to implement this method
+
+        prefix_batch = "job_batch_"
+        prefix_stream = "job_stream_"
+
+        for table_name in all_tables:
+            job_type = None
+            job_name_part = None
+
+            if table_name.startswith(prefix_batch):
+                job_type = "batch"
+                job_name_part = table_name
+            elif table_name.startswith(prefix_stream):
+                job_type = "stream"
+                job_name_part = table_name
+
+            if job_type and job_name_part:
+                # Check if this job name is already known (e.g., from a concurrent start?)
+                # This basic check might not be necessary if startup runs before listener
+                is_known = any(j["name"] == job_name_part for j in backend_data["running-jobs"]) or \
+                           any(j["name"] == job_name_part for j in backend_data["started-jobs"])
+
+                if not is_known:
+                    print(f"  Discovered existing job: {job_name_part} (Type: {job_type})")
+                    job_info = {
+                        "name": job_name_part,
+                        "type": job_type,
+                        "thread": None, # Explicitly None as the thread is lost
+                        "discovered_at_startup": True # Optional flag
+                    }
+                    discovered_jobs.append(job_info)
+
+    except Exception as e:
+        print(f"Error discovering existing jobs: {e}")
+
+    # Add discovered jobs to the list (choose the appropriate list)
+    # Using running-jobs might be okay if you accept the implications
+    backend_data["running-jobs"].extend(discovered_jobs)
+    print(f"Finished discovery. Total 'running' jobs now: {len(backend_data['running-jobs'])}")
+
+
 def main():
     # Start a thread listening for requests
     listener_thread = threading.Thread(target=__request_listener)
     listener_thread.daemon = True
-    listener_thread.start()
+    # listener_thread.start() # Start listener LATER, after DB init and discovery
 
     db_conn_params = {
         "user": DATABASE["USER"],
@@ -43,27 +91,60 @@ def main():
         "database": DATABASE["DATABASE"]
     }
 
-    backend_data["db_api"] = TimescaleDBAPI(db_conn_params)
+    try:
+        backend_data["db_api"] = TimescaleDBAPI(db_conn_params)
+        print("Database API initialized.")
+
+        # --- Run discovery AFTER db_api is initialized ---
+        discover_existing_jobs(backend_data["db_api"])
+
+        # --- Now start the listener ---
+        listener_thread.start()
+        print("Request listener started.")
+
+    except Exception as e:
+        print(f"CRITICAL ERROR during initialization: {e}")
+        sys.exit(1) # Exit if DB connection fails
 
     print("Main thread started...")
     # Main loop serving the backend logic
     try:
         while True:
-            for job in backend_data["started-jobs"]:
-                # If the job is a batch job, check if the job is finished to move it to the running-jobs list
+            # --- Main loop logic needs adjustment ---
+            # The original loop moved jobs from 'started' to 'running'.
+            # If 'started-jobs' is still used, that part can remain.
+            # However, jobs discovered at startup have thread=None,
+            # so checks like job["thread"].is_alive() will fail.
+
+            # Example adjusted loop (assuming you still use started-jobs briefly):
+            current_started = list(backend_data["started-jobs"]) # Iterate over a copy
+            for job in current_started:
+                if job.get("discovered_at_startup"): # Skip discovered jobs in this check
+                     continue
+
                 if job["type"] == "batch":
-                    if job["thread"].is_alive() == False:
+                     # Check if the thread finished *if* it exists
+                    if job["thread"] and not job["thread"].is_alive():
+                        print(f"Batch job '{job['name']}' thread finished. Moving to running-jobs.")
                         backend_data["running-jobs"].append(job)
                         backend_data["started-jobs"].remove(job)
-                # If the job is a stream job, check if there is a table with the name of the job in the database to add to run job
-                else:
-                    found = backend_data["db_api"].table_exists(job["name"])
-                    if found:
+                    # If thread is None (shouldn't happen for non-discovered), handle error?
+                elif job["type"] == "stream":
+                     # Check if table exists for newly started stream jobs
+                    if backend_data["db_api"].table_exists(f"job_stream_{job['name']}"):
+                        print(f"Stream job '{job['name']}' table found. Moving to running-jobs.")
                         backend_data["running-jobs"].append(job)
                         backend_data["started-jobs"].remove(job)
-                sleep(1)
+
+            sleep(1) # Keep the sleep
+
     except KeyboardInterrupt:
         print("Exiting backend...")
+    finally:
+        # Add cleanup if necessary (e.g., close db connection explicitly)
+        if backend_data.get("db_api"):
+            # backend_data["db_api"].close() # If your API has a close method
+            pass
 
 # Listens for incoming requests and handles them through the __handle_api_call function
 def __request_listener():
@@ -79,7 +160,7 @@ def __request_listener():
         try: 
             conn, addr = sock.accept()
             print(f'Connected to {addr}')
-            recv_data = conn.recv(1024)
+            recv_data = conn.recv(4096)
             recv_data = recv_data.decode("utf-8")
             recv_dict = json.loads(recv_data)
             print(f"Received request: {recv_dict}")
@@ -298,9 +379,9 @@ def __handle_api_call(conn, data: dict) -> None:
                 execute_calls.import_dataset(conn, path, data["timestamp_column"])
             # If the file already exists, empty the socket buffer and do nothing
             else:
-                data = conn.recv(1024)
+                data = conn.recv(4096)
                 while data:
-                    data = conn.recv(1024)
+                    data = conn.recv(4096)
         case "get-all-jobs":
             job_names = []
 

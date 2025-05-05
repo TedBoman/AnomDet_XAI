@@ -189,7 +189,7 @@ class BackendAPI:
                 data = json.dumps(data)
                 sock.sendall(bytes(data, encoding="utf-8"))
             if response:
-                data = sock.recv(1024)
+                data = sock.recv(4096)
                 data = data.decode("utf-8")
                 return data
         except Exception as e:
