@@ -15,7 +15,7 @@ import utils as ut
 
 # Constants or Configurations
 OUTPUT_DIR = "/data"
-MAX_BG_SAMPLES = 25000 # Example default, can be overridden
+MAX_BG_SAMPLES = 250000 # Example default, can be overridden
 
 class XAIRunner:
     """
@@ -23,7 +23,7 @@ class XAIRunner:
     """
     def __init__(
         self,
-        xai_params: List[Dict[str, Any]],
+        xai_settings: Dict[str, Any],
         model_wrapper: ModelWrapperForXAI,
         sequence_length: int,
         feature_columns: List[str],
@@ -31,7 +31,7 @@ class XAIRunner:
         continuous_features_list: List[str],
         job_name: str,
         mode: str = 'classification', # Default mode
-        output_dir: str = OUTPUT_DIR
+        output_dir: str = OUTPUT_DIR,
     ):
         """
         Initializes the XAIRunner.
@@ -47,15 +47,15 @@ class XAIRunner:
             mode (str): Type of problem ('classification' or 'regression'). Defaults to 'classification'.
             output_dir (str): Directory to save XAI plots and results.
         """
-        if not isinstance(xai_params, list):
-            raise TypeError("xai_params must be a list of dictionaries.")
+        if not isinstance(xai_settings, dict):
+            raise TypeError("xai_settings must be a dictionary wit settings and list of dictionaries.")
         if not model_wrapper:
             raise ValueError("model_wrapper cannot be None.")
         if not isinstance(sequence_length, int) or sequence_length <= 0:
             # Even non-sequential models need a sequence context for XAI framework
             raise ValueError("sequence_length must be a positive integer for XAI processing.")
 
-        self.xai_params = xai_params
+        self.xai_params = xai_settings.get("xai_params", None)
         self.model_wrapper = model_wrapper
         self.sequence_length = sequence_length
         self.feature_columns = feature_columns
@@ -64,6 +64,10 @@ class XAIRunner:
         self.job_name = job_name
         self.mode = mode
         self.output_dir = output_dir
+        
+        self.xai_settings = xai_settings.get("xai_settings")
+        self.xai_sampling_strategy = xai_settings.get("xai_sampling_strategy", "random")
+        self.xai_sample_seed = xai_settings.get("xai_sample_seed", None)
 
         os.makedirs(self.output_dir, exist_ok=True)
         print(f"XAIRunner initialized for job '{self.job_name}'. Output directory: '{self.output_dir}'")
@@ -86,7 +90,6 @@ class XAIRunner:
         print(f"Processing {len(self.xai_params)} XAI method(s)...")
 
         # --- Check Prerequisites ---
-        # (Moved check for TimeSeriesExplainer and ut to the top-level import)
         if (TimeSeriesExplainer is None or ut.dataframe_to_sequences is None or
                 x.process_and_plot_shap is None or x.process_and_plot_lime is None or x.process_and_plot_dice is None):
             print("XAI components not available (import failed). Skipping XAI.")
@@ -108,9 +111,7 @@ class XAIRunner:
                 print(config)
                 if config.get("method") == 'ShapExplainer':
                     settings = config.get('settings', {})
-                    print(settings)
                     shap_method = settings.get('shap_method', 'kernel')
-                    print(f"Using shap method: {shap_method} for background samples")
 
             max_bg_samples = MAX_BG_SAMPLES
             if shap_method == 'tree' and background_data_np.shape[0] > 0:
@@ -141,7 +142,6 @@ class XAIRunner:
                     warnings.warn("Background data was sampled but indices mapping is unclear. Label alignment might be approximate.", RuntimeWarning)
                     # Fallback: Use indices relative to the start of the *sampled* background data - less accurate if original df had gaps etc.
                     end_indices = [i + self.sequence_length - 1 for i in range(num_sequences)]
-
 
             valid_end_indices = [idx for idx in end_indices if idx < len(training_df_with_labels)]
 
@@ -204,60 +204,38 @@ class XAIRunner:
                 traceback.print_exc()
                 return # Stop if explainer fails
 
-            # --- 3. Prepare Instances for Explanation ---
-            print(f"Preparing instances for explanation from data source (shape: {data_source_for_explanation.shape}).")
-            print(f"Using columns for sequence generation: {self.feature_columns}")
-
-            # Ensure source data has required columns
-            missing_cols = [col for col in self.feature_columns if col not in data_source_for_explanation.columns]
-            if missing_cols:
-                raise ValueError(f"Data source for explanation is missing required feature columns: {missing_cols}")
-
-            # Generate ALL possible sequences from the source data ONCE
-            all_instances_to_explain_np = ut.dataframe_to_sequences(
-                df=data_source_for_explanation,
-                sequence_length=self.sequence_length,
-                feature_cols=self.feature_columns
-            )
-
-            num_instances_available = all_instances_to_explain_np.shape[0]
-            if num_instances_available == 0:
-                print("Warning: No sequences generated for explanation from the provided data source. Skipping explanation methods.")
-                return # Skip if no instances
-
-            print(f"Generated {num_instances_available} total sequences (instances) for potential explanation.")
-
-            # --- Extract Corresponding True Labels for ALL potential Explained Instances ---
-            # Calculate end indices in the source DataFrame for ALL sequences
+            # --- 3. Prepare ALL Instances and Labels from Explanation Source ---
+            all_instances_to_explain_np = np.array([])
             all_original_labels = None
+            num_instances_available = 0
             try:
-                start_index_in_df = self.sequence_length - 1
-                end_indices_for_explanation = list(range(start_index_in_df, start_index_in_df + num_instances_available))
+                print(f"Generating all possible sequences from explanation data source...")
+                all_instances_to_explain_np = ut.dataframe_to_sequences(df=data_source_for_explanation, sequence_length=self.sequence_length, feature_cols=self.feature_columns)
+                num_instances_available = all_instances_to_explain_np.shape[0]
+                if num_instances_available == 0: print("Warning: No sequences generated for explanation."); return
+                print(f"Generated {num_instances_available} total sequences for potential explanation.")
 
-                max_source_index = len(data_source_for_explanation) - 1
-                valid_explain_indices = [idx for idx in end_indices_for_explanation if idx <= max_source_index]
+                # Extract Labels corresponding to the END of each sequence
+                end_indices_exp = list(range(self.sequence_length - 1, self.sequence_length - 1 + num_instances_available))
+                max_source_index_exp = len(data_source_for_explanation) - 1
+                valid_end_indices_exp = [idx for idx in end_indices_exp if idx <= max_source_index_exp]
 
-                if not valid_explain_indices:
-                    raise IndexError(f"No valid indices found for explanation labels (needed up to {end_indices_for_explanation[-1]}, max is {max_source_index}).")
-
-                # Adjust available instances if not all labels could be found (should ideally not happen if sequence generation is correct)
-                if len(valid_explain_indices) < num_instances_available:
-                    warnings.warn(f"Could only find valid indices for {len(valid_explain_indices)} out of {num_instances_available} generated sequences. Trimming sequences.", RuntimeWarning)
-                    num_instances_available = len(valid_explain_indices)
+                if len(valid_end_indices_exp) < num_instances_available:
+                    warnings.warn(f"Label index mismatch for explanation source ({len(valid_end_indices_exp)} vs {num_instances_available}). Trimming sequences.", RuntimeWarning)
+                    num_instances_available = len(valid_end_indices_exp)
                     all_instances_to_explain_np = all_instances_to_explain_np[:num_instances_available]
-                    end_indices_for_explanation = valid_explain_indices # Use the valid indices
 
-                if self.actual_label_col not in data_source_for_explanation.columns:
-                    raise KeyError(f"Label column '{self.actual_label_col}' not found in data_source_for_explanation DataFrame.")
+                if self.actual_label_col in data_source_for_explanation.columns:
+                    all_original_labels = data_source_for_explanation[self.actual_label_col].iloc[valid_end_indices_exp].values
+                    print(f"Extracted {len(all_original_labels)} labels for the {num_instances_available} generated sequences.")
+                    if len(all_original_labels) != all_instances_to_explain_np.shape[0]: # Final length check
+                        min_len = min(len(all_original_labels), all_instances_to_explain_np.shape[0])
+                        warnings.warn(f"Final label/instance mismatch. Adjusting to {min_len}.", RuntimeWarning)
+                        all_instances_to_explain_np = all_instances_to_explain_np[:min_len]
+                        all_original_labels = all_original_labels[:min_len]; num_instances_available = min_len
+                else: warnings.warn(f"Label column '{self.actual_label_col}' not found in explanation source.")
 
-                all_original_labels = data_source_for_explanation[self.actual_label_col].iloc[end_indices_for_explanation].values
-                print(f"Successfully extracted {len(all_original_labels)} true labels corresponding to the {num_instances_available} generated sequences.")
-
-            except (KeyError, IndexError, Exception) as label_err:
-                print(f"ERROR extracting original labels for handler: {label_err}")
-                print("Proceeding without original labels for the handler (some plots may be affected).")
-                all_original_labels = None # Ensure it's None if extraction failed
-
+            except Exception as prep_err: print(f"ERROR preparing instances/labels from source: {prep_err}"); traceback.print_exc(); return
 
             # --- 4. Define Plot Handlers Dictionary ---
             plot_handlers = {
@@ -269,53 +247,106 @@ class XAIRunner:
             # --- 5. Loop Through XAI Methods from Config ---
             for xai_config in self.xai_params:
                 method_name = xai_config.get("method")
-                settings = xai_config.get("settings", {}) # Use method-specific settings
+                settings = xai_config.get("settings", {})
 
-                if not method_name or method_name == "none":
-                    print("Skipping entry with no method name.")
-                    continue
-
+                if not method_name or method_name == "none": continue
                 print(f"\n===== Running Method: {method_name.upper()} =====")
+
                 try:
-                    # --- Per-Method Instance Limiting ---
-                    n_explain_max_config = settings.get("n_explain_max") # Get value, could be None
-                    # Provide a default if the key is missing OR if the value is None
-                    if n_explain_max_config is None:
-                        n_explain_max = 10 # Default number of instances if not specified or None
-                        print(f"Using default n_explain_max={n_explain_max} for {method_name}.")
-                    elif not isinstance(n_explain_max_config, int) or n_explain_max_config < 0:
-                         warnings.warn(f"Invalid n_explain_max value '{n_explain_max_config}' for {method_name}. Using default=10.", RuntimeWarning)
-                         n_explain_max = 10
+                    # --- *** Determine Indices TO Explain for THIS method *** ---
+                    final_sequence_indices = np.array([], dtype=int)
+                    method_specific_orig_indices = settings.get('explain_indices') # Check for override list
+
+                    if method_specific_orig_indices is not None and isinstance(method_specific_orig_indices, list):
+                        print(f"Using method-specific indices from config: {method_specific_orig_indices[:10]}...")
+                        # Ensure indices are integers and valid for the source DF
+                        selected_original_indices = np.array([int(i) for i in method_specific_orig_indices if i in data_source_for_explanation.index])
+                        if len(selected_original_indices) != len(method_specific_orig_indices):
+                            warnings.warn("Some method-specific indices were out of bounds for the source DataFrame.", RuntimeWarning)
                     else:
-                        n_explain_max = n_explain_max_config
+                        # Use global strategy defined in __init__
+                        current_strategy = settings.get('sampling_strategy', self.xai_sampling_strategy) # Allow override of strategy per method? No, use global.
+                        current_n_samples = settings.get('n_explain_max', 10)
+                        print(f"Using global sampling strategy '{self.xai_sampling_strategy}' with n={current_n_samples}.")
+                        selected_original_indices = ut.select_explanation_indices(
+                            data_source_for_explanation, # Sample from the full source
+                            current_strategy,
+                            current_n_samples,
+                            label_col=self.actual_label_col,
+                            random_state=self.xai_sample_seed
+                        )
 
-                    # Determine the actual number of instances for *this* method
-                    num_instances_for_method = min(num_instances_available, n_explain_max)
+                    if len(selected_original_indices) == 0:
+                        print(f"WARNING: No original indices selected based on strategy/override for {method_name}. Skipping method.")
+                        continue
 
-                    if num_instances_for_method <= 0:
-                         print(f"Skipping {method_name} as number of instances to explain is {num_instances_for_method}.")
-                         continue # Skip to next method if no instances needed/available
+                    # --- Map selected original DF indices to sequence array indices ---
+                    # Sequence 'j' corresponds to label at original index 'j + sequence_length - 1'
+                    # So, to find sequence index 'j' for original index 'idx', use j = idx - (sequence_length - 1)
+                    offset = self.sequence_length - 1
+                    sequence_indices_potential = selected_original_indices - offset
+                    # Filter valid sequence indices (must be >= 0 and < num_sequences_available)
+                    valid_mask = (sequence_indices_potential >= 0) & (sequence_indices_potential < num_instances_available)
+                    final_sequence_indices = sequence_indices_potential[valid_mask].astype(int)
 
-                    print(f"Selected {num_instances_for_method} instance(s) for explanation with {method_name} (max requested: {n_explain_max}).")
+                    if len(final_sequence_indices) < len(selected_original_indices):
+                        warnings.warn(f"Could not map all selected original indices to valid sequence indices (mapped {len(final_sequence_indices)} / {len(selected_original_indices)}). Some instances might be too close to the start.", RuntimeWarning)
 
-                    # Slice the instances for this specific method
-                    # Take the *first* N instances from the total generated pool
-                    current_instances_np = all_instances_to_explain_np[:num_instances_for_method]
+                    if len(final_sequence_indices) == 0:
+                        print(f"WARNING: No valid sequence indices derived from selection for {method_name}. Skipping method.")
+                        continue
 
-                    # Slice the corresponding labels if they exist
+                    # --- Apply per-method instance limit (n_explain_max) ---
+                    # This limit applies *after* the sampling strategy/override
+                    n_explain_max = settings.get("n_explain_max")
+                    if n_explain_max is not None:
+                        try:
+                            n_explain_max = int(n_explain_max)
+                            if n_explain_max > 0 and n_explain_max < len(final_sequence_indices):
+                                print(f"Applying method-specific limit n_explain_max={n_explain_max} (selected {len(final_sequence_indices)} initially). Taking first N.")
+                                # Take first N of the selected/mapped sequence indices
+                                final_sequence_indices = final_sequence_indices[:n_explain_max]
+                            elif n_explain_max <= 0:
+                                warnings.warn(f"Invalid n_explain_max value {n_explain_max}. Ignoring limit.", RuntimeWarning)
+                        except (ValueError, TypeError):
+                            warnings.warn(f"Invalid n_explain_max value '{n_explain_max}'. Ignoring limit.", RuntimeWarning)
+
+                    num_sequences_to_process = len(final_sequence_indices)
+                    if num_sequences_to_process == 0:
+                        print(f"No instances left to explain for {method_name} after limiting/mapping. Skipping.")
+                        continue
+
+                    print(f"Final number of sequences to explain for {method_name}: {num_sequences_to_process}")
+                    # print(f"Final sequence indices: {final_sequence_indices[:10]}...") # Debug
+
+                    # --- Slice the data and labels for the current method ---
+                    current_instances_np = all_instances_to_explain_np[final_sequence_indices]
                     current_original_labels = None
                     if all_original_labels is not None:
-                        current_original_labels = all_original_labels[:num_instances_for_method]
-                        # Sanity check length
-                        if len(current_original_labels) != current_instances_np.shape[0]:
-                             warnings.warn(f"Label slice length mismatch for {method_name}. Check logic.", RuntimeWarning)
-                             # Adjust to min length to avoid index errors downstream
-                             min_len = min(len(current_original_labels), current_instances_np.shape[0])
-                             current_instances_np = current_instances_np[:min_len]
-                             current_original_labels = current_original_labels[:min_len]
-                             num_instances_for_method = min_len # Update the count being processed
+                        try:
+                            current_original_labels = all_original_labels[final_sequence_indices]
+                            if len(current_original_labels) != len(current_instances_np): # Sanity check
+                                warnings.warn("Final label/instance slice mismatch after n_explain_max. Check index logic.", RuntimeWarning)
+                                min_len_final = min(len(current_original_labels), len(current_instances_np))
+                                current_instances_np = current_instances_np[:min_len_final]
+                                current_original_labels = current_original_labels[:min_len_final]
+                                num_sequences_to_process = min_len_final
+                        except IndexError as slice_err:
+                            print(f"ERROR slicing labels with final sequence indices: {slice_err}. Proceeding without labels for this method.")
+                            current_original_labels = None # Ensure it's None if slicing fails
 
-                    # --- End Per-Method Instance Limiting ---
+                    # --- *** END Index Selection / Data Slicing *** ---
+
+                    # Get the specific explainer from TimeSeriesExplainer
+                    explainer_object = ts_explainer._get_or_initialize_explainer(method_name)
+                    if explainer_object is None: print(f"Could not get explainer for {method_name}. Skipping."); continue
+
+                    print(f"Using configuration for {method_name}: {settings}")
+                    handler_args = { # Prepare common args for plot handler
+                        "explainer_object": explainer_object, "feature_names": self.feature_columns,
+                        "sequence_length": self.sequence_length, "output_dir": self.output_dir,
+                        "mode": self.mode, "job_name": self.job_name,
+                    }
 
                     # Get the specific explainer (SHAP, LIME, DiCE) from TimeSeriesExplainer
                     explainer_object = ts_explainer._get_or_initialize_explainer(method_name)
@@ -339,146 +370,69 @@ class XAIRunner:
 
                     # --- Method Specific Logic ---
                     if method_name == "DiceExplainer":
-                        features_to_vary = settings.get('features_to_vary', self.feature_columns) # Default to all features
-                        dice_runtime_kwargs = {
-                            'total_CFs': settings.get('total_CFs', 4),
-                            'desired_class': settings.get('desired_class', 'opposite'),
-                            'features_to_vary': features_to_vary,
-                        }
+                        # (DiCE logic using current_instances_np)
+                        features_to_vary = settings.get('features_to_vary', self.feature_columns)
+                        dice_runtime_kwargs = {'total_CFs': settings.get('total_CFs', 4), 'desired_class': settings.get('desired_class', 'opposite'), 'features_to_vary': features_to_vary}
                         print(f"DiCE Runtime Params: {dice_runtime_kwargs}")
-
                         start_explain_time = time.perf_counter()
-                        # DiCE explains all instances provided in one go
-                        xai_results = ts_explainer.explain(
-                            instances_to_explain=current_instances_np, # Explain the selected N instances
-                            method_name=method_name,
-                            **dice_runtime_kwargs
-                        )
-                        end_explain_time = time.perf_counter()
-                        print(f"DICE explanation took {end_explain_time - start_explain_time:.2f}s")
-
-                        # Update handler args specific to DiCE results/instances
-                        handler_args.update({
-                            "results": xai_results,
-                            "instances_explained": current_instances_np
-                        })
-
-                        # Call DiCE Handler
-                        handler_func = plot_handlers.get(method_name)
-                        if handler_func:
-                            print("Calling DiCE plot handler...")
-                            handler_func(**handler_args)
-                        else:
-                            print(f"No plot handler found for {method_name}")
+                        xai_results = ts_explainer.explain(instances_to_explain=current_instances_np, method_name=method_name, **dice_runtime_kwargs)
+                        end_explain_time = time.perf_counter(); print(f"DICE explanation took {end_explain_time - start_explain_time:.2f}s")
+                        handler_args.update({"results": xai_results, "instances_explained": current_instances_np, "original_labels": current_original_labels})
+                        handler_func = plot_handlers.get(method_name);
+                        if handler_func: print("Calling DiCE plot handler..."); handler_func(**handler_args)
+                        else: print(f"No plot handler found for {method_name}")
 
                     elif method_name == "ShapExplainer":
-                        # Determine nsamples and l1_reg based on potentially updated shap_method
-                        current_shap_method = settings.get('shap_method', shap_method) # Allow override per config item
-                        n_samples_shap = settings.get('nsamples', 50) # Use config or default
-                        k_features = settings.get('l1_reg_k_features', 20)
-
-                        # Adjust nsamples if using TreeSHAP - typically wants fewer or uses background size
-                        if current_shap_method == 'tree':
-                            # TreeSHAP doesn't use 'nsamples' in the same way, more about background data.
-                            # Might need different parameters. Let's pass 'auto' for now.
-                            n_samples_shap = 'auto' # Or adjust based on TreeExplainer specifics
-                            l1_reg_shap = 'auto' # l1_reg less common/needed for TreeSHAP
-                            print("Adjusting SHAP params for TreeExplainer.")
-                        else: # KernelSHAP etc.
-                            n_flat_features = self.sequence_length * len(self.feature_columns)
-                            # Use feature count based l1_reg only if nsamples < n_flat_features
-                            l1_reg_shap = f'num_features({k_features})' if n_samples_shap < n_flat_features else 'auto'
-
-                        shap_runtime_kwargs = {
-                            'nsamples': n_samples_shap,
-                            'l1_reg': l1_reg_shap,
-                        }
+                        # (SHAP logic using current_instances_np)
+                        current_shap_method = settings.get('shap_method', shap_method)
+                        n_samples_shap = settings.get('nsamples', 50); k_features = settings.get('l1_reg_k_features', 20)
+                        if current_shap_method == 'tree': n_samples_shap = 'auto'; l1_reg_shap = 'auto'
+                        else: n_flat_features = self.sequence_length * len(self.feature_columns); l1_reg_shap = f'num_features({k_features})' if n_samples_shap < n_flat_features else 'auto'
+                        shap_runtime_kwargs = {'nsamples': n_samples_shap, 'l1_reg': l1_reg_shap}
                         print(f"SHAP Runtime Params ({current_shap_method}): {shap_runtime_kwargs}")
-
                         start_explain_time = time.perf_counter()
-                        # SHAP explains all selected instances in one batch
-                        xai_results = ts_explainer.explain(
-                            instances_to_explain=current_instances_np,
-                            method_name=method_name,
-                            **shap_runtime_kwargs
-                        )
-                        end_explain_time = time.perf_counter()
-                        print(f"SHAP explanation ({current_shap_method}) took {end_explain_time - start_explain_time:.2f}s")
-
-                        # Update handler args specific to SHAP
-                        handler_args.update({
-                            "results": xai_results, # SHAP values
-                            "instances_explained": current_instances_np
-                        })
-
-                        handler_func = plot_handlers.get(method_name)
-                        if handler_func:
-                            print(f"Calling plot handler for SHAP...")
-                            handler_func(**handler_args)
-                        else:
-                            print(f"No plot handler defined for SHAP.")
+                        xai_results = ts_explainer.explain(instances_to_explain=current_instances_np, method_name=method_name, **shap_runtime_kwargs)
+                        end_explain_time = time.perf_counter(); print(f"SHAP explanation ({current_shap_method}) took {end_explain_time - start_explain_time:.2f}s")
+                        handler_args.update({"results": xai_results, "instances_explained": current_instances_np, "original_labels": current_original_labels})
+                        handler_func = plot_handlers.get(method_name);
+                        if handler_func: print(f"Calling plot handler for SHAP..."); handler_func(**handler_args)
+                        else: print(f"No plot handler defined for SHAP.")
 
                     elif method_name == "LimeExplainer":
-                        num_features = settings.get('num_features', 15) # K for LIME
-                        num_samples = settings.get('num_samples', 1000) # Perturbations
-                        lime_runtime_kwargs = {
-                            'num_features': num_features,
-                            'num_samples': num_samples
-                        }
+                        # (LIME logic looping through current_instances_np)
+                        num_features = settings.get('num_features', 15); num_samples = settings.get('num_samples', 1000)
+                        lime_runtime_kwargs = {'num_features': num_features, 'num_samples': num_samples}
                         print(f"LIME Runtime Params: {lime_runtime_kwargs}")
-                        print(f"Configuring LIME for {len(current_instances_np)} instance(s)...")
+                        print(f"Executing LIME for {num_sequences_to_process} selected instance(s)...")
 
+                        for loop_idx in range(num_sequences_to_process):
+                            # Get the original sequence index for context if needed
+                            original_sequence_idx = final_sequence_indices[loop_idx]
+                            print(f"--- Explaining Instance LoopIdx={loop_idx} (OrigSeqIdx={original_sequence_idx}) with LIME ---")
+                            current_instance_np_single = current_instances_np[loop_idx : loop_idx + 1]
+                            if current_instance_np_single.size == 0: continue
 
-                        # INNER LOOP FOR LIME INSTANCES
-                        for instance_idx in range(len(current_instances_np)):
-                            print(f"--- Explaining Instance {instance_idx} with LIME ---")
-                            # Select the single instance (needs to keep 3D shape: [1, seq_len, n_features])
-                            current_instance_np = current_instances_np[instance_idx : instance_idx + 1]
-                            if current_instance_np.size == 0:
-                                print(f"Skipping LIME for instance {instance_idx} due to empty data.")
-                                continue
-
-                            # Extract the single corresponding original label if available
-                            current_original_label = None
-                            if current_original_labels is not None and instance_idx < len(current_original_labels):
-                                current_original_label = [current_original_labels[instance_idx]] # Keep as list/array
-
+                            current_original_label_single = None
+                            if current_original_labels is not None:
+                                current_original_label_single = [current_original_labels[loop_idx]] # Keep as list
 
                             try:
                                 start_lime_time = time.perf_counter()
-                                # Explain this single instance slice
-                                lime_explanation_object = ts_explainer.explain(
-                                    instances_to_explain=current_instance_np,
-                                    method_name='LimeExplainer',
-                                    **lime_runtime_kwargs
-                                )
-                                end_lime_time = time.perf_counter()
-                                print(f"LIME explanation for instance {instance_idx} took {end_lime_time - start_lime_time:.2f}s")
+                                lime_explanation_object = ts_explainer.explain(instances_to_explain=current_instance_np_single, method_name='LimeExplainer', **lime_runtime_kwargs)
+                                end_lime_time = time.perf_counter(); print(f"LIME explanation for instance {loop_idx} took {end_lime_time - start_lime_time:.2f}s")
 
-                                # Update handler args for this specific LIME instance
                                 handler_args.update({
-                                    "results": lime_explanation_object, # LIME explanation object
-                                    "instances_explained": current_instance_np, # The single instance explained
-                                    "instance_index": instance_idx, # Pass index for unique file naming etc.
-                                    "original_labels": current_original_label # Pass the single label
+                                    "results": lime_explanation_object, "instances_explained": current_instance_np_single,
+                                    "instance_index": loop_idx, # Use loop index for file naming
+                                    "original_labels": current_original_label_single
                                 })
-
-
-                                handler_func = plot_handlers.get(method_name)
-                                if handler_func:
-                                    print(f"Calling plot handler for LIME instance {instance_idx}...")
-                                    # Pass instance_index to handler if needed
-                                    handler_func(**handler_args)
-                                else:
-                                    print(f"No plot handler defined for LIME.")
-
+                                handler_func = plot_handlers.get(method_name);
+                                if handler_func: print(f"Calling plot handler for LIME instance {loop_idx}..."); handler_func(**handler_args)
+                                else: print(f"No plot handler defined for LIME.")
                             except Exception as lime_instance_err:
-                                print(f"ERROR during LIME explanation/plotting for instance {instance_idx}: {lime_instance_err}")
-                                import traceback
-                                traceback.print_exc() # Print traceback for debugging
-
+                                print(f"ERROR during LIME explanation/plotting for instance {loop_idx} (OrigSeqIdx: {original_sequence_idx}): {lime_instance_err}")
+                                traceback.print_exc()
                         print(f"--- Finished LIME Explanations ---")
-                        # END INNER LOOP FOR LIME
 
                     else:
                         print(f"Skipping unknown or unhandled XAI method: {method_name}")

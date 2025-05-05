@@ -81,119 +81,151 @@ def create_datatable(file_path):
 
 # --- Helper Function for counterfactual CSV Display ---
 def create_cfe_delta_table(file_path):
-    """Reads a CFE CSV, calculates differences, and returns a styled DataTable."""
+    """
+    Reads a CFE CSV and returns a single styled DataTable containing both
+    the original row and counterfactual rows, highlighting differences.
+    """
     try:
         df_cfe = pd.read_csv(file_path)
 
-        # Find the original row
+        # --- Find Original and Counterfactual Data ---
         original_rows = df_cfe[df_cfe['type'].str.lower() == 'original']
         if original_rows.empty:
             return html.P(f"Error: 'original' row not found in {os.path.basename(file_path)}.", style={'color': 'red'})
-        original_row = original_rows.iloc[0]
+        original_row = original_rows.iloc[0] # Use the first original row found
 
-        # Get counterfactual rows
         cf_rows = df_cfe[df_cfe['type'].str.lower() == 'counterfactual']
-        if cf_rows.empty:
-            return html.P(f"No 'counterfactual' rows found in {os.path.basename(file_path)}.", style={'color': 'orange'})
+        # No error if cf_rows is empty, we'll just show the original
 
-        # Identify feature columns (exclude 'type')
-        feature_cols = [col for col in df_cfe.columns if col.lower() != 'type']
+        # Identify feature columns (exclude 'type', but keep others like 'label')
+        all_display_cols = list(df_cfe.columns)
+        feature_cols = [col for col in all_display_cols if col.lower() != 'type']
 
-        display_data = []
+        combined_data = []
         style_conditions = []
 
-        # Process each counterfactual row
-        for idx, cf_row in cf_rows.iterrows():
-            display_row = {'Counterfactual #': idx - original_row.name} # Simple row number
-            changed_features_list = []
-            row_index = idx - original_row.name - 1 # 0-based index for styling
+        # --- Process Original Row (Row Index 0) ---
+        original_display = {'Row Type': 'Original', 'CF #': 'N/A', 'Changes': 'N/A'}
+        for col in feature_cols:
+             original_display[col] = original_row.get(col, 'N/A') # Use .get for safety
+        combined_data.append(original_display)
 
-            for col in feature_cols:
-                original_val = original_row[col]
-                cf_val = cf_row[col]
+        # Add style to distinguish the original row
+        style_conditions.append({
+            'if': {'row_index': 0},
+            'fontWeight': 'bold',
+            'backgroundColor': 'rgba(100, 100, 100, 0.15)' # Slightly different background
+        })
 
-                # Check if the value changed (handle potential type differences and NaN)
-                changed = False
-                # Try numeric comparison first with tolerance for floats
-                try:
-                    # Check for NaN equality explicitly
-                    if pd.isna(original_val) and pd.isna(cf_val):
-                        changed = False
-                    elif pd.isna(original_val) or pd.isna(cf_val):
-                        changed = True # One is NaN, the other isn't
-                    # Use isclose for floats, direct compare otherwise
-                    elif isinstance(original_val, (int, float)) and isinstance(cf_val, (int, float)):
-                         if not np.isclose(original_val, cf_val, rtol=1e-05, atol=1e-08):
-                              changed = True
-                    elif original_val != cf_val: # Direct comparison for others (strings etc)
-                        changed = True
-                except TypeError: # Fallback if types are incompatible for comparison
-                     if str(original_val) != str(cf_val):
-                           changed = True
+        # --- Process Counterfactual Rows (Starting from Row Index 1) ---
+        if not cf_rows.empty:
+            for cf_idx, (row_label, cf_row) in enumerate(cf_rows.iterrows(), start=1):
+                # combined_row_index corresponds to cf_idx since original is row 0
+                cf_display = {'Row Type': f'CF {cf_idx}', 'CF #': cf_idx}
+                changed_features_list = []
 
-                if changed:
-                    # Show the new counterfactual value
-                    display_row[col] = cf_val
-                    changed_features_list.append(col)
-                    # Add style condition to highlight this cell
-                    style_conditions.append({
-                        'if': {'row_index': row_index, 'column_id': col},
-                        'backgroundColor': '#3D9970', # Teal-ish highlight
-                        'color': 'white',
-                        'fontWeight': 'bold'
-                    })
-                else:
-                    # Indicate no change (e.g., with a dash)
-                    display_row[col] = "—" # Em dash for clarity
+                for col in feature_cols:
+                    original_val = original_row.get(col)
+                    cf_val = cf_row.get(col)
 
-            display_row['Changes'] = ", ".join(changed_features_list) if changed_features_list else "None"
-            display_data.append(display_row)
+                    # Check if the value changed
+                    changed = False
+                    try:
+                        if pd.isna(original_val) and pd.isna(cf_val):
+                            changed = False
+                        elif pd.isna(original_val) or pd.isna(cf_val):
+                            changed = True
+                        elif isinstance(original_val, (int, float)) and isinstance(cf_val, (int, float)):
+                            if not np.isclose(original_val, cf_val, rtol=1e-05, atol=1e-08, equal_nan=True):
+                                changed = True
+                        elif original_val != cf_val:
+                            changed = True
+                    except TypeError:
+                        if str(original_val) != str(cf_val):
+                            changed = True
 
-        # Define columns for the DataTable
-        table_columns = [{"name": "CF #", "id": "Counterfactual #"}] + \
-                        [{"name": "Changed Features", "id": "Changes"}] + \
-                        [{"name": i, "id": i} for i in feature_cols]
+                    if changed:
+                        cf_display[col] = cf_val
+                        changed_features_list.append(col)
+                        # Add style condition to highlight this changed cell
+                        style_conditions.append({
+                            'if': {'row_index': cf_idx, 'column_id': col},
+                            'backgroundColor': '#3D9970', # Teal-ish highlight
+                            'color': 'white',
+                            'fontWeight': 'bold'
+                        })
+                    else:
+                        # Indicate no change with em dash
+                        cf_display[col] = "—"
 
-        delta_table = dash_table.DataTable(
+                cf_display['Changes'] = ", ".join(changed_features_list) if changed_features_list else "None"
+                combined_data.append(cf_display)
+
+        # --- Define Columns for the Combined DataTable ---
+        # Start with the special columns, then add the feature columns
+        table_columns = [
+            {"name": "Row Type", "id": "Row Type"},
+            {"name": "CF #", "id": "CF #"},
+            {"name": "Changed", "id": "Changes"}
+        ] + [{"name": i, "id": i} for i in feature_cols]
+
+
+        # --- Create the Combined DataTable ---
+        combined_table = dash_table.DataTable(
             columns=table_columns,
-            data=display_data,
+            data=combined_data,
             style_table={'overflowX': 'auto', 'marginTop': '10px'},
             style_header={
                 'backgroundColor': 'rgb(30, 30, 30)',
                 'color': 'white',
                 'fontWeight': 'bold'
             },
-            style_cell={ # Default cell style
+            style_cell={ # Default cell style for all cells
                 'backgroundColor': 'rgb(50, 50, 50)',
                 'color': 'white',
                 'border': '1px solid #555',
                 'textAlign': 'left',
                 'padding': '5px',
-                'minWidth': '80px', 'width': '120px', 'maxWidth': '180px', # Adjust width as needed
+                'minWidth': '60px', 'width': '100px', 'maxWidth': '150px', # Adjust width
                 'overflow': 'hidden',
                 'textOverflow': 'ellipsis',
             },
-            # Apply conditional styles LAST to override defaults
+            # Apply conditional styles (original row + changed cells)
             style_data_conditional=style_conditions,
-            tooltip_data=[ # Show full value on hover for truncated cells
+            tooltip_data=[ # Show full value on hover
                 {
                     column: {'value': str(value), 'type': 'markdown'}
                     for column, value in row.items()
-                } for row in display_data
+                } for row in combined_data
             ],
-             tooltip_duration=None # Keep tooltip visible
+            tooltip_duration=None # Keep tooltip visible
         )
 
+        # Return a Div containing the combined table
         return html.Div([
-            html.P("Counterfactual Explanations (Highlighted cells show changed values from original):", style={'marginTop':'10px', 'fontWeight':'bold'}),
-            delta_table
-            ])
+            html.H5("Original vs. Counterfactuals:", style={'marginTop':'20px', 'fontWeight':'bold'}),
+            combined_table
+        ])
 
-    except Exception as e:
-        print(f"Error creating CFE delta table for {file_path}: {e}")
+    except FileNotFoundError:
+        print(f"Error: File not found at {file_path}")
+        P_component = getattr(html, 'P', lambda *args, **kwargs: f"Error: File not found - {os.path.basename(file_path)}")
+        return P_component(f"Error: File not found - {os.path.basename(file_path)}", style={'color':'red'})
+    except pd.errors.EmptyDataError:
+        print(f"Error: The file {file_path} is empty.")
+        P_component = getattr(html, 'P', lambda *args, **kwargs: f"Error: The file is empty - {os.path.basename(file_path)}")
+        return P_component(f"Error: The file is empty - {os.path.basename(file_path)}", style={'color':'red'})
+    except KeyError as e:
+        print(f"Error processing CFE file {file_path}: Missing expected column {e}")
         traceback.print_exc()
-        return html.P(f"Error processing counterfactuals file: {os.path.basename(file_path)} - {e}", style={'color':'red'})
-# --------------------------------------------------------
+        P_component = getattr(html, 'P', lambda *args, **kwargs: f"Error: Missing expected column {e} in {os.path.basename(file_path)}.")
+        return P_component(f"Error: Missing expected column {e} in {os.path.basename(file_path)}.", style={'color': 'red'})
+    except Exception as e:
+        print(f"Error creating combined CFE table for {file_path}: {e}")
+        traceback.print_exc()
+        P_component = getattr(html, 'P', lambda *args, **kwargs: f"Error processing counterfactuals file: {os.path.basename(file_path)} - {e}")
+        return P_component(f"Error processing counterfactuals file: {os.path.basename(file_path)} - {e}", style={'color':'red'})
+
 
 def register_job_page_callbacks(app):
     print("Registering job page callbacks...")

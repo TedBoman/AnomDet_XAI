@@ -31,9 +31,9 @@ class FrontendHandler:
         if response == "success":
             try:
                 if inj_params is None:
-                     self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=None, label_column=label_column, xai_params=xai_params, model_params=None)
+                     self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=None, label_column=label_column, xai_params=xai_params, model_params=model_params)
                 else:
-                    self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=[inj_params], label_column=label_column, xai_params=xai_params, model_params=None)
+                    self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=[inj_params], label_column=label_column, xai_params=xai_params, model_params=model_params)
             except Exception as e:
                  print(f"Error calling self.api.run_batch: {e}")
                  return f"Error starting batch job: {e}"

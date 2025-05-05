@@ -1,4 +1,6 @@
+import json
 import sys
+import traceback
 import warnings
 import pandas as pd
 import numpy as np
@@ -39,6 +41,50 @@ MODEL_DIRECTORY = "./ML_models"
 INJECTION_METHOD_DIRECTORY = "./Simulator/AnomalyInjector/InjectionMethods"
 XAI_METHOD_DIRECTORY = "/XAI_methods/methods"
 DATASET_DIRECTORY = "./Datasets"
+OUTPUT_DIR = "/data"
+
+UNSUPERVISED_MODELS = [
+    'lstm',
+    'svm',
+    'isolation_forest',
+]
+
+# --- Utility function to save results ---
+def save_run_summary(summary_dict: Dict[str, Any], job_name: str, output_dir: str) -> None:
+    """Appends a run summary dictionary to a JSON Lines file."""
+    try:
+        # Ensure output directory exists
+        
+        
+        output_path = output_dir+'/'+job_name+'/SHAP'
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Convert complex objects for JSON serialization
+        serializable_summary = {}
+        for k, v in summary_dict.items():
+            if isinstance(v, np.ndarray):
+                serializable_summary[k] = v.tolist()
+            elif isinstance(v, (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64)): # Handle numpy integers
+                 serializable_summary[k] = int(v)
+            elif isinstance(v, (np.float_, np.float16, np.float32, np.float64)): # Handle numpy floats
+                 serializable_summary[k] = float(v)
+            elif isinstance(v, pd.Timestamp): # Handle pandas timestamp
+                serializable_summary[k] = v.tz_convert(None).isoformat() if v.tz is not None else v.isoformat() # Ensure timezone naive for ISO format consistency if needed, or keep tz
+            elif isinstance(v, datetime):
+                 serializable_summary[k] = v.isoformat()
+            # Add other type conversions if needed (e.g., Path objects)
+            elif isinstance(v, Path):
+                serializable_summary[k] = str(v)
+            else:
+                serializable_summary[k] = v
+
+        json_string = json.dumps(serializable_summary, default=str) # Use default=str as fallback
+        with open(output_path, 'a') as f:
+            f.write(json_string + '\n')
+        print(f"Successfully saved run summary to {output_path}")
+    except Exception as e:
+        print(f"Error saving run summary to {output_path}: {e}")
+        traceback.print_exc()
 
 def get_anomaly_rows(
     data: pd.DataFrame,
@@ -351,332 +397,322 @@ def run_batch(
     inj_params: Optional[List[Dict[str, Any]]] = None, 
     debug: bool = False,
     label_column: Optional[str] = None, 
-    xai_params: Optional[Dict[str, Any]] = None,
+    xai_settings: Optional[Dict[str, Any]] = None,
     model_params: Optional[Dict[str, Any]] = None,
-) -> None:    
-    print("Starting Batch-job!")
+) -> int: # Return 1 for success, 0 for failure as per original logic
+    """
+    Runs a batch job including data simulation/import, model training, detection,
+    evaluation, optional XAI, and logs summary statistics and metadata.
+    """
+    print(f"Starting Batch-job: {name}")
     sys.stdout.flush()
-    
-    start_time = time.perf_counter()
 
-    if inj_params is not None:
-        anomaly_settings = []  # Create a list to hold AnomalySetting objects
-        for params in inj_params:  # Iterate over the list of anomaly dictionaries
-            anomaly = AnomalySetting(
-                params.get("anomaly_type", None),
-                int(params.get("timestamp", None)),
-                int(params.get("magnitude", None)),
-                int(params.get("percentage", None)),
-                params.get("columns", None),
-                params.get("duration", None)
-            )
-            anomaly_settings.append(anomaly)  # Add the AnomalySetting object to the list
+    # --- Timing & Initialization ---
+    overall_start_time = time.perf_counter()
+    sim_duration, training_duration, detection_duration, xai_duration = 0, 0, 0, 0
+    sim_end_time, train_end_time, detect_end_time, xai_end_time = None, None, None, None
+    evaluation_results = {}
+    run_status = "Failed" # Default status
+    run_summary = {} # Initialize summary dict
+    df = pd.DataFrame() # Initialize df
+    training_data = pd.DataFrame()
+    testing_data = pd.DataFrame()
+    feature_columns = []
+    anomaly_rows = pd.DataFrame()
+    df_eval = pd.DataFrame()
+    actual_label_col = label_column or 'label' # Use provided or default 'label'
+    sequence_length = None # Initialize
+    timestamp_col_name = 'timestamp'
 
-        batch_job = Job(filepath=path, anomaly_settings=anomaly_settings, simulation_type="batch", speedup=None, table_name=name, debug=debug)
-        
-    else:
-        batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name, debug=debug)
-    sim_engine = se()
-    result = sim_engine.main(db_conn_params=db_conn_params, job=batch_job, timestamp_col_name=None, label_col_name=label_column) # TODO: Change the None to timestamp column name when added
-    end_time = time.perf_counter()
-    print(f"Batch import took {end_time-start_time}s")
+    try:
+        # --- Simulation / Data Import ---
+        sim_start_time = time.perf_counter() # Start sim timer here
+        if inj_params is not None:
+            anomaly_settings = []
+            for params in inj_params:
+                 anomaly = AnomalySetting(
+                     params.get("anomaly_type"), int(params.get("timestamp")), int(params.get("magnitude")),
+                     int(params.get("percentage")), params.get("columns"), params.get("duration")
+                 )
+                 anomaly_settings.append(anomaly)
+            batch_job = Job(filepath=path, anomaly_settings=anomaly_settings, simulation_type="batch", speedup=None, table_name=name, debug=debug)
+        else:
+            batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name, debug=debug)
 
-    if result == 1:
+        sim_engine = se()
+        # Pass the actual label column name to the simulator if it uses it
+        result = sim_engine.main(db_conn_params=db_conn_params, job=batch_job, timestamp_col_name=None, label_col_name=actual_label_col)
+        sim_end_time = time.perf_counter()
+        sim_duration = sim_end_time - sim_start_time # Use sim_start_time
+        print(f"Batch import/simulation took {sim_duration:.2f}s")
+        actual_label_col = 'label'
+
+        if result != 1:
+            raise RuntimeError("Simulation engine did not complete successfully.")
+
+        # --- Read Data from DB ---
         api = TimescaleDBAPI(db_conn_params)
         print(f"Reading data for table/job: {name}")
-        try:
-            df = api.read_data(datetime.fromtimestamp(0), name)
-            if df.empty: raise ValueError("DataFrame read from DB is empty.")
-        except Exception as e:
-            print(f"Error reading data from TimescaleDB for '{name}': {e}")
-            return # Exit if no data
-        
+        df = api.read_data(datetime.fromtimestamp(0), name)
+        if df.empty: raise ValueError("DataFrame read from DB is empty.")
+        print(f"DEBUG: Columns read from DB for job '{name}': {df.columns.tolist()}")
+        # Ensure timestamp column exists and convert if necessary BEFORE splitting
+        if timestamp_col_name and timestamp_col_name in df.columns:
+            # Assuming read_data returns timezone-aware timestamps if applicable
+             df[timestamp_col_name] = pd.to_datetime(df[timestamp_col_name])
+             print(f"Timestamp column '{timestamp_col_name}' read and converted.")
+        elif 'timestamp' in df.columns:
+             df['timestamp'] = pd.to_datetime(df['timestamp'])
+             timestamp_col_name = 'timestamp' # Use default if found
+             print("Default 'timestamp' column read and converted.")
+        else:
+             warnings.warn("Timestamp column not found or specified. Time-based operations might fail.", RuntimeWarning)
+             # Handle case where timestamp is missing - maybe default to index?
+
         # --- Data Splitting ---
-        try:
-            training_data, testing_data = split_data(df)
-            if training_data.empty or testing_data.empty:
-                warnings.warn("Training or testing data split resulted in empty DataFrame.", RuntimeWarning)
-                # Handle fallback? Maybe use whole df for training if test is empty? Requires care.
-        except Exception as e:
-            print(f"Error during data splitting: {e}")
-            return # Cannot proceed without data splits
+        training_data, testing_data = split_data(df)
+        if training_data.empty or testing_data.empty:
+            warnings.warn("Training or testing data split resulted in empty DataFrame.", RuntimeWarning)
+            # Handle fallback if needed
 
         # --- Feature Column Definition ---
-        # Define default feature columns (adjust slicing as needed!)
-        # Example: Exclude first ('timestamp'?) and last three ('label', 'inj_anomaly', 'is_anomaly'?)
-        try:
-            if model == 'XGBoost' or model == 'decision_tree': # Handle specific model cases if needed
-                feature_columns = df.columns[1:-3].tolist()
-                training_columns = df.columns[1:-2].tolist()
-            else:
-                # Ensure indices are valid for the dataframe shape
-                if df.shape[1] > 4: # Need at least 5 columns for [1:-3]
-                    feature_columns = df.columns[1:-3].tolist()
-                    training_columns = df.columns[1:-3].tolist()
-                elif df.shape[1] > 1: # If fewer columns, take all except first
-                    feature_columns = df.columns[1:].tolist()
-                    training_columns = df.columns[1:].tolist()
-                    warnings.warn("DataFrame has few columns, using all except the first as features.", RuntimeWarning)
-                else:
-                    raise ValueError("DataFrame has too few columns to determine features.")
-        except Exception as e:
-            print(f"Error determining feature columns: {e}")
-            return
+        # Adjust this logic based on your actual column structure!
+        cols_to_exclude = {timestamp_col_name, actual_label_col, 'injected_anomaly', 'is_anomaly'} # Set of columns to exclude
+        potential_feature_cols = [col for col in df.columns if col not in cols_to_exclude and not pd.api.types.is_datetime64_any_dtype(df[col])]
+        if not potential_feature_cols:
+             raise ValueError("Could not identify any feature columns after exclusion.")
+        feature_columns = potential_feature_cols
+        print(f"Identified Features ({len(feature_columns)}): {feature_columns}")
 
-        if not feature_columns:
-            print("Error: No feature columns identified. Stopping.")
-            return
-        
-        actual_label_col = 'label' # Use provided label or default
-        anomaly_features = feature_columns + [actual_label_col]
-        print(f"Selected Feature Columns: {feature_columns}")
-        print(f"Selected Anomaly Columns with label: {anomaly_features}")
-        print(f"Selected Trainigng Columns: {training_columns}")
-
-        # Select features (handle potential missing columns defensively)
-        training_features_df = training_data[[col for col in training_columns if col in training_data.columns]]
-        training_df_with_labels = training_data
+        # Use defensive selection in case columns were dropped
+        training_features_df = training_data[[col for col in feature_columns if col in training_data.columns]]
         testing_features_df = testing_data[[col for col in feature_columns if col in testing_data.columns]]
-        testing_df_with_labels = testing_data
-        all_features_df = df[[col for col in feature_columns if col in df.columns]]
-        all_features_df_with_labels = df
+        all_features_df = df[[col for col in feature_columns if col in df.columns]] # For detection
 
-        #balanced_df = get_balanced_anomaly_sample(all_features_df_with_labels, total_rows=len(df), label_column='label', anomaly_value=1, random_state=42)
-
-        # Define which base features are continuous (example: assume all for now)
-        continuous_features_list = feature_columns # Adjust if you have categorical base features
-
-        print("Training features shape:", training_features_df.shape)
-        print("Testing features shape:", testing_features_df.shape)
-        print("All features shape:", all_features_df.shape)
-        if training_features_df.empty:
-            print("Error: Training features DataFrame is empty after column selection.")
-            return
-        # --- End Feature Selection ---
-
-        # --- Anomaly Row Extraction (using label_column parameter) ---
-        anomaly_feature_df = pd.DataFrame(columns=anomaly_features) # Initialize empty DF with correct columns
-        print(f"Attempting to use '{actual_label_col}' as the label column for anomaly extraction.")
+        # --- Anomaly Row Extraction (Ground Truth) ---
         if actual_label_col in df.columns:
-            try:
-                anomaly_rows = get_anomaly_rows(df, label_column=actual_label_col, anomaly_value=1)
-                if not anomaly_rows.empty:
-                    # Select only the defined feature columns if they exist in anomaly rows
-                    cols_in_anomaly = [col for col in feature_columns if col in anomaly_rows.columns]
-                    if cols_in_anomaly:
-                        anomaly_feature_df = anomaly_rows[cols_in_anomaly]
-                    else: print("Warning: Feature columns not present in found anomaly rows.")
-                print(f"Found {len(anomaly_feature_df)} anomaly rows with valid features.")
-            except Exception as e:
-                print(f"Error getting/processing anomaly rows using label '{actual_label_col}': {e}")
+            anomaly_rows = get_anomaly_rows(df, label_column=actual_label_col, anomaly_value=1)
+            print(f"Found {len(anomaly_rows)} ground truth anomaly rows using label '{actual_label_col}'.")
         else:
-            print(f"Warning: Specified label column '{actual_label_col}' not found in DataFrame. Cannot extract specific anomaly rows.")
-        # --- End Anomaly Row Extraction ---
+             print(f"Warning: Label column '{actual_label_col}' not found. Cannot extract ground truth anomalies.")
 
         # --- Model Training ---
-        try:
-            # Prepare parameters for the model, ensuring None is handled
-            effective_model_params = model_params or {}
-            print(f"Attempting to get model '{model}' with parameters: {effective_model_params}")
+        training_start_time = time.perf_counter()
+        effective_model_params = model_params or {}
+        print(f"Getting model '{model}' with parameters: {effective_model_params}")
+        model_instance = get_model(model, **effective_model_params) # Assumes get_model handles params
 
-            # Pass model_params during instantiation via get_model
-            # This assumes get_model and the underlying model classes
-            # accept these parameters as keyword arguments.
-            model_instance = get_model(model, **effective_model_params)
+        model_name_lower = model.lower()
 
-            print(f"Training model type: {type(model_instance).__name__}")
-            start_time = time.perf_counter()
-
-            # Train on TRAINING features DataFrame
-            # If the run method *also* takes specific training-time params (like epochs),
-            # those might still be passed here or could be part of model_params as well.
-            # Assuming basic run just takes data for now based on original code.
+        if model_name_lower in UNSUPERVISED_MODELS:
+            # --- Unsupervised Model ---
+            print(f"Model '{model}' identified as unsupervised. Training on features only.")
+            if training_features_df.empty:
+                raise ValueError("Training features DataFrame is empty, cannot train unsupervised model.")
+            print(f"Calling model.run with features-only data. Shape: {training_features_df.shape}")
+            # Pass only features to the unsupervised model's run method
             model_instance.run(training_features_df)
-
-            end_time = time.perf_counter()
-            print(f"Training took {end_time-start_time:.2f}s")
-        except Exception as train_err:
-            print(f"ERROR during model retrieval or training: {train_err}")
-            import traceback
-            traceback.print_exc() # Print full traceback for better debugging
-            return # Stop if model cannot be trained
-
-        # --- Sequence Length Determination ---
-        sequence_length = getattr(model_instance, 'sequence_length', None)
-        if not isinstance(sequence_length, int) or sequence_length <= 0:
-            # If model isn't sequential or attr missing, set default for XAI framework IF XAI is requested
-            if xai_params:
-                default_xai_seq_len = 10 # Default sequence length for XAI framework if model is non-sequential
-                warnings.warn(f"Model doesn't provide positive integer 'sequence_length'. Using default={default_xai_seq_len} for XAI data preparation.", RuntimeWarning)
-                sequence_length = default_xai_seq_len # Use default ONLY for XAI prep
-            else:
-                sequence_length = 1 # Or None if XAI isn't running anyway
-                print("Model does not appear sequential or sequence_length missing. Proceeding without sequence assumption for padding.")
         else:
-            print(f"Determined sequence_length from model: {sequence_length}")
+            # --- Supervised Model (or unknown, default to supervised) ---
+            print(f"Model '{model}' identified as supervised/unknown. Training with features and label.")
+            if training_data.empty:
+                raise ValueError("Training data DataFrame is empty for supervised model.")
+            if actual_label_col not in training_data.columns:
+                raise ValueError(f"Label column '{actual_label_col}' missing from training_data. Columns: {training_data.columns.tolist()}")
 
-        # --- Create Wrapper (Conditional - only if XAI is running) ---
-        model_wrapper = None
-        if xai_params and isinstance(xai_params, list): # Check if XAI is requested
+            # Define the exact columns needed by the supervised model internally
+            columns_for_supervised_training = feature_columns + [actual_label_col] # List of feature names + the label name
+
+            # Select only these specific columns from the training_data slice
+            # Ensure these columns actually exist in training_data to avoid KeyErrors
+            valid_cols_for_training = [col for col in columns_for_supervised_training if col in training_data.columns]
+            if len(valid_cols_for_training) != len(columns_for_supervised_training):
+                 missing_cols = set(columns_for_supervised_training) - set(valid_cols_for_training)
+                 # Raise error because model likely depends on these specific columns
+                 raise ValueError(f"Columns {missing_cols} required for supervised training not found in training_data slice.")
+
+            # Create the specific DataFrame to pass to the model
+            training_data_for_model = training_data[valid_cols_for_training]
+
+            if training_data_for_model.empty:
+                 raise ValueError("DataFrame prepared for supervised model training (features + label) is empty.")
+
+            print(f"Calling model.run with training data containing ONLY specific features and label '{actual_label_col}'. Shape: {training_data_for_model.shape}")
+            # Pass the filtered DataFrame (only features + label) to the model's run method
+            model_instance.run(training_data_for_model)
+
+        train_end_time = time.perf_counter()
+        training_duration = train_end_time - training_start_time
+        print(f"Training took {training_duration:.2f}s")
+
+        # --- Sequence Length ---
+        sequence_length = getattr(model_instance, 'sequence_length', 1) # Default to 1 if not found
+        if not isinstance(sequence_length, int) or sequence_length <= 0: sequence_length = 1
+        print(f"Using sequence_length: {sequence_length}")
+
+        # --- Anomaly Detection ---
+        detect_start_time = time.perf_counter()
+        # Ensure detection data is not empty
+        if all_features_df.empty:
+             raise ValueError("Features DataFrame for detection is empty.")
+        res = model_instance.detect(all_features_df)
+        detect_end_time = time.perf_counter()
+        detection_duration = detect_end_time - detect_start_time
+        print(f"Anomaly detection took {detection_duration:.2f}s. Results length: {len(res)}")
+
+        # --- Assign Results & Evaluate ---
+        # Prepare df_eval with original index and label for evaluation
+        df_eval = df.copy() # Copy only needed cols initially
+        df_eval['is_anomaly'] = False # Initialize column
+
+        expected_padding = sequence_length - 1
+        if len(res) == len(df_eval):
+             print("Assigning detection results directly.")
+             df_eval['is_anomaly'] = res.values if isinstance(res, pd.Series) else res
+        elif len(res) == len(df_eval) - expected_padding and expected_padding >= 0 :
+             print(f"Padding detection results with {expected_padding} 'False' values at the beginning.")
+             padding = [False] * expected_padding
+             res_list = list(res.values) if isinstance(res, pd.Series) else list(res)
+             df_eval['is_anomaly'] = padding + res_list
+        else:
+             # Handle unexpected length difference more robustly
+              warnings.warn(f"Unexpected length difference: results ({len(res)}), df ({len(df_eval)}), expected padding ({expected_padding}). Check model's detect output and sequence_length.", RuntimeWarning)
+              # Attempt assignment if possible, otherwise evaluation might fail
+              min_len = min(len(res), len(df_eval))
+              df_eval['is_anomaly'][-min_len:] = list(res)[-min_len:] # Try aligning from end
+
+        # Update anomalies in DB (using original timestamps)
+        anomaly_df_pred = df.loc[df_eval[df_eval["is_anomaly"] == True].index] # Get original rows for predicted anomalies
+        if timestamp_col_name and not anomaly_df_pred.empty:
+             # Convert timestamps back to the format expected by update_anomalies
+             arr_dt = [dt for dt in anomaly_df_pred[timestamp_col_name]] # Assuming they are datetime objects
+             # Format for TimescaleDB update - adjust formatting if needed! '+00' assumes UTC.
+             arr_str = [f"'{dt.strftime('%Y-%m-%d %H:%M:%S.%f')}{dt.strftime('%z') or '+00'}'" for dt in arr_dt]
+             api.update_anomalies(name, arr_str)
+
+        evaluation_results = evaluate_classification(df_eval) # Evaluate using actual and predicted labels
+        print("Evaluation Results:", evaluation_results)
+
+        # --- XAI Execution (Conditional) ---
+        xai_start_time = time.perf_counter() # Start XAI timer here
+        model_wrapper = None # Initialize
+        if xai_settings and isinstance(xai_settings, dict):
             interpretation = 'higher_is_anomaly' # Default
-            model_type_str = model.lower() # Use the input string for type check
-            if 'svm' in model_type_str: interpretation = 'lower_is_anomaly'
-            elif 'lstm' in model_type_str: interpretation = 'higher_is_anomaly'
-            elif 'xgboost' in model_type_str: interpretation = 'higher_is_anomaly'
-            elif 'decision_tree' in model_type_str: interpretation = 'higher_is_anomaly'
+            # Determine interpretation based on model name string
+            if 'svm' in model.lower(): interpretation = 'lower_is_anomaly'
+            elif 'lstm' in model.lower(): interpretation = 'higher_is_anomaly'
+            elif 'xgboost' in model.lower(): interpretation = 'higher_is_anomaly'
+            elif 'decision_tree' in model.lower(): interpretation = 'higher_is_anomaly'
             # Add other model types here
             else: warnings.warn(f"Unknown model type '{model}' for score interpretation. Assuming higher score is anomaly.", RuntimeWarning)
 
-            if sequence_length is None: # Should have been set above if XAI is running
-                print("ERROR: sequence_length required for XAI wrapper but is None. Skipping XAI.")
-            else:
-                try:
-                    print(f"Wrapping trained model instance ({type(model_instance).__name__}) for XAI...")
-                    # Choose the correct wrapper based on model's expected input
-                    model_wrapper = ModelWrapperForXAI(
-                        actual_model_instance=model_instance,
-                        feature_names=feature_columns,
-                        score_interpretation=interpretation
-                    )
-                    # Associate the XAI sequence length with the wrapper if needed by TimeSeriesExplainer checks
-
-                    print(f"Model wrapped successfully. Score interpretation: '{interpretation}'.")
-                except Exception as e:
-                    print(f"Error wrapping model: {e}. Skipping XAI.")
-                    model_wrapper = None
-        # --- End Wrapper ---
-
-        # --- Anomaly Detection ---
-        # Process timestamps if needed AFTER getting features (assuming map_to_timestamp not needed for model)
-        df_eval = df.copy() # Create copy for timestamp manipulation if needed for evaluation/update
-        df_eval["timestamp"] = df_eval["timestamp"].apply(map_to_timestamp)
-        df_eval["timestamp"] = df_eval["timestamp"].astype(float)
-
-        start_time = time.perf_counter()
-        res = model_instance.detect(all_features_df) # Detect using selected feature columns
-        end_time = time.perf_counter()
-        print(f"Anomaly detection took {end_time-start_time}s")
-        print(f"Detection results length: {len(res)}")
-        
-        # --- Assign Detection Results with Alignment ---
-        print(f"Detection results length: {len(res)}, DataFrame index length: {len(df_eval)}")
-
-        # Check if sequence_length is valid and > 0 before proceeding
-        if sequence_length is None or sequence_length <= 0:
-            raise RuntimeError("Cannot assign detection results: sequence_length is unknown or invalid.")
-
-        if len(res) == len(df_eval):
-            # Lengths already match (e.g., sequence_length was 1 or model handled padding)
-            print("Assigning detection results directly (lengths match).")
-            df_eval["is_anomaly"] = res.values if isinstance(res, pd.Series) else res
-        elif len(res) < len(df_eval):
-            # Length of results is shorter - likely due to sequence window. Pad the beginning.
-            padding_len = len(df_eval) - len(res)
-            expected_padding = sequence_length - 1
-            if padding_len != expected_padding:
-                warnings.warn(
-                    f"Length difference ({padding_len}) between df_eval and detection results "
-                    f"does not match expected padding ({expected_padding}) based on sequence_length={sequence_length}. "
-                    "Alignment might be incorrect.", RuntimeWarning
-                )
-
-            print(f"Padding detection results with {padding_len} 'False' values at the beginning.")
-            # Default value for padding (usually False for anomaly detection)
-            padding = [False] * padding_len
-
-            # Ensure 'res' is in a list format for concatenation
-            if isinstance(res, (pd.Series, np.ndarray)):
-                res_list = res.tolist()
-            elif isinstance(res, list):
-                res_list = res
-            else:
-                # Attempt conversion for other types, but issue a warning
-                warnings.warn(f"Unexpected type for detection result: {type(res)}. Attempting conversion to list.", RuntimeWarning)
-                try:
-                    res_list = list(res)
-                except TypeError:
-                    raise TypeError(f"Cannot convert detection result of type {type(res)} to list for padding.")
-
-            # Combine padding and results
-            combined_values = padding + res_list
-
-            # Final check - should always match now if padding was correct
-            if len(combined_values) != len(df_eval):
-                raise ValueError(f"Internal Error: Padded values length ({len(combined_values)}) still mismatch index length ({len(df_eval)}).")
-
-            df_eval["is_anomaly"] = combined_values
-        else: # len(res) > len(df_eval)
-            # This is unexpected - the result should not be longer than the input frame index
-            raise ValueError(f"Detection result length ({len(res)}) is greater than DataFrame index length ({len(df_eval)}). Cannot assign.")
-        # --- End Assign Detection Results ---
-        # --- End Anomaly Detection ---
-
-        # --- Anomaly Update and Evaluation ---
-        anomaly_df = df_eval[df_eval["is_anomaly"] == True]
-        arr = [datetime.fromtimestamp(timestamp) for timestamp in anomaly_df["timestamp"]]
-        arr = [f'\'{str(time)}+00\'' for time in arr]
-        api.update_anomalies(name, arr)
-        evaluation_results = evaluate_classification(df_eval) # Use df_eval with 'is_anomaly'
-        print("Evaluation Results:")
-        print(evaluation_results)
-        # --- End Anomaly Update ---
-        
-        # ============================================
-        # --- MODULAR XAI INTEGRATION ---
-        # ============================================
-        if xai_params and isinstance(xai_params, list) and model_wrapper is not None:
-            print(f"Preparing to run XAI via XAIRunner...")
             try:
-                # Instantiate the XAIRunner
+                print("Wrapping model for XAI...")
+                model_wrapper = ModelWrapperForXAI(
+                    actual_model_instance=model_instance,
+                    feature_names=feature_columns,
+                    score_interpretation=interpretation
+                )
+                print(f"Model wrapped. Interpretation: '{interpretation}'")
+
+                print("Instantiating XAIRunner...")
                 xai_runner_instance = XAIRunner(
-                    xai_params=xai_params,
+                    xai_settings=xai_settings,
                     model_wrapper=model_wrapper,
-                    sequence_length=sequence_length, # Ensure sequence_length is determined correctly before this point
+                    sequence_length=sequence_length,
                     feature_columns=feature_columns,
                     actual_label_col=actual_label_col,
-                    continuous_features_list=continuous_features_list, # Ensure this is defined
-                    job_name=name, # Pass the job name
-                    mode='classification', # Or determine mode if needed
-                    output_dir="/data" # Or configure as needed
+                    # Use training_features_df for continuous features list (adjust if needed)
+                    continuous_features_list=training_features_df.columns.tolist(),
+                    job_name=name,
+                    mode='classification',
+                    output_dir=OUTPUT_DIR, # Use defined output dir
                 )
 
-                # Run the explanations
-                # Pass the necessary dataframes:
-                # - training_features_df: Features only, used for background data generation
-                # - training_df_with_labels: Training data including labels, used for background outcomes and DiCE context
-                # - data_source_for_explanation: Data to actually explain (e.g., all_features_df_with_labels or anomaly_feature_df)
-                # Ensure these DataFrames are correctly prepared before this call.
-                # Example using all data for explanation:
-                data_source_for_exp = all_features_df_with_labels # Choose appropriate source
+                print("Running XAI explanations...")
+                # Prepare dataframes needed by XAIRunner
+                # Assuming training_data/testing_data include labels and timestamps if needed by XAIRunner internals
+                # Choose the data to explain (e.g., testing data, all data, or specific anomalies)
+                data_source_for_exp = df[1:] # Example: explain testing data
 
                 xai_runner_instance.run_explanations(
-                    training_features_df=training_features_df,
-                    training_df_with_labels=training_df_with_labels,
-                    data_source_for_explanation=data_source_for_exp
+                    training_features_df=training_features_df, # Features only for background
+                    training_df_with_labels=training_data,    # Full training data for context
+                    data_source_for_explanation=data_source_for_exp # Data to explain
                 )
-                print("XAI execution completed via XAIRunner.")
+                print("XAI execution completed.")
 
-            except Exception as xai_runner_err:
-                print(f"ERROR during XAI runner setup or execution: {xai_runner_err}")
-                import traceback
+            except Exception as xai_err:
+                print(f"ERROR during XAI setup or execution: {xai_err}")
                 traceback.print_exc()
+                # Continue without XAI results, but log the error later
 
+            xai_end_time = time.perf_counter()
+            xai_duration = xai_end_time - xai_start_time
         else:
-            # This condition remains the same
-            skip_reasons = []
-            if not xai_params or not isinstance(xai_params, list):
-                skip_reasons.append("XAI parameters not provided or not a list")
-            if model_wrapper is None:
-                skip_reasons.append("Model wrapper is None (required for XAI)")
-            # Potentially add check for sequence_length > 0 here as well if required by XAIRunner init
-            print(f"Skipping XAI. Reason(s): {', '.join(skip_reasons)}")
-        # ============================================
-        # --- END MODULAR XAI INTEGRATION ---
-        # ============================================
+            print("Skipping XAI (no settings provided or error during setup).")
+            xai_end_time = detect_end_time # Set XAI end time for consistent total time calculation
 
-        sys.stdout.flush()
-    else:
-        return 0
+        run_status = "Success" # Mark as successful
+
+    except Exception as e:
+        print(f"An error occurred during run_batch for job '{name}': {e}")
+        traceback.print_exc()
+        run_status = "Failed" # Ensure status reflects failure
+
+    finally:
+        overall_end_time = time.perf_counter()
+        overall_duration = overall_end_time - overall_start_time
+        print(f"Total run_batch execution for job '{name}' took {overall_duration:.2f}s. Status: {run_status}")
+
+        # --- Gather Summary Data ---
+        # Calculate additional metrics if evaluation succeeded
+        if evaluation_results:
+            tp = evaluation_results.get("correct_anomalies", 0)
+            fp = evaluation_results.get("false_positives", 0)
+            fn = evaluation_results.get("false_negatives", 0)
+            tn = evaluation_results.get("correct_non_anomalies", 0)
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+            f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+            specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+            evaluation_results["precision"] = round(precision, 4)
+            evaluation_results["recall_tpr"] = round(recall, 4)
+            evaluation_results["f1_score"] = round(f1_score, 4)
+            evaluation_results["specificity_tnr"] = round(specificity, 4)
+
+        run_summary = {
+            "job_name": name,
+            "run_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "status": run_status,
+            "dataset_path": path,
+            "model_name": model,
+            "model_params": model_params or {},
+            "xai_settings": xai_settings or {},
+            "anomaly_injection_params": inj_params or [],
+            "label_column_used": actual_label_col,
+            "data_total_rows": len(df),
+            "data_training_rows": len(training_data),
+            "data_testing_rows": len(testing_data),
+            "data_num_features": len(feature_columns),
+            "data_num_anomalies_ground_truth": len(anomaly_rows),
+            "data_num_anomalies_predicted": int(df_eval["is_anomaly"].sum()) if 'is_anomaly' in df_eval.columns else 0,
+            "sequence_length": sequence_length,
+            "evaluation_metrics": evaluation_results, # Contains original + derived metrics
+            "execution_time_total_seconds": round(overall_duration, 4),
+            "execution_time_simulation_seconds": round(sim_duration, 4),
+            "execution_time_training_seconds": round(training_duration, 4),
+            "execution_time_detection_seconds": round(detection_duration, 4),
+            "execution_time_xai_seconds": round(xai_duration, 4),
+        }
+
+        # --- Save Summary ---
+        save_run_summary(run_summary, name, OUTPUT_DIR)
+
+        sys.stdout.flush() # Ensure all print statements are flushed
+
+        return 1 if run_status == "Success" else 0
+
 
 # Starts processing of dataset as a stream
 def run_stream(db_conn_params, 
