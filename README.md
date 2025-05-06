@@ -60,6 +60,7 @@ To develop our product, to evaluate our models and to test our system during dev
    FRONTEND_PORT=<your-frontend-port>
    BACKEND_PORT=<your-backend-port>
    BACKEND_HOST=<your-backend-hostname>
+   XAI_PLOT_OUTPUT_PATH=<path-to-a-container-shared-directory>
    ```
 7. Run the following command to build and start the Docker container:
    ```sh
