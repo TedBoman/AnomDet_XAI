@@ -184,47 +184,88 @@ class LSTMModel(model_interface.ModelInterface):
     
     def _preprocess_and_create_sequences(self, input_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """
-        Scales and windows input data (DataFrame or 3D NumPy), returning 3D NumPy sequences.
+        Scales and windows input data, returning 3D NumPy sequences.
+        Handles:
+          - pandas DataFrame (2D)
+          - NumPy array (2D): Scales and creates sequences.
+          - NumPy array (3D): Assumes sequences are pre-made, scales features.
         """
         if self.scaler is None or self.sequence_length is None or self.model is None:
             raise RuntimeError("Model/scaler not ready or sequence length unknown. Call run() first.")
 
         n_features_expected = self.model.input_shape[-1]
-        X: Optional[np.ndarray] = None
+        X: Optional[np.ndarray] = None # Initialize X
 
         if isinstance(input_data, pd.DataFrame):
-            #print("Preprocessing DataFrame...") # Optional print
+            print("Preprocessing DataFrame...") # Optional print
             if input_data.shape[1] != n_features_expected:
                 raise ValueError(f"Input DataFrame has {input_data.shape[1]} features, model expects {n_features_expected}.")
             try:
-                data_normalized = self.scaler.transform(input_data)
+                # Ensure data is numeric
+                input_data_numeric = input_data.astype(np.number)
+                data_normalized = self.scaler.transform(input_data_numeric)
+                # Create 3D sequences from scaled 2D data
                 X = self.__create_sequences(data_normalized, self.sequence_length)
-            except Exception as e: raise RuntimeError(f"Failed to scale/sequence DataFrame: {e}") from e
+            except Exception as e:
+                raise RuntimeError(f"Failed to scale/sequence DataFrame: {e}") from e
 
         elif isinstance(input_data, np.ndarray):
-            #print("Preprocessing NumPy array...") # Optional print
-            if input_data.ndim != 3: raise ValueError(f"NumPy input must be 3D, got {input_data.ndim}D.")
-            if input_data.shape[1] != self.sequence_length: raise ValueError(f"NumPy seq length {input_data.shape[1]} != expected {self.sequence_length}.")
-            if input_data.shape[2] != n_features_expected: raise ValueError(f"NumPy features {input_data.shape[2]} != expected {n_features_expected}.")
+            print(f"Preprocessing NumPy array with {input_data.ndim} dimensions...") # Optional print
 
-            X_input_3d = input_data
-            n_samples, seq_len, n_feat = X_input_3d.shape
-            try:
-                X_reshaped_2d = X_input_3d.reshape(-1, n_feat)
-                X_scaled_2d = self.scaler.transform(X_reshaped_2d)
-                X = X_scaled_2d.reshape(n_samples, seq_len, n_feat)
-            except Exception as e: raise RuntimeError(f"Failed to scale 3D NumPy input: {e}") from e
+            # --- NEW: Handle 2D NumPy array ---
+            if input_data.ndim == 2:
+                if input_data.shape[1] != n_features_expected:
+                     raise ValueError(f"Input 2D NumPy array has {input_data.shape[1]} features, model expects {n_features_expected}.")
+                try:
+                    # Scale the 2D data
+                    data_normalized = self.scaler.transform(input_data)
+                    # Create 3D sequences from scaled 2D data
+                    X = self.__create_sequences(data_normalized, self.sequence_length)
+                    print(f"Created {X.shape[0]} sequences from 2D NumPy input.")
+                except Exception as e:
+                    raise RuntimeError(f"Failed to scale/sequence 2D NumPy array: {e}") from e
+            # --- End New 2D Handling ---
+
+            # --- Existing 3D NumPy array handling ---
+            elif input_data.ndim == 3:
+                if input_data.shape[1] != self.sequence_length:
+                    raise ValueError(f"Input 3D NumPy sequence length {input_data.shape[1]} != expected {self.sequence_length}.")
+                if input_data.shape[2] != n_features_expected:
+                    raise ValueError(f"Input 3D NumPy features {input_data.shape[2]} != expected {n_features_expected}.")
+
+                # Input is already 3D sequences, just need to scale the features
+                X_input_3d = input_data
+                n_samples, seq_len, n_feat = X_input_3d.shape
+                try:
+                    # Reshape to 2D for scaler [(n_samples * seq_len), n_feat]
+                    X_reshaped_2d = X_input_3d.reshape(-1, n_feat)
+                    # Scale the 2D data
+                    X_scaled_2d = self.scaler.transform(X_reshaped_2d)
+                    # Reshape back to 3D [n_samples, seq_len, n_feat]
+                    X = X_scaled_2d.reshape(n_samples, seq_len, n_feat)
+                    print(f"Scaled features within {X.shape[0]} existing 3D sequences.")
+                except Exception as e:
+                    raise RuntimeError(f"Failed to scale features within 3D NumPy input: {e}") from e
+            # --- End 3D Handling ---
+
+            else:
+                raise ValueError(f"NumPy input must be 2D or 3D, got {input_data.ndim}D.")
         else:
-            raise TypeError("Input must be a pandas DataFrame or a 3D NumPy array.")
+            raise TypeError("Input must be a pandas DataFrame or a 2D/3D NumPy array.")
 
+        # Check if X was successfully created and is not empty
         if X is None or X.size == 0:
-            warnings.warn("No sequences created from input data.", RuntimeWarning)
+            # This can happen if input is too short for __create_sequences
+            warnings.warn("No sequences generated from input data after preprocessing.", RuntimeWarning)
+            # Return an empty array with the correct final dimensions
             return np.empty((0, self.sequence_length, n_features_expected))
 
-        # Ensure float32 for model prediction
+        # Ensure float32 for model prediction compatibility
         if X.dtype != np.float32:
-            try: X = X.astype(np.float32)
-            except ValueError: warnings.warn("Could not cast sequences to float32.", RuntimeWarning)
+            try:
+                X = X.astype(np.float32)
+            except ValueError:
+                warnings.warn("Could not cast sequences to float32.", RuntimeWarning)
 
         return X
 
@@ -288,3 +329,62 @@ class LSTMModel(model_interface.ModelInterface):
         print(f"Detected {np.sum(anomalies)} anomalies using threshold {self.threshold:.6f}.")
         return np.array(anomalies) # Return 1D boolean array
     
+    
+    def predict_proba(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+        """
+        Predicts the probability of each sequence being an anomaly based on reconstruction error.
+        This is a pseudo-probability derived by applying a sigmoid function to the scaled
+        difference between the anomaly score and the threshold.
+
+        Accepts DataFrame (features) or 3D NumPy (pre-windowed sequences).
+
+        Returns:
+            np.ndarray: Array of shape (n_sequences, 2) where:
+                        Column 0: Probability of being Normal (1 - P(Anomaly))
+                        Column 1: Probability of being Anomaly
+                        Returns empty array shape (0, 2) if no sequences are generated.
+        """
+        if self.threshold is None:
+            raise RuntimeError("Threshold not set. Call run() first to train and set threshold.")
+        if not np.isfinite(self.threshold) or self.threshold <= 0:
+             warnings.warn(f"Threshold is not finite or non-positive ({self.threshold}). Probability calculation might be unreliable.", RuntimeWarning)
+             # Handle non-positive threshold for scaling gracefully
+             # If threshold is inf, all scores are below, prob_anomaly should be 0
+             if self.threshold == np.inf:
+                 n_scores = len(self.get_anomaly_score(detection_data)) # Need to know how many scores
+                 return np.hstack([np.ones((n_scores, 1)), np.zeros((n_scores, 1))])
+
+
+        # Get the reconstruction error scores
+        scores = self.get_anomaly_score(detection_data)
+
+        if scores.size == 0:
+            return np.empty((0, 2)) # Return empty array with correct number of columns
+
+        # Define the sigmoid function
+        def sigmoid(x):
+            # Clip x to avoid overflow in exp for very large negative values
+            # and underflow for very large positive values.
+            x_clipped = np.clip(x, -500, 500)
+            return 1 / (1 + np.exp(-x_clipped))
+
+        # --- Calculate scale for sigmoid ---
+        # Use the configured scale factor relative to the threshold.
+        # Add a small epsilon to prevent division by zero if threshold is very close to zero.
+        proba_scale_factor = self.config.get('proba_scale_factor', 4.0) # Default to 4.0 if not set
+        scale = max(self.threshold / proba_scale_factor, 1e-9) # Ensure scale is positive
+
+        # Calculate the scaled difference from the threshold
+        scaled_diff = (scores - self.threshold) / scale
+
+        # Apply sigmoid to get the probability of anomaly (Class 1)
+        prob_anomaly = sigmoid(scaled_diff)
+
+        # Probability of normal (Class 0) is 1 - P(Anomaly)
+        prob_normal = 1.0 - prob_anomaly
+
+        # Stack probabilities into the desired (n_sequences, 2) shape
+        probabilities = np.vstack([prob_normal, prob_anomaly]).T
+
+        #print(f"Calculated anomaly probabilities for {probabilities.shape[0]} sequences.") # Optional print
+        return probabilities
