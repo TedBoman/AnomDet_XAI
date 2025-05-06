@@ -391,6 +391,10 @@ def register_job_page_callbacks(app):
                 if data_summary_filtered:
                      display_elements.append(create_info_section("Data Summary", data_summary_filtered, theme_colors, format_floats=False))
 
+                cv_metrics_data = metadata.get("cross_validation_metrics", {})
+                if cv_metrics_data: # Only display if the section exists and is not empty
+                    display_elements.append(create_info_section("Cross-Validation Metrics", cv_metrics_data, theme_colors))
+
                 # 3. Performance Metrics
                 metrics = metadata.get("evaluation_metrics", {})
                 if metrics:

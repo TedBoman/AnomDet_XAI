@@ -670,6 +670,25 @@ def run_batch(
             evaluation_results["recall_tpr"] = round(recall, 4)
             evaluation_results["f1_score"] = round(f1_score, 4)
             evaluation_results["specificity_tnr"] = round(specificity, 4)
+            
+        cv_metrics = {}
+        if model_instance is not None: # Check if model_instance was created
+            if hasattr(model_instance, 'get_validation_scores'):
+                try:
+                    cv_metrics = model_instance.get_validation_scores()
+                    if not isinstance(cv_metrics, dict): # Ensure it's a dict
+                        print(f"Warning: get_validation_scores() did not return a dict, got {type(cv_metrics)}. Resetting cv_metrics.")
+                        cv_metrics = {}
+                except Exception as cv_err:
+                    print(f"Warning: Error calling get_validation_scores(): {cv_err}")
+                    cv_metrics = {} # Default to empty dict on error
+
+            if hasattr(model_instance, 'avg_best_iteration_cv_') and model_instance.avg_best_iteration_cv_ is not None:
+                cv_metrics['avg_best_iteration_cv'] = model_instance.avg_best_iteration_cv_
+            if hasattr(model_instance, 'avg_best_score_cv_') and model_instance.avg_best_score_cv_ is not None:
+                cv_metrics['avg_best_score_cv_from_xgb_eval_metric'] = model_instance.avg_best_score_cv_
+        else:
+            print("Warning: model_instance is None, cannot retrieve CV metrics.")
 
         run_summary = {
             "job_name": name,
@@ -688,7 +707,8 @@ def run_batch(
             "data_num_anomalies_ground_truth": len(anomaly_rows),
             "data_num_anomalies_predicted": int(df_eval["is_anomaly"].sum()) if 'is_anomaly' in df_eval.columns else 0,
             "sequence_length": sequence_length,
-            "evaluation_metrics": evaluation_results, # Contains original + derived metrics
+            "evaluation_metrics": evaluation_results,
+            "cross_validation_metrics": cv_metrics,
             "execution_time_total_seconds": round(overall_duration, 4),
             "execution_time_simulation_seconds": round(sim_duration, 4),
             "execution_time_training_seconds": round(training_duration, 4),
