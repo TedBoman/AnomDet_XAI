@@ -345,11 +345,11 @@ def split_data(data):
 
     # Calculate split indices
 
-    train_end = int(total_rows * 0.70) # 70% for training
+    train_end = int(total_rows * 0.85) # 85% for training
 
     # Split the data
     training_data = data.iloc[:train_end]
-    testing_data = data.iloc[train_end:] # Remaining 30% is testing
+    testing_data = data.iloc[train_end:] # Remaining 15% is testing
 
     return training_data, testing_data
 
@@ -476,7 +476,6 @@ def run_batch(
             # Handle fallback if needed
 
         # --- Feature Column Definition ---
-        # Adjust this logic based on your actual column structure!
         cols_to_exclude = {timestamp_col_name, actual_label_col, 'injected_anomaly', 'is_anomaly'} # Set of columns to exclude
         potential_feature_cols = [col for col in df.columns if col not in cols_to_exclude and not pd.api.types.is_datetime64_any_dtype(df[col])]
         if not potential_feature_cols:
@@ -603,6 +602,7 @@ def run_batch(
             elif 'lstm' in model.lower(): interpretation = 'higher_is_anomaly'
             elif 'xgboost' in model.lower(): interpretation = 'higher_is_anomaly'
             elif 'decision_tree' in model.lower(): interpretation = 'higher_is_anomaly'
+            elif 'isolation_forest' in model.lower(): interpretation = 'lower_is_anomaly'
             # Add other model types here
             else: warnings.warn(f"Unknown model type '{model}' for score interpretation. Assuming higher score is anomaly.", RuntimeWarning)
 
@@ -653,7 +653,7 @@ def run_batch(
             print("Skipping XAI (no settings provided or error during setup).")
             xai_end_time = detect_end_time # Set XAI end time for consistent total time calculation
 
-        run_status = "Success" # Mark as successful
+        run_status = "Success" 
 
     except Exception as e:
         print(f"An error occurred during run_batch for job '{name}': {e}")

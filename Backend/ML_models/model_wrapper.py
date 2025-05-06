@@ -1,11 +1,8 @@
-# AnomDet_XAI/Backend/ML_models/model_wrapper.py
 import traceback
 import pandas as pd
 import numpy as np
 from typing import Any, List, Union, Literal
 import warnings
-
-# Added basic logging setup - REMOVE if you have global logging configured elsewhere
 import logging
 logging.basicConfig(level=logging.INFO) # Set basic level
 logger = logging.getLogger(__name__)
@@ -57,11 +54,6 @@ class ModelWrapperForXAI:
 
         logger.info(f"ModelWrapperForXAI initialized for model type: {type(self._model).__name__}")
         logger.info(f"Underlying score interpretation: '{self._score_interpretation}'")
-        # Removed redundant feature names print
-
-    # --- Keep the rest of your methods (@property, _call_internal_method, predict, predict_proba) ---
-    # --- Make sure the predict_proba method uses the version from my previous response ---
-    # --- that correctly handles the (N, 2) output shape ---
 
     @property
     def sequence_length(self):

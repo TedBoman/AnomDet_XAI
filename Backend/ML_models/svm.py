@@ -1,10 +1,6 @@
-# File: svm_autoencoder_model.py
-
 import os
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-
-# Assuming model_interface defines ModelInterface base class
 from ML_models import model_interface
 import pandas as pd
 import numpy as np
@@ -21,9 +17,6 @@ class SVMModel(model_interface.ModelInterface):
     Anomaly detection using an Autoencoder + OneClassSVM.
     Operates on 2D data (samples, features). Refactored for correctness & XAI.
     """
-    # --- Make sequence_length an attribute for consistency, though unused internally ---
-    # This value isn't used by run/detect logic but might be useful elsewhere.
-    # It will be DIFFERENT from the sequence_length used by the XAI framework.
     sequence_length = 1 # Indicates it processes samples individually
 
     def __init__(self, **kwargs):
