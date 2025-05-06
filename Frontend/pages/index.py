@@ -353,7 +353,7 @@ def layout(handler):
                             )
                         ], style={"textAlign": "center", "marginTop": "20px"}),
 
-                        # --- Speedup Input (Conditional) ---
+                        # --- Speedup Input ---
                         html.Div([
                             html.Label("Select Speedup for Stream (Default: 1):", style={"fontSize": "22px", "color": "#ffffff"}),
                             dcc.Input(
@@ -365,20 +365,43 @@ def layout(handler):
                             )
                         ], style={"marginTop": "20px", "textAlign": "center"}),
                         
+                        # --- SEPARATOR ---
+                        html.Hr(style={'borderColor': '#446e92', }),
+                        
+                        html.Div( # Wrap label in a Div for better spacing control & consistent centering
+                            html.Label(
+                                "Note: Job processing time may vary depending on the model and XAI methods selected.", 
+                                style={
+                                    "fontSize": "14px",         # Reduced font size for a note
+                                    "color": "#cccccc",         # Softer than pure white, good on dark backgrounds
+                                    "fontStyle": "italic",      # Common styling for notes
+                                    "display": "inline-block"   # Allows text-align to work from parent
+                                }
+                            ),
+                            style={"textAlign": "center", "marginBottom": "15px"} # Center the text and add space below
+                        ),
+                        
                         # --- Start Button ---
                         html.Div([
-                            html.Button("Start Job", id="start-job-btn", style={
-                                "marginTop": "20px",
-                                "width": "150px",
-                                "height": "40px",
-                                "fontSize": "16px",
-                                "backgroundColor": "#4CAF50",
-                                "color": "#ffffff",
-                                "borderRadius": "0.3rem",
-                                "display": "block",
-                                "margin": "auto"
-                            })
-                        ], style={"textAlign": "center", "marginTop": "30px"}), 
+                            dcc.Loading(
+                                id="loading-start-job",
+                                type="default", # or "circle", "cube", etc.
+                                children=[
+                                    html.Button("Start Job", id="start-job-btn", n_clicks=0, style={ # Ensure n_clicks is initialized
+                                        "marginTop": "20px",
+                                        "width": "150px",
+                                        "height": "40px",
+                                        "fontSize": "16px",
+                                        "backgroundColor": "#4CAF50",
+                                        "color": "#ffffff",
+                                        "borderRadius": "0.3rem",
+                                        "display": "block",
+                                        "margin": "auto"
+                                    })
+                                ]
+                            )
+                        ], style={"textAlign": "center", "marginTop": "30px"}),
+
 
                         # --- Popups and Intervals ---
                         html.Div(

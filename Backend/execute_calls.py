@@ -6,19 +6,16 @@ import pandas as pd
 import numpy as np
 import os
 import time
-import threading
 from socket import socket
 from timescaledb_api import TimescaleDBAPI
 from datetime import datetime, timezone
-from typing import Any, Union
-import multiprocessing as mp
-import threading
+from typing import Any
 
 # Third-Party
 from pathlib import Path
 
 import pandas as pd
-from typing import Union, List, Optional, Dict
+from typing import List, Optional, Dict
 
 # Custom
 from Simulator.DBAPI.type_classes import Job
@@ -28,13 +25,6 @@ from ML_models.get_model import get_model
 
 # --- XAI ---
 from ML_models.model_wrapper import ModelWrapperForXAI
-import XAI_methods.preprocessor as pre
-from XAI_methods.timeseriesExplainer import TimeSeriesExplainer
-import shap
-import matplotlib.pyplot as plt
-from XAI_methods import xai_visualizations as x
-import utils as ut
-
 from XAI_methods.xai_runner import XAIRunner
 
 MODEL_DIRECTORY = "./ML_models"
