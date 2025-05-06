@@ -3,18 +3,16 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import numpy as np
 import pandas as pd
-# Assuming model_interface exists and defines ModelInterface base class
 from ML_models import model_interface
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, LSTM, RepeatVector, TimeDistributed, Dense
-from tensorflow.keras.optimizers import Adam # Import Adam optimizer
-from typing import Optional, Union, List # Make sure to import Union
-import warnings # Import warnings
+from tensorflow.keras.optimizers import Adam 
+from typing import Optional, Union, List 
+import warnings 
 
 class LSTMModel(model_interface.ModelInterface):
 
-    # Initializes the model and internal state
     def __init__(self, **kwargs):
         """
         Initializes the LSTM Autoencoder model state and stores configuration.
@@ -50,11 +48,11 @@ class LSTMModel(model_interface.ModelInterface):
         self.sequence_length = self.config['time_steps']
 
         print(f"LSTMModel Initialized with config: {self.config}")
-        # --- End MODIFIED __init__ ---
+        # --- End __init__ ---
 
 
-    # --- MODIFIED run Method ---
-    def run(self, df: pd.DataFrame): # Remove time_steps, epochs from signature
+    # --- run Method ---
+    def run(self, df: pd.DataFrame):
         """
         Preprocesses data, builds, trains, and fits the LSTM autoencoder model
         using parameters stored during __init__.

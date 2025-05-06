@@ -1,10 +1,6 @@
-# File: svm_autoencoder_model.py (Corrected Version)
-
 import os
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-
-# Assuming model_interface defines ModelInterface base class
 from ML_models import model_interface
 import pandas as pd
 import numpy as np
@@ -21,9 +17,6 @@ class SVMModel(model_interface.ModelInterface):
     Anomaly detection using an Autoencoder + OneClassSVM.
     Operates on 2D data (samples, features). Refactored for correctness & XAI.
     """
-    # --- Make sequence_length an attribute for consistency, though unused internally ---
-    # This value isn't used by run/detect logic but might be useful elsewhere.
-    # It will be DIFFERENT from the sequence_length used by the XAI framework.
     sequence_length = 1 # Indicates it processes samples individually
 
     def __init__(self, **kwargs):
@@ -226,9 +219,6 @@ class SVMModel(model_interface.ModelInterface):
         """ Internal helper: Scales (using fitted scaler) and encodes input data. """
         if self.scaler is None or self.encoder is None:
             raise RuntimeError("Model is not trained (scaler or encoder missing). Call run() first.")
-        # ...(rest of the implementation as provided before)...
-        # Scale -> Ensure float32 -> Encode -> Return encoded_data
-        # ... (previous implementation) ...
         if isinstance(data, pd.DataFrame):
             if data.shape[1] != self.n_features: raise ValueError(f"Input data has {data.shape[1]} feats, expected {self.n_features}.")
             input_np = data.values

@@ -1,19 +1,11 @@
-# AnomDet_XAI/Backend/XAI_methods/methods/ShapExplainer.py
 import shap
 import numpy as np
 import pandas as pd
 from typing import Any, Union, Dict, List, Optional
 import warnings
-import logging # Use logging
-
-# Import the base class API
+import logging 
 from XAI_methods.explainer_method_api import ExplainerMethodAPI
-
-# Set up logger for this module
 logger = logging.getLogger(__name__)
-# Add basic config if running standalone or logger is not configured elsewhere
-# logging.basicConfig(level=logging.INFO)
-
 
 class ShapExplainer(ExplainerMethodAPI):
     """

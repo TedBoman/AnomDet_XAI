@@ -1,22 +1,10 @@
-# File: XAI_methods/methods/DiceExplainer.py
-
 import dice_ml
 import numpy as np
 import pandas as pd
 from typing import Any, List, Dict, Optional
 import warnings
-import traceback # Added for detailed error printing
-
-# Import the base class API
-# Assuming it's in the same directory structure or Python path allows import
-try:
-    from XAI_methods.explainer_method_api import ExplainerMethodAPI
-except ImportError:
-    # Fallback if the structure is slightly different during execution
-    from ..explainer_method_api import ExplainerMethodAPI
-
-# Import the model wrapper type hint if available/needed for clarity
-# from ML_models.model_wrapper import ModelWrapperForXAI
+import traceback 
+from XAI_methods.explainer_method_api import ExplainerMethodAPI
 
 
 class DiceExplainer(ExplainerMethodAPI):
@@ -85,7 +73,6 @@ class DiceExplainer(ExplainerMethodAPI):
         self._num_flat_features = np.prod(self._original_sequence_shape)
 
         # Create flattened feature names
-        # Example: V1_t-0, V2_t-0 ... V1_t-(seq_len-1), V2_t-(seq_len-1)
         self.flat_feature_names = []
         for i in range(self.sequence_length): # Iterate through time steps (0 to seq_len-1)
             time_suffix = f"_t-{self.sequence_length - 1 - i}" # Suffix like _t-9, _t-8 ... _t-0
@@ -105,10 +92,7 @@ class DiceExplainer(ExplainerMethodAPI):
                  if base_name in self.continuous_feature_names_base:
                      self.continuous_flat_feature_names.append(flat_name)
             else:
-                 # If a base feature name itself contains '_t-', this logic might fail.
-                 # Assuming base names don't contain the time suffix pattern.
                  if flat_name in self.continuous_feature_names_base:
-                     # Maybe it's a non-time-suffixed continuous feature? Unlikely with current flattening.
                      self.continuous_flat_feature_names.append(flat_name)
                      warnings.warn(f"Flattened feature name '{flat_name}' matched a base continuous name directly. Ensure naming convention is consistent.", UserWarning)
 
@@ -155,7 +139,7 @@ class DiceExplainer(ExplainerMethodAPI):
         elif self.mode == 'regression': dice_model_type = 'regressor'
         else: raise ValueError(f"Invalid mode '{self.mode}' encountered during DiCE model initialization.")
 
-        # Define the prediction function wrapper FOR DICE (if needed)
+        # Define the prediction function wrapper FOR DICE
         def _predict_fn_dice(input_df: pd.DataFrame, **params) -> np.ndarray:
              num_samples = len(input_df)
              missing_cols = set(self.flat_feature_names) - set(input_df.columns)
@@ -269,7 +253,6 @@ class DiceExplainer(ExplainerMethodAPI):
 
         total_CFs = kwargs.get('total_CFs')
 
-        # ***** CORRECTED THIS PART: Handle features_to_vary conversion *****
         features_to_vary_input = kwargs.get('features_to_vary', None) # Get input list (might be None or list of base names)
         final_features_to_vary = []
 
@@ -283,7 +266,6 @@ class DiceExplainer(ExplainerMethodAPI):
             base_names_to_vary = set(features_to_vary_input)
             converted_count = 0
             for flat_name in self.flat_feature_names: # Iterate through all possible flat names
-                # Extract base name robustly
                 parts = flat_name.split('_t-')
                 base_name = parts[0] if len(parts) == 2 else flat_name # Fallback if no suffix
 
@@ -301,16 +283,13 @@ class DiceExplainer(ExplainerMethodAPI):
                  warnings.warn("After converting base feature names in 'features_to_vary', the list is empty. Defaulting to all continuous flattened features.", RuntimeWarning)
                  final_features_to_vary = self.continuous_flat_feature_names # Fallback to default
 
-        # ***** END CORRECTION *****
-
-
         # Build the final arguments for generate_counterfactuals
         dice_runtime_args = {
              'total_CFs': total_CFs,
              'features_to_vary': final_features_to_vary, # Use the processed list
              'permitted_range': kwargs.get('permitted_range', None) # Pass if provided (should use flattened names)
         }
-        # Add permitted_range validation if needed (check keys are in final_features_to_vary)
+
 
 
         if self.mode == 'classifier':
