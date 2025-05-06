@@ -55,7 +55,6 @@ def save_run_summary(summary_dict: Dict[str, Any], job_name: str, output_dir: st
     try:
         # Ensure output directory exists
         
-        
         output_path = output_dir+'/'+job_name+'/'+'logfile'
 
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -80,7 +79,7 @@ def save_run_summary(summary_dict: Dict[str, Any], job_name: str, output_dir: st
                 serializable_summary[k] = v
 
         json_string = json.dumps(serializable_summary, default=str) # Use default=str as fallback
-        with open(output_path, 'a') as f:
+        with open(output_path, 'w') as f:
             f.write(json_string + '\n')
         print(f"Successfully saved run summary to {output_path}")
     except Exception as e:

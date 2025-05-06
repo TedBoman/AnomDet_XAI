@@ -72,7 +72,12 @@ class DecisionTreeModel(model_interface.ModelInterface):
             'min_samples_leaf': kwargs.get('min_samples_leaf', 1),
             'class_weight': kwargs.get('class_weight', 'balanced'),
             'random_state': random_state, # Use the stored random_state
+            'max_features': kwargs.get('max_features', None)
         }
+        if self.model_params.get('max_features') == 'None': # Check if the value is the string "None"
+            print("INFO: Correcting 'max_features' parameter from string 'None' to Python None object.")
+            self.model_params['max_features'] = None # Use direct assignment to update the value
+        
         # Imputer strategy
         self._imputer_strategy = kwargs.get('imputer_strategy', 'mean')
 

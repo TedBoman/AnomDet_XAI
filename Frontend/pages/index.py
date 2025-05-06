@@ -63,7 +63,6 @@ def layout(handler):
                 # Add flex properties if needed, e.g., flex: 1 (takes up 1/3 width)
                 "color": "#e0e0e0",
                 "textAlign": "left",
-                "margin": "30px",
             }
         ),
         # --- END Explanation Box ---
@@ -450,6 +449,7 @@ def layout(handler):
             "margin": "30px",
             "boxShadow": "0 4px 10px rgb(0, 0, 0)",
             "textAlign": "center",
+            "minWidth": "523px",
         }),
 
         # --- XAI method Explanation Box ---
@@ -469,7 +469,6 @@ def layout(handler):
                 # Add flex properties if needed, e.g., flex: 1 (takes up 1/3 width)
                 "color": "#e0e0e0",
                 "textAlign": "left",
-                "margin": "30px",
             }
         ),
         # --- Explanation Box ---

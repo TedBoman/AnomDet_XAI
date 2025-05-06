@@ -43,7 +43,8 @@ class XGBoostModel(model_interface.ModelInterface):
             scale_pos_weight (float): Controls balance of positive/negative weights (calculated in run).
             ... other XGBClassifier parameters ...
         """
-        
+
+        # --- Model type is now XGBClassifier ---
         self.model: Optional[xgb.XGBClassifier] = None # Stores the BASE XGBoost model
         self.scaler: Optional[MinMaxScaler] = None
         self.input_type: Optional[str] = None
@@ -86,7 +87,6 @@ class XGBoostModel(model_interface.ModelInterface):
         # Store early stopping and verbosity settings
         self.early_stopping_rounds = kwargs.get('early_stopping_rounds', None) # Default off
         self.verbose_eval = kwargs.get('verbose_eval', False) # Default quiet
-
 
         print(f"XGBoostModel Initialized with base params: {self.model_params}")
         print(f"Validation split: {self.validation_set_size*100}%, Early Stopping Rounds: {self.early_stopping_rounds}")

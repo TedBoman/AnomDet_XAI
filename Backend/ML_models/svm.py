@@ -5,7 +5,7 @@ from ML_models import model_interface
 import pandas as pd
 import numpy as np
 from sklearn.svm import OneClassSVM
-from sklearn.preprocessing import StandardScaler, MinMaxScaler # Add MinMaxScaler if used by AE
+from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.models import Model # Use tensorflow.keras
 from tensorflow.keras.layers import Input, Dense # Use tensorflow.keras
 from tensorflow.keras.optimizers import Adam # Import Adam optimizer
@@ -96,8 +96,8 @@ class SVMModel(model_interface.ModelInterface):
             else:
                 warnings.warn(f"Optimizer '{optimizer_name}' not fully configured, defaulting to Adam with LR={learning_rate}.", UserWarning)
                 optimizer = Adam(learning_rate=learning_rate)
-        else: # Assume it's an optimizer instance
-             optimizer = optimizer_name
+        else:
+            optimizer = optimizer_name
 
         autoencoder.compile(optimizer=optimizer, loss=loss_function) # Use config
         print("Autoencoder Architecture:")
@@ -161,9 +161,16 @@ class SVMModel(model_interface.ModelInterface):
             if data.shape[1] != self.n_features: raise ValueError(f"Input data has {data.shape[1]} feats, expected {self.n_features}.")
             input_np = data.values
         elif isinstance(data, np.ndarray):
-            if data.ndim == 1: data = data.reshape(1, -1)
-            if data.ndim != 2: raise ValueError(f"NumPy input must be 2D (samples, features), got {data.ndim}D.")
-            if data.shape[1] != self.n_features: raise ValueError(f"NumPy input has {data.shape[1]} feats, expected {self.n_features}.")
+            if data.ndim == 1: 
+                data = data.reshape(1, -1)
+            elif data.ndim == 3 and data.shape[1] == 1: # Add this condition
+                # Reshape from (samples, 1, features) to (samples, features)
+                data = data.reshape(data.shape[0], data.shape[2]) 
+            
+            if data.ndim != 2: # This check will now pass for the (5000, 1, 29) case after reshaping
+                raise ValueError(f"NumPy input must be 2D (samples, features), got {data.ndim}D. Original shape might have been 3D and not squeezable.")
+            if data.shape[1] != self.n_features: 
+                raise ValueError(f"NumPy input has {data.shape[1]} feats, expected {self.n_features}.")
             input_np = data
         else: raise TypeError("Input must be a pandas DataFrame or a 2D NumPy array.")
 
@@ -211,24 +218,73 @@ class SVMModel(model_interface.ModelInterface):
              raise RuntimeError("Internal SVM model is not fitted or invalid.")
 
         scores = self.svm_model.decision_function(encoded_data)
-        # print(f"Calculated {len(scores)} scores.") # Optional print
         return scores # Return the raw scores (1D array)
+    
+    def predict_proba(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+        """
+        Predicts the pseudo-probability of each sample being an anomaly based on the
+        OneClassSVM decision function score. Lower scores result in higher anomaly probability.
+        This probability is derived by applying a sigmoid function to the scaled
+        difference between the threshold and the score.
 
-    # Ensure the _preprocess_and_encode helper method also exists in your class
-    def _preprocess_and_encode(self, data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
-        """ Internal helper: Scales (using fitted scaler) and encodes input data. """
-        if self.scaler is None or self.encoder is None:
-            raise RuntimeError("Model is not trained (scaler or encoder missing). Call run() first.")
-        if isinstance(data, pd.DataFrame):
-            if data.shape[1] != self.n_features: raise ValueError(f"Input data has {data.shape[1]} feats, expected {self.n_features}.")
-            input_np = data.values
-        elif isinstance(data, np.ndarray):
-            if data.ndim == 1: data = data.reshape(1, -1)
-            if data.ndim != 2: raise ValueError(f"NumPy input must be 2D (samples, features), got {data.ndim}D.")
-            if data.shape[1] != self.n_features: raise ValueError(f"NumPy input has {data.shape[1]} feats, expected {self.n_features}.")
-            input_np = data
-        else: raise TypeError("Input must be a pandas DataFrame or a 2D NumPy array.")
-        data_scaled = self.scaler.transform(input_np)
-        data_scaled = data_scaled.astype(np.float32)
-        encoded_data = self.encoder.predict(data_scaled)
-        return encoded_data
+        Accepts 2D DataFrame/NumPy (samples, features) or 1D NumPy (single sample).
+
+        Returns:
+            np.ndarray: Array of shape (n_samples, 2) where:
+                        Column 0: Probability of being Normal (1 - P(Anomaly))
+                        Column 1: Probability of being Anomaly (P(Anomaly))
+                        Returns empty array shape (0, 2) if no samples processed.
+        """
+        if self.threshold is None:
+            raise RuntimeError("Threshold not set. Call run() first to train and set threshold.")
+        if not np.isfinite(self.threshold):
+             warnings.warn(f"Threshold is not finite ({self.threshold}). Probability calculation might be unreliable.", RuntimeWarning)
+             # Handle non-finite threshold for scaling gracefully
+             # Get scores first to determine output shape
+             scores = self.get_anomaly_score(detection_data)
+             n_scores = len(scores)
+             if n_scores == 0: return np.empty((0, 2))
+
+             # If threshold is -inf, all scores are > threshold => P(Anomaly) = 0
+             if self.threshold == -np.inf:
+                 return np.hstack([np.ones((n_scores, 1)), np.zeros((n_scores, 1))])
+             # If threshold is +inf, all scores are < threshold => P(Anomaly) = 1
+             if self.threshold == np.inf:
+                  return np.hstack([np.zeros((n_scores, 1)), np.ones((n_scores, 1))])
+             # Handle NaN case - return uncertain probabilities? Or 0.5/0.5? Let's use 0.5/0.5
+             return np.full((n_scores, 2), 0.5)
+
+
+        # Get the SVM decision function scores (lower = more anomalous)
+        scores = self.get_anomaly_score(detection_data)
+
+        if scores.size == 0:
+            return np.empty((0, 2)) # Return empty array with correct number of columns
+
+        # Define the sigmoid function
+        def sigmoid(x):
+            # Clip x to avoid overflow/underflow in exp
+            x_clipped = np.clip(x, -500, 500)
+            return 1 / (1 + np.exp(-x_clipped))
+
+        # --- Calculate scale for sigmoid ---
+        # Use the configured scale factor relative to the threshold's magnitude.
+        proba_svm_scale_factor = self.config.get('proba_svm_scale_factor', 4.0) # Default to 4.0
+        # Use max with epsilon to prevent division by zero and handle threshold=0
+        scale = max(abs(self.threshold) / proba_svm_scale_factor, 1e-9)
+
+        # Calculate the scaled difference: -(score - threshold) / scale
+        # This ensures scores below threshold give positive input to sigmoid
+        scaled_neg_diff = -(scores - self.threshold) / scale
+
+        # Apply sigmoid to get the probability of anomaly (Class 1)
+        prob_anomaly = sigmoid(scaled_neg_diff)
+
+        # Probability of normal (Class 0) is 1 - P(Anomaly)
+        prob_normal = 1.0 - prob_anomaly
+
+        # Stack probabilities into the desired (n_samples, 2) shape
+        probabilities = np.vstack([prob_normal, prob_anomaly]).T
+
+        #print(f"Calculated anomaly probabilities for {probabilities.shape[0]} samples.") # Optional print
+        return probabilities
