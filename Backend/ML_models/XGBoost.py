@@ -2,80 +2,83 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import train_test_split # Added for validation split
+from sklearn.model_selection import StratifiedKFold # k-fold cross-validation
+from sklearn.metrics import roc_auc_score, f1_score, accuracy_score # For direct evaluation
 from ML_models import model_interface 
 from typing import List, Dict, Optional, Tuple, Union
 import warnings
 
 class XGBoostModel(model_interface.ModelInterface):
     """
-    Supervised XGBoost classification model for anomaly detection using labeled data.
-
-    Trains a base XGBClassifier directly, without probability calibration.
+    Supervised XGBoost classification model for anomaly detection using labeled data,
+    with k-fold cross-validation for performance estimation.
 
     Handles input as:
     1.  Pandas DataFrame: Converts features directly to a 2D NumPy array.
-        NOTE: This approach treats each row independently and DOES NOT use
-        lagging or time-series context. The `time_steps` parameter is ignored.
-        Internal preprocessing for XAI methods IS supported for this input type.
-    2.  3D NumPy array (X) and 1D NumPy array (y): Assumes X has shape
-        (samples, sequence_length, features). Flattens the last two dimensions.
-        Internal preprocessing for XAI methods IS supported for this input type.
+    2.  3D NumPy array (X) and 1D NumPy array (y): Flattens the last two dimensions.
 
-    Trains an XGBClassifier to predict the anomaly label.
+    Performance is estimated using k-fold cross-validation.
+    A final XGBClassifier model is then trained on the entire dataset.
     Handles class imbalance using 'scale_pos_weight'.
-    Provides compatibility with SHAP/LIME via the `predict_proba` method,
-    which handles preprocessing internally based on the training input type.
     """
 
     def __init__(self, **kwargs):
         """
-        Initializes the XGBoost classifier model using parameters from kwargs.
+        Initializes the XGBoost classifier model.
 
-        Expected kwargs (examples):
+        Args:
             n_estimators (int): Number of boosting rounds (default: 100).
             learning_rate (float): Step size shrinkage (default: 0.1).
             max_depth (int): Maximum depth of a tree (default: 6).
-            objective (str): Specifies the learning task (default: 'binary:logistic').
-            eval_metric (str): Evaluation metric for validation data (default: 'logloss').
-            random_state (int): Random number seed (default: 42).
+            objective (str): Learning task (default: 'binary:logistic').
+            eval_metric (str or list): Metric for XGBoost's internal eval during CV folds (default: 'logloss').
+                                    Note: For early stopping, if a list is provided, the last metric is used.
+            random_state (int): Random seed (default: 42).
             n_jobs (int): Number of parallel threads (default: -1).
-            scale_pos_weight (float): Controls balance of positive/negative weights (calculated in run).
+            n_splits (int): Number of folds for StratifiedKFold cross-validation (default: 5).
+            shuffle_kfold (bool): Whether to shuffle data before k-fold splitting (default: True).
+            early_stopping_rounds (int, optional): Activates early stopping. XGBoost stops if eval metric
+                                                   doesn't improve in this many rounds for a fold (default: None).
+            validation_metrics (list): Metrics to compute and average across folds for final reporting
+                                       (e.g., ['roc_auc', 'f1', 'accuracy'], default: ['roc_auc', 'f1']).
+                                       These are calculated manually after each fold's training.
+            verbose_eval (bool, int): Verbosity for XGBoost training within folds (default: False).
             ... other XGBClassifier parameters ...
         """
-
-        # --- Model type is now XGBClassifier ---
-        self.model: Optional[xgb.XGBClassifier] = None # Stores the BASE XGBoost model
+        self.model: Optional[xgb.XGBClassifier] = None
         self.scaler: Optional[MinMaxScaler] = None
         self.input_type: Optional[str] = None
         self.processed_feature_names: Optional[List[str]] = None
         self.sequence_length: Optional[int] = None
         self.n_original_features: Optional[int] = None
         self.label_col: Optional[str] = None
-        self.best_score: Optional[float] = None # Store best validation score
-        self.best_iteration: Optional[int] = None # Store best iteration
 
-        # --- Store configuration from kwargs ---
+        self.validation_scores_: Dict[str, float] = {} # Stores average validation metrics from k-fold
+        self.avg_best_iteration_cv_: Optional[float] = None # Average best iteration from CV if early stopping used
+        self.avg_best_score_cv_: Optional[float] = None # Average best score (from eval_metric) from CV
+
         self.random_state = kwargs.get('random_state', 42)
-        self.validation_set_size = kwargs.get('validation_set_size', 0.15) # Default 15%
-        if not 0 < self.validation_set_size < 1:
-            raise ValueError("validation_set_size must be between 0 and 1.")
+        self.n_splits = kwargs.get('n_splits', 5)
+        self.shuffle_kfold = kwargs.get('shuffle_kfold', True)
+        if self.n_splits <= 1:
+            raise ValueError("n_splits for k-fold cross-validation must be greater than 1.")
 
-        # Base XGBoost parameters (excluding scale_pos_weight, calculated later)
+        # Metrics for manual calculation and averaging after each fold
+        self.user_validation_metrics = kwargs.get('validation_metrics', ['roc_auc', 'f1'])
+
+
         self.model_params = {
             'n_estimators': kwargs.get('n_estimators', 100),
             'learning_rate': kwargs.get('learning_rate', 0.1),
             'max_depth': kwargs.get('max_depth', 6),
             'objective': kwargs.get('objective', 'binary:logistic'),
-            'eval_metric': kwargs.get('eval_metric', 'logloss'), # Important for early stopping
+            # eval_metric for XGBoost's internal evaluation (e.g., for early stopping)
+            'eval_metric': kwargs.get('eval_metric', 'logloss'),
             'random_state': self.random_state,
             'n_jobs': kwargs.get('n_jobs', -1)
-            # Add other relevant base params here if needed
         }
         allowed_xgb_params = set(xgb.XGBClassifier().get_params().keys())
-        # print(allowed_xgb_params) # Optional: print if needed for debugging
-        # Exclude params managed separately
-        managed_params = {'scale_pos_weight', 'early_stopping_rounds'}
+        managed_params = {'scale_pos_weight', 'early_stopping_rounds', 'n_splits', 'shuffle_kfold', 'validation_metrics', 'verbose_eval'}
         extra_xgb_params = {
             k: v for k, v in kwargs.items()
             if k in allowed_xgb_params
@@ -84,13 +87,14 @@ class XGBoostModel(model_interface.ModelInterface):
         }
         self.model_params.update(extra_xgb_params)
 
-        # Store early stopping and verbosity settings
-        self.early_stopping_rounds = kwargs.get('early_stopping_rounds', None) # Default off
-        self.verbose_eval = kwargs.get('verbose_eval', False) # Default quiet
+        self.early_stopping_rounds = kwargs.get('early_stopping_rounds', None)
+        self.verbose_eval = kwargs.get('verbose_eval', False)
 
         print(f"XGBoostModel Initialized with base params: {self.model_params}")
-        print(f"Validation split: {self.validation_set_size*100}%, Early Stopping Rounds: {self.early_stopping_rounds}")
-        print(f"Verbose Eval: {self.verbose_eval}")
+        print(f"K-fold CV: n_splits={self.n_splits}, shuffle={self.shuffle_kfold}")
+        print(f"Early Stopping Rounds (per fold): {self.early_stopping_rounds}, XGBoost Verbose Eval: {self.verbose_eval}")
+        print(f"User-defined CV metrics for averaging: {self.user_validation_metrics}")
+
 
     def _prepare_data_for_model(
         self, X: Union[pd.DataFrame, np.ndarray],
@@ -245,123 +249,180 @@ class XGBoostModel(model_interface.ModelInterface):
 
     def run(self, X: Union[pd.DataFrame, np.ndarray], y: Optional[np.ndarray] = None, label_col: str = 'label'):
         """
-        Trains the base XGBoost classifier with validation split (NO CALIBRATION).
-
-        Args:
-            X: Input data (DataFrame or 3D NumPy). The *entire* training dataset.
-            y: Target labels (required if X is NumPy array).
-            label_col: Name of the target label column (used if X is DataFrame).
+        Prepares data, performs k-fold cross-validation with XGBoost,
+        and then trains a final XGBoost model on the entire dataset.
         """
+        print(f"Running training for XGBoostModel with K-Fold CV (Input type: {'DataFrame' if isinstance(X, pd.DataFrame) else 'NumPy'})...")
+
+        # --- Step 1: Prepare FULL data (fits scaler globally) ---
         if isinstance(X, pd.DataFrame):
             if y is not None: warnings.warn("Arg 'y' ignored for DataFrame input.", UserWarning)
-            print("Running training with DataFrame input (processed as 2D NumPy)...")
-            X_processed_scaled, y_aligned, _ = self._prepare_data_for_model(
+            X_processed_full, y_aligned_full, _ = self._prepare_data_for_model(
                 X, y=None, label_col=label_col, is_training=True
             )
         elif isinstance(X, np.ndarray):
-            print("Running training with 3D NumPy input (flattened for XGBoost)...")
-            X_processed_scaled, y_aligned, _ = self._prepare_data_for_model(
-                X, y=y, label_col=None, is_training=True
+            X_processed_full, y_aligned_full, _ = self._prepare_data_for_model(
+                X, y=y, label_col=None, is_training=True # Pass y here
             )
         else:
-            raise TypeError("Input 'X' must be pandas DataFrame or 3D NumPy array.")
+            raise TypeError("Input 'X' must be pandas DataFrame or NumPy array.")
 
-        if X_processed_scaled.shape[0] == 0 or y_aligned is None:
-            warnings.warn("No data or labels available for training after preprocessing.", RuntimeWarning)
+        if X_processed_full.shape[0] == 0 or y_aligned_full is None:
+            warnings.warn("No data or labels for training after preprocessing. Model not trained.", RuntimeWarning)
             self.model = None
             return
-
-        if X_processed_scaled.shape[0] < 10: # Arbitrary small number
-            warnings.warn(f"Very small dataset ({X_processed_scaled.shape[0]} samples), validation split might be ineffective.", RuntimeWarning)
-            # Decide if you want to proceed without validation or raise error
-            # For now, we proceed but validation might be empty or tiny
+        if X_processed_full.shape[0] < self.n_splits:
+            warnings.warn(f"Number of samples ({X_processed_full.shape[0]}) is less than n_splits ({self.n_splits}). K-fold CV might fail.", RuntimeWarning)
 
 
-        try:
-            X_train, X_val, y_train, y_val = train_test_split(
-                X_processed_scaled,
-                y_aligned,
-                test_size=self.validation_set_size,
-                random_state=self.random_state,
-                stratify=y_aligned # Important for imbalanced datasets
-            )
-            print(f"Data split: Train shape={X_train.shape}, Validation shape={X_val.shape}")
-            if X_val.shape[0] == 0:
-                warnings.warn("Validation set is empty after split. Disabling early stopping.", RuntimeWarning)
-                effective_early_stopping_rounds = None
-                eval_set = None
-
-            else:
-                effective_early_stopping_rounds = self.early_stopping_rounds
-                eval_set = [(X_val, y_val)] # XGBoost expects a list of tuples
-
-        except ValueError as e:
-            warnings.warn(f"Could not stratify split (maybe only one class present?): {e}. Training without validation set for early stopping.", RuntimeWarning)
-            # Fallback: Train on all data, no early stopping
-            X_train, y_train = X_processed_scaled, y_aligned
-            # X_val, y_val are not needed anymore here
-            effective_early_stopping_rounds = None
-            eval_set = None
-
-
-        # Handle Class Imbalance 
-        n_neg_train = np.sum(y_train == 0); n_pos_train = np.sum(y_train == 1)
-        scale_pos_weight = 1.0 # Default to float
-        if n_pos_train == 0: warnings.warn("No positive samples (label=1) found in the TRAINING split.", RuntimeWarning)
-        elif n_neg_train == 0: warnings.warn("No negative samples (label=0) found in the TRAINING split.", RuntimeWarning)
-        else: scale_pos_weight = float(n_neg_train) / float(n_pos_train) # Ensure float division
-        print(f"Calculated scale_pos_weight based on TRAINING split: {scale_pos_weight:.4f}")
-
-        # --- Use base parameters stored during __init__ and add scale_pos_weight ---
-        current_model_params = self.model_params.copy()
-        current_model_params['scale_pos_weight'] = scale_pos_weight
-        # Add max_delta_step if needed for stability with imbalance
-        current_model_params.setdefault('max_delta_step', 1)
-
-        # --- Step 1: Train the Base XGBoost Classifier with Validation (for early stopping) ---
-        print(f"Training BASE XGBClassifier with {X_train.shape[0]} train samples, using {X_val.shape[0] if X_val is not None else 0} validation samples for potential early stopping...")
-        print(f"Using effective XGBoost parameters: {current_model_params}")
-        print(f"Early stopping rounds: {effective_early_stopping_rounds}, Verbose: {self.verbose_eval}")
-
-        base_xgb_model = xgb.XGBClassifier(**current_model_params)
-
-        fit_params = {}
-        if eval_set and effective_early_stopping_rounds is not None and effective_early_stopping_rounds > 0:
-            fit_params['early_stopping_rounds'] = effective_early_stopping_rounds
-            fit_params['eval_set'] = eval_set
-            fit_params['verbose'] = self.verbose_eval
-        elif self.verbose_eval and eval_set: # If verbose is True but no early stopping, still show eval if possible
-            fit_params['eval_set'] = eval_set
-            fit_params['verbose'] = self.verbose_eval
-
-
-        try:
-            # Fit using the TRAINING split, validate on the VALIDATION split (if available)
-            base_xgb_model.fit(X_train, y_train, **fit_params)
-
-            # Store best score and iteration if early stopping was used
-            if 'early_stopping_rounds' in fit_params and eval_set: # Check eval_set as well
-                if hasattr(base_xgb_model, 'best_score') and hasattr(base_xgb_model, 'best_iteration'):
-                    self.best_score = base_xgb_model.best_score
-                    self.best_iteration = base_xgb_model.best_iteration
-                    print(f"Early stopping triggered. Best iteration: {self.best_iteration}, Best score ({base_xgb_model.eval_metric}): {self.best_score:.4f}")
-                else: 
-                    print("Early stopping was enabled, but couldn't retrieve best_score/best_iteration (check XGBoost version compatibility if needed).")
-
-        except Exception as e:
-            raise RuntimeError(f"Base XGBoost fitting failed: {e}") from e
-        print("Base model training complete.")
+        # --- Step 2: K-Fold Cross-Validation for Performance Estimation ---
+        skf = StratifiedKFold(n_splits=self.n_splits, shuffle=self.shuffle_kfold, random_state=self.random_state)
         
-        if eval_set: # Check if validation set exists
-            try:
-                base_probs_val = base_xgb_model.predict_proba(X_val)
-                if base_probs_val.shape[1] > 1:
-                    print(f"DEBUG: Base (Uncalibrated) P(anomaly) on VAL set stats: min={np.min(base_probs_val[:, 1]):.4f}, max={np.max(base_probs_val[:, 1]):.4f}, mean={np.mean(base_probs_val[:, 1]):.4f}")
-            except Exception as prob_e: print(f"Debug predict_proba on validation set failed: {prob_e}")
+        fold_scores: Dict[str, List[float]] = {metric: [] for metric in self.user_validation_metrics}
+        fold_best_iterations = []
+        fold_best_eval_scores = [] # For XGBoost's own eval_metric
+        fold_count = 0
 
-        # --- Step 2: Store the BASE XGBoost Model ---
-        self.model = base_xgb_model # Store the base model directly
-        print(f"Stored BASE XGBoost model of type: {type(self.model)}")
+        print(f"Starting {self.n_splits}-fold cross-validation for XGBoost...")
+        for fold_idx, (train_index, val_index) in enumerate(skf.split(X_processed_full, y_aligned_full)):
+            fold_count += 1
+            print(f"  Fold {fold_idx + 1}/{self.n_splits}...")
+            X_train_fold, X_val_fold = X_processed_full[train_index], X_processed_full[val_index]
+            y_train_fold, y_val_fold = y_aligned_full[train_index], y_aligned_full[val_index]
+
+            if X_train_fold.shape[0] == 0 or X_val_fold.shape[0] == 0:
+                warnings.warn(f"    Fold {fold_idx+1} has empty train/validation. Skipping.", RuntimeWarning)
+                continue
+
+            # Handle Class Imbalance for the current fold
+            n_neg_train_fold = np.sum(y_train_fold == 0); n_pos_train_fold = np.sum(y_train_fold == 1)
+            scale_pos_weight_fold = 1.0
+            if n_pos_train_fold == 0: warnings.warn(f"    No positive samples in train part of fold {fold_idx+1}.", RuntimeWarning)
+            elif n_neg_train_fold == 0: warnings.warn(f"    No negative samples in train part of fold {fold_idx+1}.", RuntimeWarning)
+            else: scale_pos_weight_fold = float(n_neg_train_fold) / float(n_pos_train_fold)
+            print(f"    Fold {fold_idx+1} scale_pos_weight: {scale_pos_weight_fold:.4f}")
+
+            current_fold_model_params = self.model_params.copy()
+            current_fold_model_params['scale_pos_weight'] = scale_pos_weight_fold
+            current_fold_model_params.setdefault('max_delta_step', 1) # Often good with imbalance
+
+            temp_model_fold = xgb.XGBClassifier(**current_fold_model_params)
+            
+            fit_params_fold = {}
+            if self.early_stopping_rounds is not None and self.early_stopping_rounds > 0:
+                fit_params_fold['early_stopping_rounds'] = self.early_stopping_rounds
+                fit_params_fold['eval_set'] = [(X_val_fold, y_val_fold)] # XGBoost expects list of tuples
+                fit_params_fold['verbose'] = self.verbose_eval
+            elif self.verbose_eval: # If verbose is True but no early stopping
+                fit_params_fold['eval_set'] = [(X_val_fold, y_val_fold)]
+                fit_params_fold['verbose'] = self.verbose_eval
+            
+            try:
+                temp_model_fold.fit(X_train_fold, y_train_fold, **fit_params_fold)
+                if self.early_stopping_rounds and hasattr(temp_model_fold, 'best_iteration') and temp_model_fold.best_iteration is not None: # Check if best_iteration is set
+                    fold_best_iterations.append(temp_model_fold.best_iteration)
+                    # Store best score if available (depends on XGB version and eval_metric)
+                    if hasattr(temp_model_fold, 'best_score') and temp_model_fold.best_score is not None:
+                         fold_best_eval_scores.append(temp_model_fold.best_score)
+                    print(f"    Fold {fold_idx+1} - Best Iteration (early stopping): {temp_model_fold.best_iteration if temp_model_fold.best_iteration is not None else 'N/A'}")
+
+            except Exception as e:
+                warnings.warn(f"    XGBoost fitting failed for fold {fold_idx + 1}: {e}. Skipping fold.", RuntimeWarning)
+                continue
+
+            # Manual evaluation using user-defined metrics
+            try:
+                y_pred_val_fold = temp_model_fold.predict(X_val_fold)
+                y_proba_val_fold = temp_model_fold.predict_proba(X_val_fold)[:, 1] # Prob of positive class
+
+                for metric_name in self.user_validation_metrics:
+                    score = np.nan
+                    try:
+                        if metric_name == 'accuracy':
+                            score = accuracy_score(y_val_fold, y_pred_val_fold)
+                        elif metric_name == 'f1':
+                            score = f1_score(y_val_fold, y_pred_val_fold, zero_division=0)
+                        elif metric_name == 'roc_auc':
+                            if len(np.unique(y_val_fold)) > 1:
+                                score = roc_auc_score(y_val_fold, y_proba_val_fold)
+                            else:
+                                warnings.warn(f"    ROC AUC undefined for fold {fold_idx + 1} (single class in y_val_fold).", RuntimeWarning)
+                        else:
+                             warnings.warn(f"    Unsupported user metric '{metric_name}' for fold {fold_idx + 1}.", UserWarning)
+                             continue
+                        fold_scores[metric_name].append(score)
+                        print(f"    Fold {fold_idx + 1} User Metric '{metric_name}': {score:.4f}")
+                    except Exception as metric_e:
+                        print(f"    Failed to calculate user metric '{metric_name}' for fold {fold_idx + 1}: {metric_e}")
+                        fold_scores[metric_name].append(np.nan)
+            except Exception as eval_e:
+                print(f"    Failed during manual validation evaluation for fold {fold_idx + 1}: {eval_e}")
+
+        if fold_count == 0 and self.n_splits > 0:
+            warnings.warn("XGBoost K-fold CV: No folds successfully processed. Validation scores will be empty/NaN.", RuntimeWarning)
+            self.validation_scores_ = {metric: np.nan for metric in self.user_validation_metrics}
+            self.avg_best_iteration_cv_ = None
+            self.avg_best_score_cv_ = None
+        else:
+            print("\nCross-validation summary (XGBoost):")
+            for metric_name in self.user_validation_metrics:
+                valid_metric_scores = [s for s in fold_scores[metric_name] if not np.isnan(s)]
+                if valid_metric_scores:
+                    avg_score = np.mean(valid_metric_scores)
+                    std_score = np.std(valid_metric_scores)
+                    self.validation_scores_[metric_name] = avg_score
+                    print(f"  Average User Metric '{metric_name}': {avg_score:.4f} (Std: {std_score:.4f})")
+                else:
+                    self.validation_scores_[metric_name] = np.nan
+                    print(f"  Average User Metric '{metric_name}': NaN")
+            
+            if fold_best_iterations: # Only if early stopping was active and iterations recorded
+                self.avg_best_iteration_cv_ = np.mean(fold_best_iterations)
+                print(f"  Average Best Iteration (from CV with early stopping): {self.avg_best_iteration_cv_:.2f}")
+            if fold_best_eval_scores:
+                self.avg_best_score_cv_ = np.mean(fold_best_eval_scores)
+                print(f"  Average Best XGBoost Eval Metric Score (from CV): {self.avg_best_score_cv_:.4f}")
+
+        print("-" * 30)
+
+        # --- Step 3: Training the FINAL XGBoost Model on the ENTIRE Prepared Dataset ---
+        print(f"Training final XGBoost model on {X_processed_full.shape[0]} samples, {X_processed_full.shape[1]} features...")
+        final_model_params = self.model_params.copy()
+        # Calculate scale_pos_weight for the full dataset
+        n_neg_full = np.sum(y_aligned_full == 0); n_pos_full = np.sum(y_aligned_full == 1)
+        scale_pos_weight_full = 1.0
+        if n_pos_full == 0: warnings.warn("No positive samples in ENTIRE dataset for final model.", RuntimeWarning)
+        elif n_neg_full == 0: warnings.warn("No negative samples in ENTIRE dataset for final model.", RuntimeWarning)
+        else: scale_pos_weight_full = float(n_neg_full) / float(n_pos_full)
+        final_model_params['scale_pos_weight'] = scale_pos_weight_full
+        final_model_params.setdefault('max_delta_step', 1)
+        
+        print(f"Final model scale_pos_weight: {scale_pos_weight_full:.4f}")
+        
+        # Optional: Adjust n_estimators for the final model based on avg_best_iteration_cv_
+        if self.early_stopping_rounds and self.avg_best_iteration_cv_ is not None and self.avg_best_iteration_cv_ > 0:
+            # Use integer number of estimators, ensure it's at least 1.
+            # Add a small margin, e.g., 10% or a fixed number, as CV best_iteration can vary.
+            # This is a heuristic. One might also choose not to use early stopping for the final fit,
+            # or use the original n_estimators if CV results were too variable.
+            final_n_estimators = max(1, int(np.ceil(self.avg_best_iteration_cv_))) # Using ceil and ensuring int
+            print(f"Adjusting final model n_estimators to {final_n_estimators} based on average best_iteration from CV.")
+            final_model_params['n_estimators'] = final_n_estimators
+        else:
+            print(f"Using original n_estimators ({final_model_params['n_estimators']}) for final model.")
+
+
+        self.model = xgb.XGBClassifier(**final_model_params)
+        try:
+            # For the final model, typically we don't use early stopping unless we have a separate, untouched test set.
+            # Here, we fit on all of X_processed_full.
+            self.model.fit(X_processed_full, y_aligned_full, verbose=self.verbose_eval)
+        except Exception as e:
+            self.model = None
+            raise RuntimeError(f"Final XGBoost fitting failed on the full dataset: {e}") from e
+
+        print("Final XGBoost model training complete.")
+
 
     def detect(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """ Detects anomalies (predicts class 1). """
@@ -437,3 +498,32 @@ class XGBoostModel(model_interface.ModelInterface):
 
         print(f"Predicted probabilities shape: {probabilities.shape}")
         return probabilities
+    
+    def get_validation_scores(self) -> Dict[str, float]:
+        """Returns the average validation scores from k-fold cross-validation."""
+        if not self.validation_scores_:
+             print("K-fold CV scores (user metrics) not available.")
+             return {}
+        if all(np.isnan(score) for score in self.validation_scores_.values()):
+            print("K-fold CV scores (user metrics) are all NaN.")
+        return self.validation_scores_
+
+    def get_feature_importances(self) -> Optional[Dict[str, float]]:
+        """Returns feature importances from the final trained XGBoost model."""
+        if self.model is None:
+            print("Final model not trained yet.")
+            return None
+        if not hasattr(self.model, 'feature_importances_'):
+            print("Final model does not have feature_importances_ attribute.")
+            return None
+        if self.processed_feature_names is None:
+            print("Processed feature names not available for final model.")
+            # Fallback if names are missing for some reason
+            return {f"feature_{i}": imp for i, imp in enumerate(self.model.feature_importances_)}
+
+        importances = self.model.feature_importances_
+        if len(importances) != len(self.processed_feature_names):
+            warnings.warn(f"Mismatch in importances ({len(importances)}) and processed feature names ({len(self.processed_feature_names)}) for final model.")
+            max_len = min(len(importances), len(self.processed_feature_names))
+            return {self.processed_feature_names[i]: importances[i] for i in range(max_len)}
+        return dict(zip(self.processed_feature_names, importances))
