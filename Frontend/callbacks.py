@@ -1,6 +1,7 @@
 # callbacks.py (Complete and Updated File)
 
 import base64
+import re
 import sys
 import traceback
 from dash import Dash, dcc, html, Input, Output, State, ALL, MATCH, callback, callback_context, no_update, ctx
@@ -1197,14 +1198,29 @@ def get_index_callbacks(app):
         # --- Proceed with Job Submission Logic (triggered by button) ---
         print(f"Start job button clicked (n_clicks={n_clicks})")
 
-        # Basic Validation
+        # --- Basic Validation ---
         error_msg = None
-        if not selected_dataset: error_msg = "Please select a dataset."
-        elif not selected_detection_model: error_msg = "Please select a detection model."
-        elif not job_name: error_msg = "Job name cannot be empty."
+        if not selected_dataset:
+            error_msg = "Please select a dataset."
+        elif not selected_detection_model:
+            error_msg = "Please select a detection model."
+        elif not job_name: # Check if job_name is empty
+            error_msg = "Job name cannot be empty."
+        # --- New validation for job_name format ---
+        elif not re.match(r"^[a-z_][a-z0-9_]*$", job_name): # Regex for validation
+            if job_name[0].isdigit():
+                error_msg = "Job name cannot start with a number."
+            elif any(c.isupper() for c in job_name):
+                error_msg = "Job name cannot contain uppercase letters."
+            else:
+                # This more general message covers other invalid characters if your regex is stricter
+                error_msg = "Job name must start with a lowercase letter or underscore, and contain only lowercase letters, numbers, or underscores."
+        # --- End of new validation ---
         else:
-            response = handler.check_name(job_name)
-            if response != "success": error_msg = "Job name already exists!"
+            # Assuming handler.check_name is defined and checks for existing job names
+            response = handler.check_name(job_name) 
+            if response != "success":
+                error_msg = "Job name already exists!"
 
         if error_msg:
             style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})

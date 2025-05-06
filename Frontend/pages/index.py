@@ -353,7 +353,7 @@ def layout(handler):
                             )
                         ], style={"textAlign": "center", "marginTop": "20px"}),
 
-                        # --- Speedup Input (Conditional) ---
+                        # --- Speedup Input ---
                         html.Div([
                             html.Label("Select Speedup for Stream (Default: 1):", style={"fontSize": "22px", "color": "#ffffff"}),
                             dcc.Input(
@@ -365,7 +365,21 @@ def layout(handler):
                             )
                         ], style={"marginTop": "20px", "textAlign": "center"}),
                         
-                        html.Label("Note: Job processing time may vary depending on the model and XAI methods selected.", style={"fontSize": "22px", "color": "#ffffff"}),
+                        # --- SEPARATOR ---
+                        html.Hr(style={'borderColor': '#446e92', }),
+                        
+                        html.Div( # Wrap label in a Div for better spacing control & consistent centering
+                            html.Label(
+                                "Note: Job processing time may vary depending on the model and XAI methods selected.", 
+                                style={
+                                    "fontSize": "14px",         # Reduced font size for a note
+                                    "color": "#cccccc",         # Softer than pure white, good on dark backgrounds
+                                    "fontStyle": "italic",      # Common styling for notes
+                                    "display": "inline-block"   # Allows text-align to work from parent
+                                }
+                            ),
+                            style={"textAlign": "center", "marginBottom": "15px"} # Center the text and add space below
+                        ),
                         
                         # --- Start Button ---
                         html.Div([
