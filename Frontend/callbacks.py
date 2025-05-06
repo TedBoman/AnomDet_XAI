@@ -1209,7 +1209,7 @@ def get_index_callbacks(app):
         if error_msg:
             style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
             return style_copy, False, error_msg # Show error popup
-
+        
         # Process Labeled Data Info
         is_labeled = "is_labeled" in labeled_check_val
         label_col_to_pass = None

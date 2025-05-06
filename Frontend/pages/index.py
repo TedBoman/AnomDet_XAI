@@ -365,20 +365,29 @@ def layout(handler):
                             )
                         ], style={"marginTop": "20px", "textAlign": "center"}),
                         
+                        html.Label("Note: Job processing time may vary depending on the model and XAI methods selected.", style={"fontSize": "22px", "color": "#ffffff"}),
+                        
                         # --- Start Button ---
                         html.Div([
-                            html.Button("Start Job", id="start-job-btn", style={
-                                "marginTop": "20px",
-                                "width": "150px",
-                                "height": "40px",
-                                "fontSize": "16px",
-                                "backgroundColor": "#4CAF50",
-                                "color": "#ffffff",
-                                "borderRadius": "0.3rem",
-                                "display": "block",
-                                "margin": "auto"
-                            })
-                        ], style={"textAlign": "center", "marginTop": "30px"}), 
+                            dcc.Loading(
+                                id="loading-start-job",
+                                type="default", # or "circle", "cube", etc.
+                                children=[
+                                    html.Button("Start Job", id="start-job-btn", n_clicks=0, style={ # Ensure n_clicks is initialized
+                                        "marginTop": "20px",
+                                        "width": "150px",
+                                        "height": "40px",
+                                        "fontSize": "16px",
+                                        "backgroundColor": "#4CAF50",
+                                        "color": "#ffffff",
+                                        "borderRadius": "0.3rem",
+                                        "display": "block",
+                                        "margin": "auto"
+                                    })
+                                ]
+                            )
+                        ], style={"textAlign": "center", "marginTop": "30px"}),
+
 
                         # --- Popups and Intervals ---
                         html.Div(
