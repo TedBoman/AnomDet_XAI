@@ -85,6 +85,8 @@ class TimeSeriesAnomalyInjector:
                                     )
                                     # Mark anomaly flags
                                     modified_data.loc[anomaly_indices, "injected_anomaly"] = True
+                                    if 'label' in modified_data: modified_data.loc[anomaly_indices, "label"] = True # set the label to true if we have labeles
+
                                     dl.debug_print(f"Data after injection:\n{modified_data.loc[anomaly_indices, column]}")
                                     dl.debug_print(f"Anomaly flags after injection:\n{modified_data.loc[anomaly_indices, 'injected_anomaly']}")
                                     

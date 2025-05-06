@@ -1,8 +1,10 @@
 import os
 import socket
 import json
+import sys
 from time import sleep
 from datetime import datetime
+from typing import Optional, Dict, List, Any
 
 class BackendAPI:
     # Constructor setting host adress and port for the the backend container
@@ -11,32 +13,57 @@ class BackendAPI:
         self.port = port
 
     # Sends a request to the backend to start a batch job
-    def run_batch(self, model: str, dataset: str, name: str, debug=False, inj_params: dict=None) -> None:
+    def run_batch(self, model: str, dataset: str, name: str, debug=False,
+                inj_params: Optional[List[Dict[str, Any]]]=None, # Backend expects list? Match frontend
+                label_column: Optional[str]=None,
+                xai_params: Optional[Dict[str, Any]]=None,
+                model_params: Optional[Dict[str, Any]]=None,
+                ) -> None:
         data = {
             "METHOD": "run-batch",
             "model": model,
             "dataset": dataset,
-            "name": name,
-            "debug": debug
+            "name": "job_batch_"+name, # Consider just passing 'name' maybe?
+            "debug": debug,
         }
-        if inj_params:
+        print(label_column)
+        sys.stdout.flush()
+        if inj_params: 
             data["inj_params"] = inj_params
+        if label_column is not None:
+            data["label_column"] = label_column
+        if xai_params is not None:
+            data["xai_params"] = xai_params
+        if model_params is not None:
+            data["model_params"] = model_params
 
+        #print(f"API sending run-batch data: {data}") # Optional: Debug log
         self.__send_data(data, response=False)
 
     # Sends a request to the backend to start a stream job
-    def run_stream(self, model: str,dataset: str, name: str, speedup: int, debug=False, inj_params: dict=None) -> None:
+    def run_stream(self, model: str, dataset: str, name: str, speedup: int, debug=False,
+                inj_params: Optional[List[Dict[str, Any]]]=None,
+                label_column: Optional[str]=None, 
+                xai_params: Optional[Dict[str, Any]]=None,
+                model_params: Optional[Dict[str, Any]]=None,
+                ) -> None:
         data = {
-            "METHOD": "run-stream",
+            "METHOD": "run-batch",
             "model": model,
             "dataset": dataset,
-            "name": name,
-            "speedup": speedup,
-            "debug" : debug
+            "name": "job_batch_"+name, # Consider just passing 'name' maybe?
+            "debug": debug,
         }
         if inj_params:
             data["inj_params"] = inj_params
-            
+        if label_column is not None:
+            data["label_column"] = label_column
+        if xai_params is not None:
+            data["xai_params"] = xai_params
+        if model_params is not None:
+            data["model_params"] = model_params
+
+        #print(f"API sending run-stream data: {data}") # Optional: Debug log
         self.__send_data(data, response=False)
 
     # Requests each row of data of a running job from timestamp and forward
@@ -68,6 +95,13 @@ class BackendAPI:
     def get_models(self) -> str:
         data = {
             "METHOD": "get-models"
+        }
+        return self.__send_data(data)
+    
+    # Get all available XAI methods
+    def get_xai_methods(self) -> str:
+        data = {
+            "METHOD": "get-xai-methods"
         }
         return self.__send_data(data)
     
@@ -155,7 +189,7 @@ class BackendAPI:
                 data = json.dumps(data)
                 sock.sendall(bytes(data, encoding="utf-8"))
             if response:
-                data = sock.recv(1024)
+                data = sock.recv(4096)
                 data = data.decode("utf-8")
                 return data
         except Exception as e:

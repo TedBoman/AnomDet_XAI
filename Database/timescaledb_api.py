@@ -1,7 +1,7 @@
 import numpy as np
 from db_interface import DBInterface
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 import psycopg2
 import psycopg2.extras as extras
 from psycopg2.extras import execute_values
@@ -24,15 +24,30 @@ class TimescaleDBAPI(DBInterface):
     def create_table(self, table_name: str, columns: list[str]) -> None:
         length = len(columns)
         
-        # The first column is of type TIMESTAMPTZ NOT NULL and the rest are VARCHAR(50)
-        columns[0] = f'\"{columns[0]}\" TIMESTAMPTZ NOT NULL'
-        for i in range(1, length):
-            columns[i] = f'\"{columns[i]}\" TEXT'
-        columns = columns + ["is_anomaly BOOLEAN"] + ["injected_anomaly BOOLEAN"]
-
         try: 
-            conn = psycopg2.connect(self.connection_string)                         # Connect to the database
+            conn = psycopg2.connect(self.connection_string) # Connect to the database
             cursor = conn.cursor()
+
+            # Check if table exists
+            check_exists_query = """
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = %s
+                );
+            """
+            cursor.execute(check_exists_query, (table_name,))
+            table_exists = cursor.fetchone()[0]
+
+            if table_exists:
+                print(f"Info: Table '{table_name}' already exists.")
+                conn.close() # Close connection before returning
+                return None # Return None if table exists
+            
+            # The first column is of type TIMESTAMPTZ NOT NULL and the rest are
+            columns[0] = f'\"{columns[0]}\" TIMESTAMPTZ NOT NULL'
+            for i in range(1, length):
+                columns[i] = f'\"{columns[i]}\" NUMERIC'
+            columns = columns + ["is_anomaly BOOLEAN"] + ["injected_anomaly BOOLEAN"]
             
             query_create_table = f'CREATE TABLE "{table_name}" ({",".join(columns)});'
             cursor.execute(query_create_table)
@@ -42,6 +57,8 @@ class TimescaleDBAPI(DBInterface):
             cursor.execute(query_create_hypertable)
 
             conn.commit()
+
+            return table_name
                 
         except Exception as error:
             print("Error: %s" % error)
@@ -82,28 +99,23 @@ class TimescaleDBAPI(DBInterface):
         # Assuming the docker container is started, connect to the database
         try:
             conn = psycopg2.connect(self.connection_string)
-            cursor = conn.cursor()
+
+            params = {}
+            from_dt_utc_naive = from_time.astimezone(timezone.utc).replace(tzinfo=None)
+            params['from_ts'] = from_dt_utc_naive
+
+            if to_time is not None:
+                to_dt_utc_naive = to_time.astimezone(timezone.utc).replace(tzinfo=None)
+                params['to_ts'] = to_dt_utc_naive
+
             if to_time is not None:
                 query = f'SELECT * FROM {table_name} WHERE timestamp >= \'{from_time}\' AND timestamp <= \'{to_time}\' ORDER BY timestamp ASC;'
             else:
                 query = f'SELECT * FROM {table_name} WHERE timestamp >= \'{from_time}\' ORDER BY timestamp ASC;'
 
-            cursor.execute(query)
+            df = pd.read_sql_query(query, conn, params=params) # Let pandas handle it
 
-            data = cursor.fetchall()
-            conn.close()
-            
-            df = pd.DataFrame(data)
-            df.columns = [desc[0] for desc in cursor.description]
-
-            cols = df.columns.tolist()
-
-            cols.remove("is_anomaly")
-            cols.remove("injected_anomaly")
-            cols.remove("timestamp")
-            
-            for col in cols:
-                df[col] = df[col].astype(float)
+            print(f"Read data with columns: {df.columns.values}")
 
             return df
         except Exception as error:
@@ -190,3 +202,24 @@ class TimescaleDBAPI(DBInterface):
 
         finally:
             conn.close()
+            
+    def list_all_tables(self):
+        tables = []
+        query = """
+            SELECT tablename
+            FROM pg_catalog.pg_tables
+            WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema'
+              AND (tablename LIKE 'job_batch_%' OR tablename LIKE 'job_stream_%');
+        """
+        # Or query without the LIKE filter and filter in Python if preferred
+        try:
+            conn = psycopg2.connect(self.connection_string)
+            cursor = conn.cursor()
+            cursor.execute(query)
+            results = cursor.fetchall()
+            tables = [row[0] for row in results]
+            conn.close()
+        except Exception as e:
+            print(f"Error listing tables: {e}")
+            # Handle error appropriately, maybe reconnect?
+        return tables

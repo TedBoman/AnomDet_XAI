@@ -111,6 +111,12 @@ def main(argv: list[str]) -> None:
                 handle_error(1, "Invalid number of arguments")
             result = api.get_models()
 
+        # Get all avaliable models for anomaly detection if the command is "get-models"
+        case "get-xai-methods":
+            if (arg_len != 2):
+                handle_error(1, "Invalid number of arguments")
+            result = api.get_xai_methods()
+
         # Get all avaliable injection methods for anomaly detection if the command is "get-injection-methods"
         case "get-injection-methods":
             if (arg_len != 2):
