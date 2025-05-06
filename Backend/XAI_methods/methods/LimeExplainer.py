@@ -1,14 +1,9 @@
-# File: lime_explainer.py
-
 import lime
 import lime.lime_tabular
 import numpy as np
 import pandas as pd
 from typing import Any, Union, Dict, List, Optional
 import warnings
-
-# Import the base class API
-# Assume it's in the same directory or Python path
 from XAI_methods.explainer_method_api import ExplainerMethodAPI
 
 class LimeExplainer(ExplainerMethodAPI):
@@ -42,7 +37,7 @@ class LimeExplainer(ExplainerMethodAPI):
                 # Other potential LimeTabularExplainer init args can be passed here.
         """
         print("Initializing LimeExplainer...")
-        self.model = model # Should be the wrapper (e.g., SequenceTo2DWrapper)
+        self.model = model 
         self.mode = params.get('mode', None)
         self.feature_names = params.get('feature_names', None)
         self.class_names = params.get('class_names', None)
@@ -98,12 +93,10 @@ class LimeExplainer(ExplainerMethodAPI):
                      predictions = self.model.predict(data_reshaped_3d)
                      # Attempt to format as pseudo-probabilities if predict returns single class (0 or 1)
                      if predictions.ndim == 2 and predictions.shape[1] == 1:
-                          # Assuming output is anomaly class (1) vs normal (0)
                           prob_class_1 = predictions.flatten().astype(float)
                           prob_class_0 = 1.0 - prob_class_1
                           return np.vstack([prob_class_0, prob_class_1]).T # Shape (n_samples, 2)
                      else:
-                          # Cannot easily convert other formats to probabilities
                           raise RuntimeError("LIME needs probabilities from predict_proba for classification, but model only has predict with incompatible output.")
                 else:
                     # Use predict_proba
@@ -140,7 +133,7 @@ class LimeExplainer(ExplainerMethodAPI):
                 feature_names=self.feature_names_flat,   # Flattened feature names
                 class_names=self.class_names,            # List of class names if classification
                 mode=self.mode,                          # 'classification' or 'regression'
-                **lime_init_kwargs                        # Pass other init args
+                **lime_init_kwargs                       # Pass other init args
             )
             print("LimeExplainer initialization complete.")
         except Exception as e:
@@ -200,8 +193,8 @@ class LimeExplainer(ExplainerMethodAPI):
         # Extract LIME explain_instance specific arguments from kwargs
         num_features = kwargs.get('num_features', 10)
         num_samples = kwargs.get('num_samples', 5000) # LIME default
-        labels = kwargs.get('labels', (1,) if self.mode == 'classification' else None) # Default to explain class 1 if classification? Or let LIME decide? Let LIME decide default.
-        top_labels = kwargs.get('top_labels', None) # Let LIME default handle this unless specified
+        labels = kwargs.get('labels', (1,) if self.mode == 'classification' else None) 
+        top_labels = kwargs.get('top_labels', None) 
         other_lime_kwargs = {k: v for k, v in kwargs.items() if k not in ['num_features', 'num_samples', 'labels', 'top_labels']}
 
         print(f"Calling LIME explain_instance (num_features={num_features}, num_samples={num_samples})...")

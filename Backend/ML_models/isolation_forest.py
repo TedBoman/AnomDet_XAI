@@ -1,10 +1,9 @@
-# Inside IsolationForestModel class file
 import warnings
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler # Optional: Add if scaling is desired
-from ML_models import model_interface # Assuming interface
+from sklearn.preprocessing import StandardScaler 
+from ML_models import model_interface 
 from typing import Union, List, Optional
 
 class IsolationForestModel(model_interface.ModelInterface):
@@ -120,7 +119,6 @@ class IsolationForestModel(model_interface.ModelInterface):
 
         # Apply scaling if scaler was fitted
         if self.scaler:
-            #print("Applying fitted scaler...") # Optional print
             data_2d = self.scaler.transform(data_2d)
 
         return data_2d

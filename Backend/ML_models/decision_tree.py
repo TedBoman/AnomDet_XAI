@@ -5,7 +5,6 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.impute import SimpleImputer 
 from sklearn.model_selection import train_test_split # Added for validation split
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score # Added for evaluation
-# Make sure this import points to your actual model interface base class
 from ML_models import model_interface 
 from typing import Dict, List, Optional, Tuple, Union
 import warnings
@@ -508,8 +507,6 @@ class DecisionTreeModel(model_interface.ModelInterface):
         """
         if self.model is None or self.scaler is None or self.imputer is None or self.input_type is None \
             or self.n_original_features is None:
-            # Added check for original_feature_names_ needed for NumPy case consistency
-            # or (self.input_type == 'numpy' and self.original_feature_names_ is None): 
             raise RuntimeError("Model is not trained or key components (scaler/imputer/input_type/dims/names) are missing for XAI prediction.")
         
         if not isinstance(X_xai, np.ndarray):
@@ -535,7 +532,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
                         if n_feat != self.n_original_features:
                              raise ValueError(f"XAI 3D input feature mismatch: got {n_feat} features, expected {self.n_original_features}")
                         # Reshape (n_instances, 1, n_features) to (n_instances, n_features)
-                        # print(f"DEBUG (predict_proba DF): Reshaping XAI input {X_xai.shape} to 2D.") # Optional debug
+                        print(f"DEBUG (predict_proba DF): Reshaping XAI input {X_xai.shape} to 2D.") 
                         X_to_process_2d = X_xai.reshape(n_inst, n_feat)
                     else:
                         # If seq_len is not 1, then it's an invalid 3D shape for DF model
@@ -602,7 +599,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
         if not hasattr(self.model, 'classes_') or self.model.classes_ is None:
              # This can happen if fit failed or model doesn't expose classes_
              warnings.warn("Model classes_ attribute not available. Cannot validate output probability shape accurately.", RuntimeWarning)
-             expected_cols = None # Unknown
+             expected_cols = None 
         else:
              expected_cols = len(self.model.classes_)
         
