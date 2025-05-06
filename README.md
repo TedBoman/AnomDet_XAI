@@ -43,7 +43,7 @@ To develop our product, to evaluate our models and to test our system during dev
 2. Ensure that you have Git installed on your system
 3. Clone the repository using a terminal running the following command:
    ```sh 
-   git clone https://github.com/MarcusHammarstrom/AnomDet.git
+   https://github.com/TedBoman/AnomDet_XAI.git
    ```
 4. Navigate to the cloned repository and change to the Docker directory
    ```sh 
