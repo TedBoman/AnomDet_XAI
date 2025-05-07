@@ -98,16 +98,33 @@ class BatchImporter:
         """
         # Insert the row (modified or not) into the database
         # Handle timestamp conversion safely
-        if isinstance(chunk['timestamp'].iloc[0], pd.Timestamp):
-            # Already a timestamp, no conversion needed
-            pass
-        else:
+        if 'timestamp' in chunk.columns and not pd.api.types.is_datetime64_any_dtype(chunk['timestamp']):
+            dl.debug_print(f"Process_chunk: Timestamp column in table {table_name} is not datetime. Attempting conversion.")
+            # Make a copy to avoid SettingWithCopyWarning if chunk is a view
+            timestamp_series = chunk['timestamp'].copy() 
             try:
-                # First try direct conversion from Unix timestamp
-                chunk['timestamp'] = pd.to_datetime(chunk['timestamp'], unit='s')
-            except (ValueError, OutOfBoundsDatetime):
-                # If that fails, try converting through datetime
-                chunk['timestamp'] = pd.to_datetime(chunk['timestamp'])
+                # First, try standard conversion (handles various string formats, including ISO)
+                converted_timestamps = pd.to_datetime(timestamp_series, errors='coerce')
+
+                # If standard conversion results in all NaT, and original wasn't all NaT,
+                # it might indicate numeric timestamps (e.g., Unix epochs in seconds).
+                if converted_timestamps.isna().all() and not timestamp_series.isna().all():
+                    dl.debug_print(f"Process_chunk: Standard to_datetime resulted in all NaT for non-NaT input for table {table_name}. Trying with unit='s'.")
+                    # This attempts to interpret numbers as seconds since epoch
+                    converted_timestamps = pd.to_datetime(timestamp_series, unit='s', errors='coerce')
+                
+                chunk.loc[:, 'timestamp'] = converted_timestamps
+                
+                # Optionally, handle rows where timestamp is still NaT (unconvertible)
+                # For example, by dropping them or logging them:
+                if chunk['timestamp'].isna().any():
+                    dl.debug_print(f"Process_chunk: {chunk['timestamp'].isna().sum()} rows in table {table_name} had unconvertible timestamps.")
+                    # chunk = chunk.dropna(subset=['timestamp']) # Uncomment to drop
+
+            except Exception as e:
+                dl.print_exception(f"Process_chunk: Critical error converting timestamp in table {table_name}: {e}. Coercing to NaT.")
+                chunk.loc[:, 'timestamp'] = pd.to_datetime(chunk['timestamp'], errors='coerce') # Fallback to coerce
+
         db_instance = self.init_db(conn_params)
         db_instance.insert_data(table_name, chunk)
 
@@ -180,6 +197,12 @@ class BatchImporter:
             dl.print_exception("Canceling job")
             return
         
+        # --- Drop Unnamed Columns ---
+        # Select columns that do not start with 'Unnamed:'
+        full_df = full_df.loc[:, ~full_df.columns.str.startswith('Unnamed:')]
+        dl.debug_print("Dropped unnamed columns.")
+        # --- End Drop Unnamed Columns ---
+        
         #full_df = full_df.rename(columns={timestamp_col_name: 'timestamp'}) # Uncomment when passing timestamp column
         full_df.columns.values[0] = "timestamp"
 
@@ -192,6 +215,38 @@ class BatchImporter:
         if rename_map: # Only rename if there's anything to rename
             full_df = full_df.rename(columns=rename_map)
             dl.debug_print("Label column renaming applied.")
+            
+        # --- Label Column Conversion to 0/1 ---
+        if 'label' in full_df.columns:
+            dl.debug_print(f"Processing 'label' column. Initial unique values (up to 10): {full_df['label'].dropna().unique()[:10]}")
+
+            def convert_label_value(val):
+                if isinstance(val, str):
+                    val_lower = val.lower()
+                    if val_lower == 'true':
+                        return 1
+                    if val_lower == 'false':
+                        return 0
+                elif isinstance(val, bool):
+                    return 1 if val else 0
+                
+                # Check for numeric 1 or 0 (handles int and float)
+                # Using np.isclose for float comparison is safer if precision issues were a concern,
+                # but direct equality works for exact 0.0 and 1.0.
+                if val == 1 or val == 1.0:
+                    return 1
+                if val == 0 or val == 0.0:
+                    return 0
+                
+                # Default for anything else (other numbers, unhandled strings, None, NaN)
+                return 0
+
+            full_df['label'] = full_df['label'].apply(convert_label_value).astype(int)
+            
+            dl.debug_print(f"Converted 'label' column to 0/1 integers. Unique values after conversion: {full_df['label'].unique()}")
+        else:
+            dl.debug_print("'label' column not found or specified. Skipping label conversion.")
+
         
         columns = list(full_df.columns.values)
         
@@ -215,12 +270,6 @@ class BatchImporter:
         for chunk in [full_df[i:i+int(self.chunksize)] for i in range(0, int(len(full_df)), int(self.chunksize))]:
             if anomaly_settings:
                 chunk = chunk.copy()
-                # If timestamps need adjustment, add start_time explicitly
-                chunk.loc[:, chunk.columns[0]] = chunk.loc[:, chunk.columns[0]].apply(
-                    lambda x: self.start_time + pd.Timedelta(seconds=x.timestamp())
-                    if isinstance(x, datetime.datetime) and x < self.start_time
-                    else x
-                )
 
                 # Inject anomalies across chunk boundaries
                 chunk = self.inject_anomalies_into_chunk(chunk, anomaly_settings)
