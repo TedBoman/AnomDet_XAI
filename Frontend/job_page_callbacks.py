@@ -592,12 +592,66 @@ def register_job_page_callbacks(app):
             # --- Convert Timestamp ---
             x_axis_data = df.index # Default
             if 'timestamp' in df.columns:
-                # Your timestamp conversion logic seems fine, adapt if needed
-                epoch_start = pd.Timestamp('1970-01-01 00:00:00', tzinfo=timezone.utc)
-                relative_seconds = pd.to_numeric(df['timestamp'], errors='coerce')
-                df['datetime'] = epoch_start + pd.to_timedelta(relative_seconds, unit='s')
-                x_axis_data = df['datetime']
-                print(f"(Graph Update CB) Converted timestamp to datetime column 'datetime'.")
+                timestamp_numeric = pd.to_numeric(df['timestamp'], errors='coerce')
+                df['datetime'] = pd.NaT # Initialize datetime column
+
+                valid_timestamps = timestamp_numeric.dropna()
+                if not valid_timestamps.empty:
+                    median_val = None
+                    SAMPLING_THRESHOLD = 10000  # If more than 10,000 valid timestamps, sample for median
+                    SAMPLE_SIZE = 5000          # Number of items to sample for median calculation
+
+
+                    if len(valid_timestamps) > SAMPLING_THRESHOLD:
+                        print(f"(Graph Update CB) Valid timestamps count ({len(valid_timestamps)}) > {SAMPLING_THRESHOLD}. Sampling {SAMPLE_SIZE} for median.")
+                        # Ensure sample size is not larger than the population of valid timestamps
+                        actual_sample_size = min(SAMPLE_SIZE, len(valid_timestamps))
+                        # Using .iloc on a sample of indices can be efficient if valid_timestamps is a filtered view
+                        # Alternatively, directly sample from valid_timestamps if it's a new Series copy
+                        sample_for_median = valid_timestamps.sample(n=actual_sample_size, random_state=42) # random_state for reproducibility
+                        median_val = sample_for_median.median()
+                    else:
+                        median_val = valid_timestamps.median()
+
+                    # Heuristic to determine unit based on magnitude of the median timestamp value.
+                    # Typical epoch seconds for recent dates: ~1.7e9
+                    # Typical epoch milliseconds for recent dates: ~1.7e12
+                    # Typical epoch nanoseconds for recent dates: ~1.7e18 (value from pd.Timestamp.value)
+                    # Pandas max datetime (year 2262) is ~9.2e9 seconds from 1970, or ~9.2e12 ms, or ~9.2e15 ns.
+                    # The raw int64 value for pd.Timestamp.max is ~9.2e18.
+
+                    # Threshold for seconds: e.g., if values are generally less than ~year 3000 in seconds.
+                    # (Year 3000 is approx 3.25e10 seconds since epoch)
+                    SECONDS_THRESHOLD = 4 * 10**10
+                    # Threshold for milliseconds: e.g., if values are less than ~year 3000 in milliseconds.
+                    # (Year 3000 is approx 3.25e13 milliseconds since epoch)
+                    MILLISECONDS_THRESHOLD = 4 * 10**13
+
+                    if median_val > MILLISECONDS_THRESHOLD:
+                        # Very large numbers, likely nanoseconds (this caused the OutOfBounds error previously
+                        # when these nanoseconds were misinterpreted as seconds in the timedelta calculation)
+                        assumed_unit = 'ns'
+                        print(f"(Graph Update CB) Timestamp values (median: {median_val:.2e}) suggest NANOSECONDS since epoch.")
+                    elif median_val > SECONDS_THRESHOLD:
+                        # Medium-large numbers, likely milliseconds
+                        assumed_unit = 'ms'
+                        print(f"(Graph Update CB) Timestamp values (median: {median_val:.2e}) suggest MILLISECONDS since epoch.")
+                    else:
+                        # Smaller numbers, likely seconds
+                        assumed_unit = 's'
+                        print(f"(Graph Update CB) Timestamp values (median: {median_val:.2e}) suggest SECONDS since epoch.")
+                    
+                    df['datetime'] = pd.to_datetime(timestamp_numeric, unit=assumed_unit, errors='coerce', utc=True)
+                    
+                    if df['datetime'].notna().any():
+                        x_axis_data = df['datetime']
+                        print(f"(Graph Update CB) Converted 'timestamp' column to 'datetime' using assumed unit '{assumed_unit}'.")
+                    else:
+                        print(f"(Graph Update CB) Warning: 'timestamp' conversion using unit '{assumed_unit}' resulted in all NaT. Using index for X-axis.")
+                        # x_axis_data remains df.index (or set to empty if preferred)
+                else: # All timestamp values were NaN or the column was empty after coercing
+                    print("(Graph Update CB) All 'timestamp' values are invalid or column is effectively empty after pd.to_numeric. Using index for X-axis.")
+                    # x_axis_data remains df.index
             else:
                 print("(Graph Update CB) Warning: 'timestamp' column not found. Using DataFrame index for X-axis.")
 
