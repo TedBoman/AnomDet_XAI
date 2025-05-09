@@ -87,80 +87,69 @@ class BatchImporter:
             return None
 
     def process_chunk(self, conn_params, table_name, chunk):
-        """
-        Processes a chunk of data by creating a DBInterface instance
-        and inserting the chunk into the database.
+        # Timestamp conversion should have been fully handled in start_simulation.
+        # Chunks arriving here should have 'timestamp' as datetime64[ns, UTC].
+        if 'timestamp' not in chunk.columns or \
+           not pd.api.types.is_datetime64_any_dtype(chunk['timestamp']) or \
+           chunk['timestamp'].dt.tz is None or \
+           str(chunk['timestamp'].dt.tz).upper() != 'UTC': # Check it's UTC
+            dl.debug_print(f"CRITICAL WARNING in process_chunk: Timestamp column for table {table_name} is not in expected datetime64[ns, UTC] format. Dtype: {chunk['timestamp'].dtype if 'timestamp' in chunk.columns else 'Not Found'}, TZ: {chunk['timestamp'].dt.tz if 'timestamp' in chunk.columns and pd.api.types.is_datetime64_any_dtype(chunk['timestamp']) else 'N/A'}. Data might be incorrect.")
+            # Potentially coercive UTC conversion as a last resort, or skip insertion
+            if 'timestamp' in chunk.columns and pd.api.types.is_datetime64_any_dtype(chunk['timestamp']):
+                if chunk['timestamp'].dt.tz is None:
+                    chunk.loc[:, 'timestamp'] = chunk['timestamp'].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
+                else:
+                    chunk.loc[:, 'timestamp'] = chunk['timestamp'].dt.tz_convert('UTC')
+                chunk.dropna(subset=['timestamp'], inplace=True) # Drop if localization failed
+            else: # Cannot convert if not datetime like at all
+                dl.debug_print(f"Cannot ensure UTC for non-datetime-like timestamp in chunk for {table_name}")
 
-        Args:
-            conn_params: The parameters needed to connect to the database.
-            table_name: The name of the table.
-            chunk (pd.DataFrame): A chunk of data to be inserted.
-        """
-        # Insert the row (modified or not) into the database
-        # Handle timestamp conversion safely
-        if 'timestamp' in chunk.columns and not pd.api.types.is_datetime64_any_dtype(chunk['timestamp']):
-            dl.debug_print(f"Process_chunk: Timestamp column in table {table_name} is not datetime. Attempting conversion.")
-            # Make a copy to avoid SettingWithCopyWarning if chunk is a view
-            timestamp_series = chunk['timestamp'].copy() 
-            try:
-                # First, try standard conversion (handles various string formats, including ISO)
-                converted_timestamps = pd.to_datetime(timestamp_series, errors='coerce')
-
-                # If standard conversion results in all NaT, and original wasn't all NaT,
-                # it might indicate numeric timestamps (e.g., Unix epochs in seconds).
-                if converted_timestamps.isna().all() and not timestamp_series.isna().all():
-                    dl.debug_print(f"Process_chunk: Standard to_datetime resulted in all NaT for non-NaT input for table {table_name}. Trying with unit='s'.")
-                    # This attempts to interpret numbers as seconds since epoch
-                    converted_timestamps = pd.to_datetime(timestamp_series, unit='s', errors='coerce')
-                
-                chunk.loc[:, 'timestamp'] = converted_timestamps
-                
-                # Optionally, handle rows where timestamp is still NaT (unconvertible)
-                # For example, by dropping them or logging them:
-                if chunk['timestamp'].isna().any():
-                    dl.debug_print(f"Process_chunk: {chunk['timestamp'].isna().sum()} rows in table {table_name} had unconvertible timestamps.")
-                    # chunk = chunk.dropna(subset=['timestamp']) # Uncomment to drop
-
-            except Exception as e:
-                dl.print_exception(f"Process_chunk: Critical error converting timestamp in table {table_name}: {e}. Coercing to NaT.")
-                chunk.loc[:, 'timestamp'] = pd.to_datetime(chunk['timestamp'], errors='coerce') # Fallback to coerce
 
         db_instance = self.init_db(conn_params)
-        db_instance.insert_data(table_name, chunk)
+        if not db_instance:
+            dl.debug_print(f"DB connection failed in process_chunk for table {table_name}. Chunk not inserted.")
+            return # Or some error status
+            
+        if not chunk.empty:
+            db_instance.insert_data(table_name, chunk)
+        else:
+            dl.debug_print(f"Chunk for table {table_name} is empty after timestamp processing. Nothing to insert.")
+
 
     def inject_anomalies_into_chunk(self, chunk, anomaly_settings):
-        """
-        Injects anomalies into a chunk of data.
-
-        Args:
-            chunk (pd.DataFrame): The chunk of data to inject anomalies into.
-            anomaly_settings (list): List of anomaly settings.
-
-        Returns:
-            pd.DataFrame: The modified chunk with injected anomalies.
-        """
         try:
-            injector = TimeSeriesAnomalyInjector()
-            chunk_start_time = pd.to_datetime(chunk['timestamp'].min(), unit='s')
-            chunk_end_time = pd.to_datetime(chunk['timestamp'].max(), unit='s')
-            
-            for setting in anomaly_settings:
-                anomaly_start = setting.timestamp
-                anomaly_end = anomaly_start + pd.Timedelta(seconds=ut.parse_duration(setting.duration).total_seconds())
+            injector = TimeSeriesAnomalyInjector() # Ensure this is your actual class
 
-                # Check if the chunk overlaps with the anomaly's time range
-                if (chunk_start_time <= anomaly_end) and (chunk_end_time >= anomaly_start):
-                    # Inject anomalies
-                    dl.debug_print("Anomaly within chunk!")
-                    
+            # Timestamps in chunk and anomaly_settings should be absolute and UTC by now
+            if 'timestamp' not in chunk.columns or \
+               not pd.api.types.is_datetime64_any_dtype(chunk['timestamp']) or \
+               chunk['timestamp'].isna().all():
+                dl.debug_print("Warning: Chunk timestamps invalid for anomaly injection. Skipping.")
+                return chunk
+
+            chunk_start_time = chunk['timestamp'].min()
+            chunk_end_time = chunk['timestamp'].max()
+
+            for setting in anomaly_settings: # These have absolute pd.Timestamp(UTC)
+                if not isinstance(setting.timestamp, pd.Timestamp) or pd.isna(setting.timestamp):
+                    dl.debug_print(f"Skipping anomaly setting due to invalid absolute timestamp: {setting.timestamp}")
+                    continue
+
+                anomaly_start_abs = setting.timestamp # Should be absolute, UTC
+                # Ensure ut.parse_duration and setting.duration are valid
+                anomaly_duration_seconds = ut.parse_duration(setting.duration).total_seconds() # Ensure ut exists
+                anomaly_end_abs = anomaly_start_abs + pd.Timedelta(seconds=anomaly_duration_seconds)
+
+                if pd.notna(chunk_start_time) and pd.notna(chunk_end_time) and \
+                   (chunk_start_time <= anomaly_end_abs) and (chunk_end_time >= anomaly_start_abs):
+                    dl.debug_print(f"Anomaly '{setting.anomaly_type}' at {anomaly_start_abs} is within chunk [{chunk_start_time} - {chunk_end_time}].")
                     chunk = injector.inject_anomaly(chunk, setting)
-                    dl.debug_print(chunk)
-                
+            
             return chunk
-
         except Exception as e:
             dl.print_exception(f"Error injecting anomalies into chunk: {e}")
             return chunk
+
 
     def start_simulation(self, conn_params, anomaly_settings=None, table_name=None, timestamp_col_name=None, label_col_name=None):
         """
@@ -203,9 +192,49 @@ class BatchImporter:
         dl.debug_print("Dropped unnamed columns.")
         # --- End Drop Unnamed Columns ---
         
-        #full_df = full_df.rename(columns={timestamp_col_name: 'timestamp'}) # Uncomment when passing timestamp column
-        full_df.columns.values[0] = "timestamp"
+        #Time column renaming
+        original_first_col_name = full_df.columns[0]
+        if original_first_col_name != 'timestamp':
+            dl.debug_print(f"Renaming first column '{original_first_col_name}' to 'timestamp'.")
+            full_df.columns.values[0] = "timestamp"
+        
+        # --- DataFrame Timestamp Conversion ---
+        if 'timestamp' in full_df.columns:
+            timestamp_col = full_df['timestamp']
+            if pd.api.types.is_numeric_dtype(timestamp_col):
+                dl.debug_print("Numeric 'timestamp' column in DataFrame. Interpreting as seconds since Unix epoch.")
+                # Using pd.to_numeric to handle potential strings that are numbers, then to_datetime
+                full_df.loc[:, 'timestamp'] = pd.to_datetime(pd.to_numeric(timestamp_col, errors='coerce'), unit='s', utc=True, errors='coerce')
+            elif not pd.api.types.is_datetime64_any_dtype(timestamp_col): # It's object/string etc.
+                dl.debug_print("Non-numeric, non-datetime 'timestamp' column in DataFrame. Attempting to parse as datetime strings.")
+                full_df.loc[:, 'timestamp'] = pd.to_datetime(timestamp_col, utc=True, errors='coerce')
+            else: # Already datetime64; ensure UTC
+                dl.debug_print("'timestamp' column is already datetime. Ensuring it is UTC.")
+                if timestamp_col.dt.tz is None:
+                    full_df.loc[:, 'timestamp'] = timestamp_col.dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
+                elif str(timestamp_col.dt.tz).upper() != 'UTC':
+                    full_df.loc[:, 'timestamp'] = timestamp_col.dt.tz_convert('UTC')
+            
+            # Handle NaTs from conversion
+            initial_rows = len(full_df)
+            full_df.dropna(subset=['timestamp'], inplace=True)
+            if len(full_df) < initial_rows:
+                dl.debug_print(f"Dropped {initial_rows - len(full_df)} rows due to NaT timestamps after conversion.")
+            if full_df.empty:
+                dl.debug_print("DataFrame became empty after dropping NaT timestamps. Canceling job.")
+                pool.close()
+                pool.join()
+                return 0 # Indicate failure
+        else:
+            dl.debug_print("CRITICAL: 'timestamp' column not found in DataFrame. Cannot proceed.")
+            pool.close()
+            pool.join()
+            return 0 # Indicate failure
 
+        dl.debug_print("Sample of DataFrame after all timestamp processing (should be datetime64[ns, UTC]):")
+        dl.debug_print(full_df.head())
+        
+        
         print(f"renaming columns '{label_col_name}'")
         rename_map = {}
         if label_col_name != 'label':
@@ -247,7 +276,6 @@ class BatchImporter:
         else:
             dl.debug_print("'label' column not found or specified. Skipping label conversion.")
 
-        
         columns = list(full_df.columns.values)
         
         table_name = self.create_table(conn_params, Path(self.file_path).stem if table_name is None else table_name, columns)

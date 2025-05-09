@@ -1,5 +1,6 @@
 # pages/job_page.py
 from dash import dcc, html
+import plotly.graph_objects as go
 
 # --- Helper function ---
 def get_display_job_name(full_job_name):
@@ -45,8 +46,8 @@ def layout(handler, job_name):
         # --- Store Components ---
         dcc.Store(id='job-page-job-name-store', data=job_name),
         dcc.Store(id='job-page-data-store'),
-        dcc.Store(id='job-page-xai-store'), # Assuming you might use XAI later
-        dcc.Store(id='job-page-status-store'), # Assuming you might use status later
+        dcc.Store(id='job-page-xai-store'),
+        dcc.Store(id='job-page-status-store'),
 
         # ... other stores ...
         dcc.Interval(id='job-page-interval-component', interval=10*1000, n_intervals=0),
@@ -136,12 +137,34 @@ def layout(handler, job_name):
             # Meta data            
             html.Div(id='job-metadata-display', style={'marginBottom': '20px', 'color': 'white'}),
             
-            # Graph Area
+            # Graph Area with Feature Selector
             html.Div([
                 html.H3("Time Series Data & Detected Anomalies", style={'color': theme_colors['text_medium']}),
-                html.P("(Click features in legend to toggle visibility)", style={'color': '#A0A0A0', 'fontSize':'small', 'textAlign':'center', 'marginTop': '-10px', 'marginBottom': '10px'}),
-                dcc.Graph(id='timeseries-anomaly-graph', figure={})
+                
+                # Feature Selector Dropdown
+                html.Div([
+                    html.Label("Select Features to Plot:", style={'color': theme_colors['text_light'], 'marginRight': '10px', 'display':'block', 'marginBottom':'5px'}),
+                    dcc.Dropdown(
+                        id='feature-selector-dropdown',
+                        options=[], # Populated by callback
+                        value=[],   # Initially empty or set by callback to first item
+                        multi=True, # Allow selecting multiple features
+                        placeholder="Select features...",
+                        style={ # Styles for the dropdown input box itself
+                            'width': '100%',
+                            'color': theme_colors['text_dark'], # Text color inside input box (e.g. "Select...")
+                        },
+                        # To style the dropdown menu (options list), you might need external CSS
+                        # targeting classes like .Select-menu-outer, .Select-option
+                        # However, Dash dcc.Dropdown has limited direct styling for the menu itself.
+                        # For the input part of the dropdown:
+                        # className='custom-dropdown-input' # if you want to use CSS file
+                    ),
+                ], style={'marginBottom': '15px', 'padding': '10px', 'backgroundColor': 'rgba(40,40,40,0.3)', 'borderRadius': '5px'}),
+                
+                dcc.Graph(id='timeseries-anomaly-graph', figure={}), # Empty figure initially
             ], style={'marginBottom': '20px'}),
+            
             # XAI Section
             html.Div([
                 html.H3("Explainability (XAI) Results", style={'color': '#C0C0C0'}),
@@ -149,7 +172,7 @@ def layout(handler, job_name):
                 html.Div(id='xai-results-content', children="Checking for XAI results...")
             ], id='xai-results-section', style={'display': 'block', 'marginBottom': '20px'}), # Keep visible initially or control via callback
 
-            # Other plots placeholder (keep as before)
+            # Other plots placeholder
             html.Div(id='other-plots-section')
 
         ], style={'padding': '20px', 'backgroundColor': theme_colors['content_background'], 'borderRadius': '10px'}),

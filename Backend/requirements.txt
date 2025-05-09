@@ -10,7 +10,7 @@ openpyxl==3.1.5
 xlrd==2.0.1
 requests==2.32.3
 numba==0.61.2
-shap==0.47.1
+shap==0.47.2
 matplotlib==3.10.1
 lime==0.2.0.1
 xgboost==3.0.0

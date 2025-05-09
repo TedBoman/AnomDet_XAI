@@ -39,6 +39,8 @@ UNSUPERVISED_MODELS = [
     'isolation_forest',
 ]
 
+PRIMARY_KEY_COLUMN = 'id'
+
 # --- Utility function to save results ---
 def save_run_summary(summary_dict: Dict[str, Any], job_name: str, output_dir: str) -> None:
     """Appends a run summary dictionary to a JSON Lines file."""
@@ -445,6 +447,8 @@ def run_batch(
         print(f"Reading data for table/job: {name}")
         df = api.read_data(datetime.fromtimestamp(0), name)
         if df.empty: raise ValueError("DataFrame read from DB is empty.")
+        if PRIMARY_KEY_COLUMN not in df.columns:
+            raise ValueError(f"Primary key column '{PRIMARY_KEY_COLUMN}' not found in DataFrame read from table '{name}'.")
         print(f"DEBUG: Columns read from DB for job '{name}': {df.columns.tolist()}")
         # Ensure timestamp column exists and convert if necessary BEFORE splitting
         if timestamp_col_name and timestamp_col_name in df.columns:
@@ -466,8 +470,10 @@ def run_batch(
             # Handle fallback if needed
 
         # --- Feature Column Definition ---
-        cols_to_exclude = {timestamp_col_name, actual_label_col, 'injected_anomaly', 'is_anomaly'} # Set of columns to exclude
-        potential_feature_cols = [col for col in df.columns if col not in cols_to_exclude and not pd.api.types.is_datetime64_any_dtype(df[col])]
+        # Exclude ID, timestamp, labels, and existing flag columns from features
+        cols_to_exclude = {PRIMARY_KEY_COLUMN, timestamp_col_name, actual_label_col, 'injected_anomaly', 'is_anomaly'}
+        potential_feature_cols = [col for col in df.columns 
+                                  if col not in cols_to_exclude and not pd.api.types.is_datetime64_any_dtype(df[col])]
         if not potential_feature_cols:
              raise ValueError("Could not identify any feature columns after exclusion.")
         feature_columns = potential_feature_cols
@@ -571,13 +577,23 @@ def run_batch(
               df_eval['is_anomaly'][-min_len:] = list(res)[-min_len:] # Try aligning from end
 
         # Update anomalies in DB (using original timestamps)
-        anomaly_df_pred = df.loc[df_eval[df_eval["is_anomaly"] == True].index] # Get original rows for predicted anomalies
-        if timestamp_col_name and not anomaly_df_pred.empty:
-             # Convert timestamps back to the format expected by update_anomalies
-             arr_dt = [dt for dt in anomaly_df_pred[timestamp_col_name]] # Assuming they are datetime objects
-             # Format for TimescaleDB update - adjust formatting if needed! '+00' assumes UTC.
-             arr_str = [f"'{dt.strftime('%Y-%m-%d %H:%M:%S.%f')}{dt.strftime('%z') or '+00'}'" for dt in arr_dt]
-             api.update_anomalies(name, arr_str)
+        predicted_anomalies_mask = df_eval['is_anomaly'] == True
+        # Select rows from the original 'df' (which includes the PRIMARY_KEY_COLUMN)
+        anomaly_df_for_update = df.loc[predicted_anomalies_mask & df[PRIMARY_KEY_COLUMN].notna()]
+        
+        print(f'Found {len(anomaly_df_for_update)} anomalies to update in DB via PK.')
+        if not anomaly_df_for_update.empty:
+            anomaly_pk_values = anomaly_df_for_update[PRIMARY_KEY_COLUMN].tolist()
+            if anomaly_pk_values:
+                # Call the new DB API function that updates by primary key
+                # This method needs to be implemented in your TimescaleDBAPI class.
+                api.update_anomalies(table_name=name,
+                                           pk_column_name=PRIMARY_KEY_COLUMN,
+                                           anomaly_pk_values=anomaly_pk_values)
+            else:
+                print("No valid primary key values found for the detected anomalies.")
+        else:
+            print("No anomalies detected in current run, or no anomalies with valid PKs.")
 
         evaluation_results = evaluate_classification(df_eval) # Evaluate using actual and predicted labels
         print("Evaluation Results:", evaluation_results)

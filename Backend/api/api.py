@@ -179,7 +179,7 @@ class BackendAPI:
                 json_data = recv_data
                 while recv_data:
                     sock.settimeout(1)
-                    recv_data = sock.recv(1024).decode("utf-8")
+                    recv_data = sock.recv(1024*100).decode("utf-8")
                     if recv_data:
                         json_data += recv_data
                 

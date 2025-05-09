@@ -490,7 +490,6 @@ def register_job_page_callbacks(app):
         ctx = dash.callback_context
         trigger_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else 'initial load'
         current_time_display = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
         display_name = get_display_job_name(job_name) # Get display name
 
         if not job_name:
@@ -563,158 +562,280 @@ def register_job_page_callbacks(app):
             print("(Data Fetch CB) No fetch condition met or start_time_iso not set. Returning no_update.")
             return dash.no_update, dash.no_update, dash.no_update
 
+    # --- Callback to populate feature selector dropdown ---
+    @app.callback(
+        [Output('feature-selector-dropdown', 'options'),
+         Output('feature-selector-dropdown', 'value')],
+        [Input('job-page-data-store', 'data')], # This is the critical Input
+        [State('job-page-job-name-store', 'data')] 
+    )
+    def update_feature_selector_options(stored_data_json, job_name):
+        """
+        Populates the feature selector dropdown based on available numeric columns
+        in the stored data. Selects the first feature by default if available.
+        """
+        print(f"(Feature Selector CB) ENTERED. Job: {get_display_job_name(job_name)}. Data store updated.")
+        sys.stdout.flush() 
+
+        ctx = dash.callback_context
+        trigger_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else 'No trigger (initial or direct)'
+        print(f"(Feature Selector CB) Triggered by: {trigger_id}. Job: {get_display_job_name(job_name)}")
+
+        if not stored_data_json: 
+            print("(Feature Selector CB) No data in store (stored_data_json is None or empty). Clearing dropdown.")
+            return [], []
+        
+        # print(f"(Feature Selector CB) stored_data_json (first 500 chars): {str(stored_data_json)[:500]}") 
+
+        try:
+            df = pd.read_json(StringIO(stored_data_json), orient='split')
+            print(f"(Feature Selector CB) DataFrame successfully loaded. Shape: {df.shape}. Columns: {df.columns.tolist()}")
+            if df.empty:
+                print("(Feature Selector CB) DataFrame is empty after loading. Clearing dropdown.")
+                return [], []
+
+            cols_to_exclude = {'timestamp', 'datetime', 'id'} 
+            
+            numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
+            print(f"(Feature Selector CB) Initial numeric columns: {numeric_cols}")
+
+            available_y_cols = [col for col in numeric_cols if col.lower() not in cols_to_exclude] 
+            print(f"(Feature Selector CB) Filtered plottable features: {available_y_cols}")
+
+            options = [{'label': col, 'value': col} for col in available_y_cols]
+            default_value = [available_y_cols[0]] if available_y_cols else []
+            
+            print(f"(Feature Selector CB) Generated options: {options}")
+            print(f"(Feature Selector CB) Setting default value: {default_value}")
+            sys.stdout.flush() 
+            return options, default_value
+
+        except ValueError as ve: 
+            print(f"(Feature Selector CB) ValueError (likely JSON format issue for job '{get_display_job_name(job_name)}'): {ve}")
+            traceback.print_exc(); sys.stdout.flush()
+            return [], []
+        except Exception as e:
+            print(f"(Feature Selector CB) Generic error for job '{get_display_job_name(job_name)}': {e}")
+            traceback.print_exc(); sys.stdout.flush()
+            return [], []
 
     # --- Callback 2: Update Graph from Stored Data ---
     @app.callback(
         Output('timeseries-anomaly-graph', 'figure'),
-        Input('job-page-data-store', 'data'),
-        State('job-page-job-name-store', 'data')
+        [Input('job-page-data-store', 'data'),
+         Input('feature-selector-dropdown', 'value')],
+        [State('job-page-job-name-store', 'data')]
     )
-    def update_graph_from_data(stored_data_json, job_name):
-        """
-        Updates the graph based on the data stored in dcc.Store.
-        All numeric columns are added as traces, hidden by default ('legendonly').
-        Anomaly markers are plotted visibly.
-        """
-        job_title_name = get_display_job_name(job_name) if job_name else "No Job Selected" 
-        fig = go.Figure(layout={'template': 'plotly_dark', 'title': f'Loading Data for {job_title_name}...' })
+    def update_graph_from_data(stored_data_json, selected_features, job_name):
+        job_title_name = get_display_job_name(job_name) if job_name else "No Job Selected"
+        fig = go.Figure(layout=go.Layout(
+            template='plotly_dark',
+            title=f'Time Series Data: {job_title_name}',
+            xaxis_title="Timestamp",
+            yaxis_title="Value",
+            legend_title_text='Features',
+            uirevision=job_name,  # Persists zoom/pan state across updates for the same job_name
+            hovermode='closest'   # Explicitly set hovermode
+        ))
+        
+        current_annotations_init = fig.layout.annotations
+        if current_annotations_init is None:
+            fig.layout.annotations = []
+        elif not isinstance(current_annotations_init, list):
+            try:
+                fig.layout.annotations = list(current_annotations_init) # Handles tuples
+            except TypeError: # Fallback if not iterable for some reason
+                fig.layout.annotations = []
+
+        # Shapes (though vrects are added directly, good practice if shapes were used elsewhere)
+        current_shapes_init = fig.layout.shapes
+        if current_shapes_init is None:
+            fig.layout.shapes = []
+        elif not isinstance(current_shapes_init, list):
+            try:
+                fig.layout.shapes = list(current_shapes_init) # Handles tuples
+            except TypeError:
+                fig.layout.shapes = []
 
         if stored_data_json is None:
-            print("(Graph Update CB) No data in store.")
-            fig.update_layout(title=f'No Data Available for {job_title_name}', xaxis={'visible': False}, yaxis={'visible': False})
+            # print("(Graph Update CB) No data in store for graph.")
+            fig.update_layout(title=f'No Data Available for {job_title_name}. Waiting for data...',
+                            xaxis={'visible': False}, yaxis={'visible': False})
             return fig
 
-        print("(Graph Update CB) Data found in store, processing graph...")
+        # print(f"(Graph Update CB) Data found. Selected features for plotting: {selected_features}")
         try:
             df = pd.read_json(StringIO(stored_data_json), orient='split')
-            print(f"(Graph Update CB) DataFrame loaded. Shape: {df.shape}")
+            if df.empty:
+                # print("(Graph Update CB) DataFrame from store is empty for graph.")
+                fig.update_layout(title=f'No data points to plot for {job_title_name}.',
+                                xaxis={'visible': False}, yaxis={'visible': False})
+                return fig
 
-            # --- Convert Timestamp ---
-            x_axis_data = df.index # Default
+            # print(f"(Graph Update CB) DataFrame loaded for graph. Shape: {df.shape}. Columns: {df.columns.tolist()}")
+
+            x_axis_source_name = 'index'
+            x_axis_data = df.index
+            is_datetime_axis = False
+
             if 'timestamp' in df.columns:
                 timestamp_numeric = pd.to_numeric(df['timestamp'], errors='coerce')
-                df['datetime'] = pd.NaT # Initialize datetime column
-
+                if 'datetime' not in df.columns: df['datetime'] = pd.NaT
                 valid_timestamps = timestamp_numeric.dropna()
                 if not valid_timestamps.empty:
-                    median_val = None
-                    SAMPLING_THRESHOLD = 10000  # If more than 10,000 valid timestamps, sample for median
-                    SAMPLE_SIZE = 5000          # Number of items to sample for median calculation
-
-
-                    if len(valid_timestamps) > SAMPLING_THRESHOLD:
-                        print(f"(Graph Update CB) Valid timestamps count ({len(valid_timestamps)}) > {SAMPLING_THRESHOLD}. Sampling {SAMPLE_SIZE} for median.")
-                        # Ensure sample size is not larger than the population of valid timestamps
-                        actual_sample_size = min(SAMPLE_SIZE, len(valid_timestamps))
-                        # Using .iloc on a sample of indices can be efficient if valid_timestamps is a filtered view
-                        # Alternatively, directly sample from valid_timestamps if it's a new Series copy
-                        sample_for_median = valid_timestamps.sample(n=actual_sample_size, random_state=42) # random_state for reproducibility
-                        median_val = sample_for_median.median()
-                    else:
-                        median_val = valid_timestamps.median()
-
-                    # Heuristic to determine unit based on magnitude of the median timestamp value.
-                    # Typical epoch seconds for recent dates: ~1.7e9
-                    # Typical epoch milliseconds for recent dates: ~1.7e12
-                    # Typical epoch nanoseconds for recent dates: ~1.7e18 (value from pd.Timestamp.value)
-                    # Pandas max datetime (year 2262) is ~9.2e9 seconds from 1970, or ~9.2e12 ms, or ~9.2e15 ns.
-                    # The raw int64 value for pd.Timestamp.max is ~9.2e18.
-
-                    # Threshold for seconds: e.g., if values are generally less than ~year 3000 in seconds.
-                    # (Year 3000 is approx 3.25e10 seconds since epoch)
-                    SECONDS_THRESHOLD = 4 * 10**10
-                    # Threshold for milliseconds: e.g., if values are less than ~year 3000 in milliseconds.
-                    # (Year 3000 is approx 3.25e13 milliseconds since epoch)
-                    MILLISECONDS_THRESHOLD = 4 * 10**13
-
-                    if median_val > MILLISECONDS_THRESHOLD:
-                        # Very large numbers, likely nanoseconds (this caused the OutOfBounds error previously
-                        # when these nanoseconds were misinterpreted as seconds in the timedelta calculation)
-                        assumed_unit = 'ns'
-                        print(f"(Graph Update CB) Timestamp values (median: {median_val:.2e}) suggest NANOSECONDS since epoch.")
-                    elif median_val > SECONDS_THRESHOLD:
-                        # Medium-large numbers, likely milliseconds
-                        assumed_unit = 'ms'
-                        print(f"(Graph Update CB) Timestamp values (median: {median_val:.2e}) suggest MILLISECONDS since epoch.")
-                    else:
-                        # Smaller numbers, likely seconds
-                        assumed_unit = 's'
-                        print(f"(Graph Update CB) Timestamp values (median: {median_val:.2e}) suggest SECONDS since epoch.")
-                    
+                    median_val = valid_timestamps.median()
+                    SECONDS_THRESHOLD, MILLISECONDS_THRESHOLD = 4e10, 4e13
+                    if median_val > MILLISECONDS_THRESHOLD: assumed_unit = 'ns'
+                    elif median_val > SECONDS_THRESHOLD: assumed_unit = 'ms'
+                    else: assumed_unit = 's'
                     df['datetime'] = pd.to_datetime(timestamp_numeric, unit=assumed_unit, errors='coerce', utc=True)
-                    
                     if df['datetime'].notna().any():
                         x_axis_data = df['datetime']
-                        print(f"(Graph Update CB) Converted 'timestamp' column to 'datetime' using assumed unit '{assumed_unit}'.")
-                    else:
-                        print(f"(Graph Update CB) Warning: 'timestamp' conversion using unit '{assumed_unit}' resulted in all NaT. Using index for X-axis.")
-                        # x_axis_data remains df.index (or set to empty if preferred)
-                else: # All timestamp values were NaN or the column was empty after coercing
-                    print("(Graph Update CB) All 'timestamp' values are invalid or column is effectively empty after pd.to_numeric. Using index for X-axis.")
-                    # x_axis_data remains df.index
+                        is_datetime_axis = True
+                        x_axis_source_name = 'datetime'
+            elif 'datetime' in df.columns and pd.api.types.is_datetime64_any_dtype(df['datetime']):
+                dt_series = pd.to_datetime(df['datetime'], errors='coerce', utc=True)
+                if dt_series.notna().any():
+                    x_axis_data = dt_series
+                    df['datetime'] = dt_series # Ensure df uses the standardized datetime
+                    is_datetime_axis = True
+                    x_axis_source_name = 'datetime'
+            
+            if isinstance(x_axis_data, pd.Index): # Ensure x_axis_data is a Series for consistent operations
+                x_axis_data = x_axis_data.to_series(name=x_axis_data.name or x_axis_source_name)
+
+            # print(f"(Graph Update CB) X-axis type: {x_axis_data.dtype}, is datetime: {is_datetime_axis}, source: {x_axis_source_name}")
+
+            fig.layout.annotations = [] if fig.layout.annotations is None else list(fig.layout.annotations)
+            fig.layout.shapes = []
+
+            plotted_trace_count = 0
+            if not selected_features:
+                fig.layout.annotations.append(dict(
+                    text="Use the dropdown to select features.", xref="paper", yref="paper",
+                    y=0.5, showarrow=False, font=dict(size=16)
+                ))
             else:
-                print("(Graph Update CB) Warning: 'timestamp' column not found. Using DataFrame index for X-axis.")
-
-            # --- Identify Columns ---
-            cols_to_exclude = {'timestamp', 'datetime', 'label', 'is_anomaly', 'injected_anomaly'}
-            numeric_cols = df.select_dtypes(include=['number']).columns
-            available_y_cols = [col for col in numeric_cols if col not in cols_to_exclude]
-            print(f"(Graph Update CB) Found {len(available_y_cols)} numeric columns available for plotting: {available_y_cols}")
-
-            # --- Create Graph ---
-            fig = go.Figure(layout=go.Layout(
-                title=f"Time Series Data: {job_title_name}", 
-                template="plotly_dark",
-                xaxis_title="Timestamp",
-                yaxis_title="Value",
-                legend_title_text='Features',
-                uirevision=job_name # Use original job_name for uirevision
-            ))
-
-            # --- Add Traces ---
-            if not available_y_cols:
-                 print("(Graph Update CB) No numeric Y-axis columns found to plot.")
-                 fig.update_layout(title=f"No Plottable Numeric Data Found for {job_title_name}") 
-            else:
-                print(f"(Graph Update CB) Adding {len(available_y_cols)} traces with 'legendonly' visibility.")
-                for col_name in available_y_cols:
-                    if pd.api.types.is_numeric_dtype(df[col_name]):
-                         fig.add_trace(go.Scattergl(x=x_axis_data, y=df[col_name], mode='lines', name=col_name, visible='legendonly'))
-                    else:
-                         print(f"(Graph Update CB) Warning: Column '{col_name}' was in available list but is not numeric. Skipping.")
-
-            # --- Add Anomaly Markers ---
-            anomaly_col = 'is_anomaly'
-            if anomaly_col in df.columns:
-                anomalies_df = df[df[anomaly_col] == 1]
-                print(f"(Graph Update CB) Found {len(anomalies_df)} anomalies indicated by column '{anomaly_col}'.")
-                if not anomalies_df.empty:
-                    y_anomaly_col = available_y_cols[0] if available_y_cols else None
-                    y_values_for_anomalies = anomalies_df[y_anomaly_col] if y_anomaly_col else 0
-                    anomaly_x_data = anomalies_df['datetime'] if 'datetime' in anomalies_df else anomalies_df.index
-                    fig.add_trace(go.Scattergl(
-                        x=anomaly_x_data, y=y_values_for_anomalies,
-                        mode='markers', name='Detected Anomaly',
-                        marker=dict(color='red', size=8, symbol='x'),
-                        visible='legendonly' # Changed to legendonly as requested elsewhere
+                for col_name in selected_features:
+                    if col_name in df.columns and pd.api.types.is_numeric_dtype(df[col_name]):
+                        fig.add_trace(go.Scattergl(
+                            x=x_axis_data, y=df[col_name], mode='lines', name=col_name,
+                            hoverinfo='x+y' # Simple hover info
+                        ))
+                        plotted_trace_count += 1
+                if plotted_trace_count == 0 and selected_features:
+                    fig.layout.annotations.append(dict(
+                        text="Selected features are not plottable.", xref="paper", yref="paper",
+                        y=0.5, showarrow=False, font=dict(size=16)
                     ))
-                else:
-                    print("(Graph Update CB) Anomaly column found, but no anomalies detected (value != 1).")
-            else:
-                print(f"(Graph Update CB) Anomaly indicator column '{anomaly_col}' not found in data.")
 
+            anomaly_col = 'is_anomaly'
+            MAX_VRECT_ANOMALIES = 1000 # Tune this based on desired performance vs. visibility
+
+            condition_for_anomaly_plotting = (
+                anomaly_col in df.columns and
+                df[anomaly_col].isin([0, 1]).any() and # Check if 'is_anomaly' contains 0s or 1s
+                (not df.empty and x_axis_data.notna().any()) # Check if x_axis has any valid (non-NaT) data
+            )
+
+            if condition_for_anomaly_plotting:
+                anomalies_df = df[df[anomaly_col] == 1].copy()
+                num_anomalies = len(anomalies_df)
+
+                anomalies_df = df[df[anomaly_col] == 1].copy()
+                num_anomalies = len(anomalies_df)
+                # print(f"(Graph Update CB) Found {num_anomalies} anomalies for '{anomaly_col}'.")
+
+                if num_anomalies > 0:
+                    if 0 < num_anomalies <= MAX_VRECT_ANOMALIES:
+                        bar_width = None
+                        # x_axis_data should be a Series here
+                        unique_sorted_x_values = x_axis_data.dropna().unique()
+                        try: # Ensure sorting
+                            unique_sorted_x_values.sort()
+                        except Exception: pass # Continue if sort fails
+
+                        if len(unique_sorted_x_values) > 1:
+                            if is_datetime_axis:
+                                # Convert to int64 (nanoseconds) for diff, then median, then back to Timedelta
+                                diffs_ns = pd.Series(unique_sorted_x_values).astype('int64').diff().iloc[1:]
+                                median_diff_val_ns = diffs_ns.median()
+                                # Fallback if median is NaN (e.g., only one diff or all NaNs)
+                                median_diff = pd.to_timedelta(median_diff_val_ns if pd.notna(median_diff_val_ns) else 2e8, unit='ns') # Default 200ms
+                            else: # Numeric axis
+                                diffs_numeric = pd.Series(unique_sorted_x_values).diff().iloc[1:]
+                                median_diff = diffs_numeric.median() if pd.notna(diffs_numeric.median()) else 0.1 # Fallback
+                            
+                            width_factor = 1
+                            if is_datetime_axis:
+                                bar_width = median_diff * width_factor if median_diff.total_seconds() > 0 else pd.Timedelta(milliseconds=int(200*width_factor))
+                                if bar_width.total_seconds() < 0.002: bar_width = pd.Timedelta(milliseconds=2) # Min width
+                            else: # Numeric axis
+                                bar_width = median_diff * width_factor if median_diff > 0 else (0.1 * width_factor)
+                                if bar_width < 0.002: bar_width = 0.002 # Min width for numeric
+                        
+                        if bar_width is None: # Fallback if unique_sorted_x_values had < 2 points
+                            bar_width = pd.Timedelta(seconds=0.5) if is_datetime_axis else 0.25
+                        
+                        # Get X coordinates of anomalies from the correct source in anomalies_df
+                        if x_axis_source_name == 'datetime' and 'datetime' in anomalies_df.columns:
+                            current_anomaly_x_coords = anomalies_df['datetime']
+                        else: # Assumes x_axis_source_name was 'index' or general numeric
+                            current_anomaly_x_coords = anomalies_df.index.to_series() # Ensure it's a Series
+
+                        for anomaly_center_x in current_anomaly_x_coords:
+                            if pd.isna(anomaly_center_x): continue
+                            try:
+                                x0 = anomaly_center_x - (bar_width / 2)
+                                x1 = anomaly_center_x + (bar_width / 2)
+                                if x0 != x1: # Ensure non-zero width
+                                    fig.add_vrect(x0=x0, x1=x1,
+                                                fillcolor="rgba(220, 50, 50, 0.3)",
+                                                layer="below", line_width=0)
+                            except TypeError: # Handles potential type mismatches in subtraction/addition
+                                continue # Skip this vrect if types are incompatible
+                        
+                        if num_anomalies > 0 :
+                            fig.add_trace(go.Scatter( # Use regular Scatter for simple legend entry
+                                x=[None], y=[None], mode='markers',
+                                marker=dict(color='rgba(220, 50, 50, 0.7)', symbol='square', size=10),
+                                name='Detected Anomaly (Band)'
+                            ))
+
+                    elif num_anomalies > MAX_VRECT_ANOMALIES:
+                        fig.add_trace(go.Scatter(
+                            x=[None], y=[None], mode='markers',
+                            marker=dict(color='rgba(255, 0, 0, 0.7)', symbol='x', size=8),
+                            name=f'Detected Anomaly ({num_anomalies} - not shown as bands)',
+                        ))
+                        
         except Exception as e:
-            print(f"(Graph Update CB) Error processing stored data or plotting:")
+            print(f"(Graph Update CB) Error during graph generation: {e}")
             traceback.print_exc()
-            fig = go.Figure(layout={
-                'template': 'plotly_dark', 'title': f'Error Displaying Data for {job_title_name}', 
-                'xaxis': {'visible': False}, 'yaxis': {'visible': False},
-                'annotations': [{'text': f'An error occurred: {str(e)}', 'xref': 'paper', 'yref': 'paper', 'showarrow': False, 'font': {'size': 16}}]
-            })
-            sys.stdout.flush()
+            # Robustly ensure fig.layout.annotations is a list before appending the error message
+            current_fig_annotations_in_except = fig.layout.annotations
+            if not isinstance(current_fig_annotations_in_except, list):
+                if current_fig_annotations_in_except is None:
+                    # This case should be covered by initialization at the top, but as a safeguard:
+                    current_fig_annotations_in_except = []
+                else: # It's a tuple or some other iterable not a list
+                    try:
+                        current_fig_annotations_in_except = list(current_fig_annotations_in_except)
+                    except TypeError: # If not iterable for some reason
+                        current_fig_annotations_in_except = [] 
+                # Assign back to the figure's layout attribute if a new list object was created
+                fig.layout.annotations = current_fig_annotations_in_except
+            
+            # Now it should be safe to append
+            fig.layout.annotations.append(
+                {'text': f'An error occurred: {str(e)}', 'xref': 'paper', 'yref': 'paper',
+                'y': 0.5, 'showarrow': False, 'font': {'size': 16}}
+            )
+            fig.update_layout(title=f'Error Displaying Data for {job_title_name}',
+                            xaxis={'visible': False}, yaxis={'visible': False})
 
-        sys.stdout.flush() # Ensure prints are flushed
-        return fig # Return only the figure
+        sys.stdout.flush()
+        return fig
     
     @app.callback(
         [Output('xai-results-content', 'children'),
