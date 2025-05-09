@@ -567,7 +567,8 @@ def register_job_page_callbacks(app):
         [Output('feature-selector-dropdown', 'options'),
          Output('feature-selector-dropdown', 'value')],
         [Input('job-page-data-store', 'data')], # This is the critical Input
-        [State('job-page-job-name-store', 'data')] 
+        [State('job-page-job-name-store', 'data')],
+        prevent_initial_call=True 
     )
     def update_feature_selector_options(stored_data_json, job_name):
         """
@@ -594,7 +595,7 @@ def register_job_page_callbacks(app):
                 print("(Feature Selector CB) DataFrame is empty after loading. Clearing dropdown.")
                 return [], []
 
-            cols_to_exclude = {'timestamp', 'datetime', 'id'} 
+            cols_to_exclude = {'timestamp', 'id'} 
             
             numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
             print(f"(Feature Selector CB) Initial numeric columns: {numeric_cols}")
@@ -627,6 +628,9 @@ def register_job_page_callbacks(app):
         [State('job-page-job-name-store', 'data')]
     )
     def update_graph_from_data(stored_data_json, selected_features, job_name):
+        print(f"(Graph Update CB) ENTERED for job '{job_name}'. stored_data_json is None: {stored_data_json is None}") # DIAGNOSTIC
+        # print(f"(Graph Update CB) Selected features: {selected_features}") # DIAGNOSTIC
+        sys.stdout.flush()
         job_title_name = get_display_job_name(job_name) if job_name else "No Job Selected"
         fig = go.Figure(layout=go.Layout(
             template='plotly_dark',
@@ -647,7 +651,7 @@ def register_job_page_callbacks(app):
             except TypeError: # Fallback if not iterable for some reason
                 fig.layout.annotations = []
 
-        # Shapes (though vrects are added directly, good practice if shapes were used elsewhere)
+        # Shapes
         current_shapes_init = fig.layout.shapes
         if current_shapes_init is None:
             fig.layout.shapes = []
@@ -658,12 +662,12 @@ def register_job_page_callbacks(app):
                 fig.layout.shapes = []
 
         if stored_data_json is None:
-            # print("(Graph Update CB) No data in store for graph.")
+            print("(Graph Update CB) No data in store for graph.")
             fig.update_layout(title=f'No Data Available for {job_title_name}. Waiting for data...',
                             xaxis={'visible': False}, yaxis={'visible': False})
             return fig
 
-        # print(f"(Graph Update CB) Data found. Selected features for plotting: {selected_features}")
+        print(f"(Graph Update CB) Data found. Selected features for plotting: {selected_features}")
         try:
             df = pd.read_json(StringIO(stored_data_json), orient='split')
             if df.empty:
@@ -672,15 +676,15 @@ def register_job_page_callbacks(app):
                                 xaxis={'visible': False}, yaxis={'visible': False})
                 return fig
 
-            # print(f"(Graph Update CB) DataFrame loaded for graph. Shape: {df.shape}. Columns: {df.columns.tolist()}")
+            print(f"(Graph Update CB) DataFrame loaded for graph. Shape: {df.shape}. Columns: {df.columns.tolist()}")
 
             x_axis_source_name = 'index'
             x_axis_data = df.index
-            is_datetime_axis = False
+            is_timestamp_axis = False
 
             if 'timestamp' in df.columns:
                 timestamp_numeric = pd.to_numeric(df['timestamp'], errors='coerce')
-                if 'datetime' not in df.columns: df['datetime'] = pd.NaT
+                if 'timestamp' not in df.columns: df['timestamp'] = pd.NaT
                 valid_timestamps = timestamp_numeric.dropna()
                 if not valid_timestamps.empty:
                     median_val = valid_timestamps.median()
@@ -688,26 +692,37 @@ def register_job_page_callbacks(app):
                     if median_val > MILLISECONDS_THRESHOLD: assumed_unit = 'ns'
                     elif median_val > SECONDS_THRESHOLD: assumed_unit = 'ms'
                     else: assumed_unit = 's'
-                    df['datetime'] = pd.to_datetime(timestamp_numeric, unit=assumed_unit, errors='coerce', utc=True)
-                    if df['datetime'].notna().any():
-                        x_axis_data = df['datetime']
-                        is_datetime_axis = True
-                        x_axis_source_name = 'datetime'
-            elif 'datetime' in df.columns and pd.api.types.is_datetime64_any_dtype(df['datetime']):
-                dt_series = pd.to_datetime(df['datetime'], errors='coerce', utc=True)
+                    df['timestamp'] = pd.to_datetime(timestamp_numeric, unit=assumed_unit, errors='coerce', utc=True)
+                    if df['timestamp'].notna().any():
+                        x_axis_data = df['timestamp']
+                        is_timestamp_axis = True
+                        x_axis_source_name = 'timestamp'
+            elif 'timestamp' in df.columns and pd.api.types.is_datetime64_any_dtype(df['timestamp']):
+                dt_series = pd.to_datetime(df['timestamp'], errors='coerce', utc=True)
                 if dt_series.notna().any():
                     x_axis_data = dt_series
-                    df['datetime'] = dt_series # Ensure df uses the standardized datetime
-                    is_datetime_axis = True
-                    x_axis_source_name = 'datetime'
+                    df['timestamp'] = dt_series # Ensure df uses the standardized datetime
+                    is_timestamp_axis = True
+                    x_axis_source_name = 'timestamp'
             
             if isinstance(x_axis_data, pd.Index): # Ensure x_axis_data is a Series for consistent operations
                 x_axis_data = x_axis_data.to_series(name=x_axis_data.name or x_axis_source_name)
 
-            # print(f"(Graph Update CB) X-axis type: {x_axis_data.dtype}, is datetime: {is_datetime_axis}, source: {x_axis_source_name}")
+            print(f"(Graph Update CB) X-axis type: {x_axis_data.dtype}, is timestamp: {is_timestamp_axis}, source: {x_axis_source_name}")
 
             fig.layout.annotations = [] if fig.layout.annotations is None else list(fig.layout.annotations)
             fig.layout.shapes = []
+            
+            print(f"(Graph Update CB) Final x_axis_source_name: '{x_axis_source_name}', is_timestamp_axis: {is_timestamp_axis}") # DIAGNOSTIC
+            if not x_axis_data.empty:
+                print(f"(Graph Update CB) x_axis_data head: \n{x_axis_data.head()}") # DIAGNOSTIC
+                print(f"(Graph Update CB) x_axis_data tail: \n{x_axis_data.tail()}") # DIAGNOSTIC
+                print(f"(Graph Update CB) x_axis_data NaNs: {x_axis_data.isna().sum()} out of {len(x_axis_data)}") # DIAGNOSTIC
+            else:
+                print("(Graph Update CB) x_axis_data is empty!") # DIAGNOSTIC
+            sys.stdout.flush()
+
+            # --- Plotting Traces ---
 
             plotted_trace_count = 0
             if not selected_features:
@@ -730,7 +745,7 @@ def register_job_page_callbacks(app):
                     ))
 
             anomaly_col = 'is_anomaly'
-            MAX_VRECT_ANOMALIES = 1000 # Tune this based on desired performance vs. visibility
+            MAX_VRECT_ANOMALIES = 500 # Tune this based on desired performance vs. visibility
 
             condition_for_anomaly_plotting = (
                 anomaly_col in df.columns and
@@ -744,96 +759,72 @@ def register_job_page_callbacks(app):
 
                 anomalies_df = df[df[anomaly_col] == 1].copy()
                 num_anomalies = len(anomalies_df)
-                # print(f"(Graph Update CB) Found {num_anomalies} anomalies for '{anomaly_col}'.")
+                print(f"(Graph Update CB) Found {num_anomalies} anomalies for '{anomaly_col}'.")
+                sys.stdout.flush()
 
                 if num_anomalies > 0:
-                    if 0 < num_anomalies <= MAX_VRECT_ANOMALIES:
-                        bar_width = None
-                        # x_axis_data should be a Series here
-                        unique_sorted_x_values = x_axis_data.dropna().unique()
-                        try: # Ensure sorting
-                            unique_sorted_x_values.sort()
-                        except Exception: pass # Continue if sort fails
+                    legend_name = f'Anomaly as Xs ({num_anomalies})'
 
-                        if len(unique_sorted_x_values) > 1:
-                            if is_datetime_axis:
-                                # Convert to int64 (nanoseconds) for diff, then median, then back to Timedelta
-                                diffs_ns = pd.Series(unique_sorted_x_values).astype('int64').diff().iloc[1:]
-                                median_diff_val_ns = diffs_ns.median()
-                                # Fallback if median is NaN (e.g., only one diff or all NaNs)
-                                median_diff = pd.to_timedelta(median_diff_val_ns if pd.notna(median_diff_val_ns) else 2e8, unit='ns') # Default 200ms
-                            else: # Numeric axis
-                                diffs_numeric = pd.Series(unique_sorted_x_values).diff().iloc[1:]
-                                median_diff = diffs_numeric.median() if pd.notna(diffs_numeric.median()) else 0.1 # Fallback
-                            
-                            width_factor = 1
-                            if is_datetime_axis:
-                                bar_width = median_diff * width_factor if median_diff.total_seconds() > 0 else pd.Timedelta(milliseconds=int(200*width_factor))
-                                if bar_width.total_seconds() < 0.002: bar_width = pd.Timedelta(milliseconds=2) # Min width
-                            else: # Numeric axis
-                                bar_width = median_diff * width_factor if median_diff > 0 else (0.1 * width_factor)
-                                if bar_width < 0.002: bar_width = 0.002 # Min width for numeric
-                        
-                        if bar_width is None: # Fallback if unique_sorted_x_values had < 2 points
-                            bar_width = pd.Timedelta(seconds=0.5) if is_datetime_axis else 0.25
-                        
-                        # Get X coordinates of anomalies from the correct source in anomalies_df
-                        if x_axis_source_name == 'datetime' and 'datetime' in anomalies_df.columns:
-                            current_anomaly_x_coords = anomalies_df['datetime']
-                        else: # Assumes x_axis_source_name was 'index' or general numeric
-                            current_anomaly_x_coords = anomalies_df.index.to_series() # Ensure it's a Series
+                    if x_axis_source_name == 'timestamp':
+                        sample_x_coords = anomalies_df['timestamp'] if 'timestamp' in anomalies_df else anomalies_df.index.to_series()
+                    else:
+                        sample_x_coords = anomalies_df.index.to_series()
 
-                        for anomaly_center_x in current_anomaly_x_coords:
-                            if pd.isna(anomaly_center_x): continue
+                    # Y value set to Y axis
+                    y_coords = pd.Series([0.0] * len(anomalies_df), index=sample_x_coords.index if isinstance(sample_x_coords, pd.Series) else None) # Default y=0
+                    
+                    fig.add_trace(go.Scattergl(
+                        x=sample_x_coords,
+                        y=y_coords,
+                        mode='markers',
+                        marker=dict(color='rgba(255, 0, 0, 0.9)', symbol='x', size=8),
+                        name=legend_name
+                    ))
+            
+            # --- Apply Initial X-axis Zoom ---
+            if not df.empty and x_axis_data.notna().any() and len(x_axis_data) > 1:
+                INITIAL_POINTS_TO_SHOW = 1000 # Number of most recent data points to display initially
+
+                if len(x_axis_data) > INITIAL_POINTS_TO_SHOW:
+                    # x_axis_data is sorted because df was sorted based on the time column
+                    x_start_zoom = x_axis_data.iloc[-INITIAL_POINTS_TO_SHOW]
+                    x_end_zoom = x_axis_data.iloc[-1]
+                    
+                    print(f"(Graph Update CB) Initial calculated zoom range: [{x_start_zoom}, {x_end_zoom}]") # DIAGNOSTIC
+                    sys.stdout.flush()
+                    
+                    if pd.notna(x_start_zoom) and pd.notna(x_end_zoom):
+                        # Handle pd.Period type for xaxis_range if necessary
+                        if isinstance(x_start_zoom, pd.Period) or isinstance(x_end_zoom, pd.Period):
                             try:
-                                x0 = anomaly_center_x - (bar_width / 2)
-                                x1 = anomaly_center_x + (bar_width / 2)
-                                if x0 != x1: # Ensure non-zero width
-                                    fig.add_vrect(x0=x0, x1=x1,
-                                                fillcolor="rgba(220, 50, 50, 0.3)",
-                                                layer="below", line_width=0)
-                            except TypeError: # Handles potential type mismatches in subtraction/addition
-                                continue # Skip this vrect if types are incompatible
-                        
-                        if num_anomalies > 0 :
-                            fig.add_trace(go.Scatter( # Use regular Scatter for simple legend entry
-                                x=[None], y=[None], mode='markers',
-                                marker=dict(color='rgba(220, 50, 50, 0.7)', symbol='square', size=10),
-                                name='Detected Anomaly (Band)'
-                            ))
-
-                    elif num_anomalies > MAX_VRECT_ANOMALIES:
-                        fig.add_trace(go.Scatter(
-                            x=[None], y=[None], mode='markers',
-                            marker=dict(color='rgba(255, 0, 0, 0.7)', symbol='x', size=8),
-                            name=f'Detected Anomaly ({num_anomalies} - not shown as bands)',
-                        ))
-                        
+                                x_start_zoom_ts = x_start_zoom.to_timestamp() if isinstance(x_start_zoom, pd.Period) else x_start_zoom
+                                x_end_zoom_ts = x_end_zoom.to_timestamp() if isinstance(x_end_zoom, pd.Period) else x_end_zoom
+                                fig.update_layout(xaxis_range=[x_start_zoom_ts, x_end_zoom_ts])
+                            except Exception: # Fallback if conversion fails
+                                fig.update_layout(xaxis_range=[x_start_zoom, x_end_zoom])
+                        else:
+                            fig.update_layout(xaxis_range=[x_start_zoom, x_end_zoom])
+                            print(f"(Graph Update CB) Applied initial zoom to show last {INITIAL_POINTS_TO_SHOW} points.")
+                else:
+                    print(f"(Graph Update CB) Not applying initial zoom, not enough data points ({len(x_axis_data)} available).")
+                sys.stdout.flush()
         except Exception as e:
             print(f"(Graph Update CB) Error during graph generation: {e}")
+            sys.stdout.flush()
             traceback.print_exc()
             # Robustly ensure fig.layout.annotations is a list before appending the error message
             current_fig_annotations_in_except = fig.layout.annotations
             if not isinstance(current_fig_annotations_in_except, list):
-                if current_fig_annotations_in_except is None:
-                    # This case should be covered by initialization at the top, but as a safeguard:
-                    current_fig_annotations_in_except = []
-                else: # It's a tuple or some other iterable not a list
-                    try:
-                        current_fig_annotations_in_except = list(current_fig_annotations_in_except)
-                    except TypeError: # If not iterable for some reason
-                        current_fig_annotations_in_except = [] 
-                # Assign back to the figure's layout attribute if a new list object was created
+                if current_fig_annotations_in_except is None: current_fig_annotations_in_except = []
+                else: 
+                    try: current_fig_annotations_in_except = list(current_fig_annotations_in_except)
+                    except TypeError: current_fig_annotations_in_except = [] 
                 fig.layout.annotations = current_fig_annotations_in_except
-            
-            # Now it should be safe to append
-            fig.layout.annotations.append(
-                {'text': f'An error occurred: {str(e)}', 'xref': 'paper', 'yref': 'paper',
-                'y': 0.5, 'showarrow': False, 'font': {'size': 16}}
-            )
-            fig.update_layout(title=f'Error Displaying Data for {job_title_name}',
-                            xaxis={'visible': False}, yaxis={'visible': False})
+            fig.layout.annotations.append({'text':f'Error: {str(e)}','xref':'paper','yref':'paper','y':0.5,'showarrow':False,'font':{'size':16,'color':'red'}})
+            fig.update_layout(title=f'Error Displaying Data', xaxis={'visible':False}, yaxis={'visible':False})
+            sys.stdout.flush()
 
+        print(f"(Graph Update CB) Returning figure. Traces: {len(fig.data)}, Annotations: {len(fig.layout.annotations)}, Shapes: {len(fig.layout.shapes)}") # DIAGNOSTIC
         sys.stdout.flush()
         return fig
     
