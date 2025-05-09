@@ -421,13 +421,65 @@ def run_batch(
         sim_start_time = time.perf_counter() # Start sim timer here
         if inj_params is not None:
             anomaly_settings = []
-            for params in inj_params:
-                 anomaly = AnomalySetting(
-                     params.get("anomaly_type"), int(params.get("timestamp")), int(params.get("magnitude")),
-                     int(params.get("percentage")), params.get("columns"), params.get("duration")
-                 )
-                 anomaly_settings.append(anomaly)
+            # inj_params is a list of lists of dictionaries, e.g., [[{...}, {...}], [{...}]]
+            for anomaly_group in inj_params: # Iterate through each group of anomalies
+                if not isinstance(anomaly_group, list):
+                    print(f"WARNING: Expected a list for an anomaly group, but got {type(anomaly_group)}. Skipping this group: {anomaly_group}")
+                    continue
+                for params_dict in anomaly_group: # Iterate through each anomaly definition (dict) in the group
+                    if not isinstance(params_dict, dict):
+                        print(f"WARNING: Expected a dictionary for anomaly parameters, but got {type(params_dict)}. Skipping this entry: {params_dict}")
+                        continue
+
+                    # Safely get parameters from the dictionary
+                    anomaly_type = params_dict.get("anomaly_type")
+                    timestamp_str = params_dict.get("timestamp")
+                    magnitude_str = params_dict.get("magnitude")
+                    percentage_str = params_dict.get("percentage")
+                    columns = params_dict.get("columns") # Should be a list, e.g., ['V7']
+                    duration = params_dict.get("duration") # String, e.g., '10s'
+
+                    # Validate required parameters and convert types
+                    missing_keys = []
+                    if anomaly_type is None: missing_keys.append("anomaly_type")
+                    if timestamp_str is None: missing_keys.append("timestamp")
+                    if magnitude_str is None: missing_keys.append("magnitude")
+                    if percentage_str is None: missing_keys.append("percentage")
+                    # columns and duration can be optional depending on AnomalySetting definition
+
+                    if missing_keys:
+                        print(f"WARNING: Missing required keys {missing_keys} in anomaly params: {params_dict}. Skipping.")
+                        continue
+                    
+                    try:
+                        timestamp = int(timestamp_str)
+                        magnitude = int(magnitude_str)
+                        percentage = int(percentage_str)
+                    except ValueError as ve:
+                        print(f"WARNING: Error converting string to int for anomaly params: {params_dict}. Error: {ve}. Skipping.")
+                        continue
+                    except TypeError as te: # Handles if any _str is None due to missing key not caught above
+                        print(f"WARNING: Non-string type encountered during int conversion for anomaly params: {params_dict}. Error: {te}. Skipping.")
+                        continue
+
+                    # Assuming AnomalySetting expects columns as a list and duration as a string.
+                    # Add validation for columns if it's expected to be a list.
+                    if columns is not None and not isinstance(columns, list):
+                        print(f"WARNING: 'columns' parameter expected to be a list, but got {type(columns)}: {columns}. Using as is or skipping.")
+                        # Decide how to handle: skip, or try to use, or wrap in a list if appropriate
+                        # For now, let's assume AnomalySetting can handle it or it's an error to be skipped.
+                        # If columns must be a list:
+                        # columns = [columns] if not isinstance(columns, list) else columns
+
+                    anomaly = AnomalySetting(
+                        anomaly_type, timestamp, magnitude,
+                        percentage, columns, duration
+                    )
+                    anomaly_settings.append(anomaly)
+            
+            # This line assumes 'path', 'name', 'debug' are defined elsewhere in your function
             batch_job = Job(filepath=path, anomaly_settings=anomaly_settings, simulation_type="batch", speedup=None, table_name=name, debug=debug)
+            print(f"Successfully processed {len(anomaly_settings)} anomaly settings.") # For feedback
         else:
             batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name, debug=debug)
 

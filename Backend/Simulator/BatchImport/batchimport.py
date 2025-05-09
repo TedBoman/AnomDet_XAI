@@ -7,6 +7,7 @@ from pathlib import Path
 import datetime
 import numpy as np
 import pandas as pd
+import pytz
 
 #from Simulator.DBAPI.db_interface import DBInterface as db
 from timescaledb_api import TimescaleDBAPI as db
@@ -85,71 +86,121 @@ class BatchImporter:
         else: # result is None (error)
             print(f"Error reported by API during creation of table '{tb_name}'.")
             return None
+    def process_chunk(self, conn_params, table_name, chunk_df):
+        # This function is called by multiprocessing, ensure it's self-contained or pickles correctly.
+        # dl.debug_print(f"Process {mp.current_process().pid}: Processing chunk for table {table_name}. Chunk shape: {chunk_df.shape}")
+        
+        if not isinstance(chunk_df, pd.DataFrame) or chunk_df.empty:
+            dl.debug_print(f"Process {mp.current_process().pid}: Chunk for table {table_name} is empty or not a DataFrame. Nothing to insert.")
+            return
 
-    def process_chunk(self, conn_params, table_name, chunk):
-        # Timestamp conversion should have been fully handled in start_simulation.
-        # Chunks arriving here should have 'timestamp' as datetime64[ns, UTC].
-        if 'timestamp' not in chunk.columns or \
-           not pd.api.types.is_datetime64_any_dtype(chunk['timestamp']) or \
-           chunk['timestamp'].dt.tz is None or \
-           str(chunk['timestamp'].dt.tz).upper() != 'UTC': # Check it's UTC
-            dl.debug_print(f"CRITICAL WARNING in process_chunk: Timestamp column for table {table_name} is not in expected datetime64[ns, UTC] format. Dtype: {chunk['timestamp'].dtype if 'timestamp' in chunk.columns else 'Not Found'}, TZ: {chunk['timestamp'].dt.tz if 'timestamp' in chunk.columns and pd.api.types.is_datetime64_any_dtype(chunk['timestamp']) else 'N/A'}. Data might be incorrect.")
-            # Potentially coercive UTC conversion as a last resort, or skip insertion
-            if 'timestamp' in chunk.columns and pd.api.types.is_datetime64_any_dtype(chunk['timestamp']):
-                if chunk['timestamp'].dt.tz is None:
-                    chunk.loc[:, 'timestamp'] = chunk['timestamp'].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
+        # Critical check: Ensure timestamp column is present and in correct UTC format
+        if 'timestamp' not in chunk_df.columns:
+            dl.debug_print(f"CRITICAL ERROR in process_chunk: 'timestamp' column missing in chunk for table {table_name}. Skipping insertion.")
+            return
+        if not pd.api.types.is_datetime64_any_dtype(chunk_df['timestamp']):
+            dl.debug_print(f"CRITICAL ERROR in process_chunk: 'timestamp' column in chunk for table {table_name} is not datetime64. Dtype: {chunk_df['timestamp'].dtype}. Skipping insertion.")
+            return
+        if chunk_df['timestamp'].dt.tz is None or str(chunk_df['timestamp'].dt.tz).upper() != 'UTC':
+            dl.debug_print(f"CRITICAL WARNING in process_chunk: Timestamp for {table_name} not UTC. TZ: {chunk_df['timestamp'].dt.tz}. Attempting conversion.")
+            try:
+                if chunk_df['timestamp'].dt.tz is None:
+                    chunk_df.loc[:, 'timestamp'] = chunk_df['timestamp'].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
                 else:
-                    chunk.loc[:, 'timestamp'] = chunk['timestamp'].dt.tz_convert('UTC')
-                chunk.dropna(subset=['timestamp'], inplace=True) # Drop if localization failed
-            else: # Cannot convert if not datetime like at all
-                dl.debug_print(f"Cannot ensure UTC for non-datetime-like timestamp in chunk for {table_name}")
-
-
-        db_instance = self.init_db(conn_params)
+                    chunk_df.loc[:, 'timestamp'] = chunk_df['timestamp'].dt.tz_convert('UTC')
+                chunk_df.dropna(subset=['timestamp'], inplace=True) # Drop if localization/conversion failed
+                if chunk_df.empty:
+                    dl.debug_print(f"Process {mp.current_process().pid}: Chunk became empty after UTC conversion for {table_name}.")
+                    return
+            except Exception as e_ts_conv:
+                dl.print_exception(f"Error converting chunk timestamp to UTC for {table_name}: {e_ts_conv}. Skipping insertion.")
+                return
+        
+        db_instance = self.init_db(conn_params) # init_db is part of BatchImporter, might need to be static or passed
         if not db_instance:
-            dl.debug_print(f"DB connection failed in process_chunk for table {table_name}. Chunk not inserted.")
-            return # Or some error status
+            dl.debug_print(f"Process {mp.current_process().pid}: DB connection failed in process_chunk for table {table_name}. Chunk not inserted.")
+            return 
             
-        if not chunk.empty:
-            db_instance.insert_data(table_name, chunk)
-        else:
-            dl.debug_print(f"Chunk for table {table_name} is empty after timestamp processing. Nothing to insert.")
-
-
-    def inject_anomalies_into_chunk(self, chunk, anomaly_settings):
         try:
-            injector = TimeSeriesAnomalyInjector() # Ensure this is your actual class
+            if not chunk_df.empty:
+                # dl.debug_print(f"Process {mp.current_process().pid}: Inserting {len(chunk_df)} rows into {table_name}.")
+                db_instance.insert_data(table_name, chunk_df)
+            # else:
+                # dl.debug_print(f"Process {mp.current_process().pid}: Chunk for table {table_name} is empty. Nothing to insert.")
+        except Exception as e_insert:
+            dl.print_exception(f"Process {mp.current_process().pid}: Error inserting data into {table_name}: {e_insert}")
 
-            # Timestamps in chunk and anomaly_settings should be absolute and UTC by now
-            if 'timestamp' not in chunk.columns or \
-               not pd.api.types.is_datetime64_any_dtype(chunk['timestamp']) or \
-               chunk['timestamp'].isna().all():
-                dl.debug_print("Warning: Chunk timestamps invalid for anomaly injection. Skipping.")
-                return chunk
 
-            chunk_start_time = chunk['timestamp'].min()
-            chunk_end_time = chunk['timestamp'].max()
+    def inject_anomalies_into_chunk(self, chunk_df, anomaly_settings_abs_utc, chunk_index_for_logging="N/A"):
+        # dl.debug_print(f"Injection check for chunk {chunk_index_for_logging}. Chunk shape: {chunk_df.shape}")
+        if not isinstance(chunk_df, pd.DataFrame) or chunk_df.empty:
+            dl.debug_print(f"  Chunk {chunk_index_for_logging} is empty, skipping anomaly injection.")
+            return chunk_df
+        if not anomaly_settings_abs_utc: # If list is empty
+            # dl.debug_print(f"  No anomaly settings provided for chunk {chunk_index_for_logging}.")
+            return chunk_df
 
-            for setting in anomaly_settings: # These have absolute pd.Timestamp(UTC)
-                if not isinstance(setting.timestamp, pd.Timestamp) or pd.isna(setting.timestamp):
-                    dl.debug_print(f"Skipping anomaly setting due to invalid absolute timestamp: {setting.timestamp}")
+        try:
+            injector = TimeSeriesAnomalyInjector()
+
+            if 'timestamp' not in chunk_df.columns or \
+            not pd.api.types.is_datetime64_any_dtype(chunk_df['timestamp']) or \
+            chunk_df['timestamp'].isna().all() or \
+            chunk_df['timestamp'].dt.tz is None or str(chunk_df['timestamp'].dt.tz).upper() != 'UTC':
+                dl.debug_print(f"  WARNING: Chunk {chunk_index_for_logging} timestamps invalid for anomaly injection (Not datetime, all NaT, or not UTC). TZ: {chunk_df['timestamp'].dt.tz if 'timestamp' in chunk_df.columns and pd.api.types.is_datetime64_any_dtype(chunk_df['timestamp']) else 'N/A'}. Skipping injection.")
+                return chunk_df
+
+            chunk_start_time = chunk_df['timestamp'].min()
+            chunk_end_time = chunk_df['timestamp'].max()
+
+            if pd.isna(chunk_start_time) or pd.isna(chunk_end_time):
+                dl.debug_print(f"  WARNING: Chunk {chunk_index_for_logging} has NaT start/end time. Skipping anomaly injection.")
+                return chunk_df
+
+            # dl.debug_print(f"  Chunk {chunk_index_for_logging} Time Range: [{chunk_start_time}] to [{chunk_end_time}]")
+
+            modified_chunk = chunk_df.copy() # Work on a copy
+
+            for i, setting in enumerate(anomaly_settings_abs_utc):
+                if not isinstance(setting.timestamp, pd.Timestamp) or pd.isna(setting.timestamp) or \
+                setting.timestamp.tzinfo is None or str(setting.timestamp.tzinfo).upper() != 'UTC':
+                    dl.debug_print(f"    Skipping anomaly setting {i} due to invalid/non-UTC absolute timestamp: {setting.timestamp}")
                     continue
 
-                anomaly_start_abs = setting.timestamp # Should be absolute, UTC
-                # Ensure ut.parse_duration and setting.duration are valid
-                anomaly_duration_seconds = ut.parse_duration(setting.duration).total_seconds() # Ensure ut exists
-                anomaly_end_abs = anomaly_start_abs + pd.Timedelta(seconds=anomaly_duration_seconds)
+                anomaly_start_abs = setting.timestamp
+                
+                try:
+                    # Ensure ut.parse_duration exists and works as expected
+                    anomaly_duration_timedelta = ut.parse_duration(setting.duration) 
+                    if not isinstance(anomaly_duration_timedelta, pd.Timedelta) or anomaly_duration_timedelta.total_seconds() <= 0:
+                        dl.debug_print(f"    Skipping anomaly setting {i} ('{setting.anomaly_type}') due to invalid duration: {setting.duration} (parsed as {anomaly_duration_timedelta})")
+                        continue
+                    anomaly_end_abs = anomaly_start_abs + anomaly_duration_timedelta
+                except Exception as e_dur:
+                    dl.debug_print(f"    Skipping anomaly setting {i} ('{setting.anomaly_type}') due to error parsing duration '{setting.duration}': {e_dur}")
+                    continue
+                
+                # dl.debug_print(f"    Anomaly Setting {i} ('{setting.anomaly_type}'): Range [{anomaly_start_abs}] to [{anomaly_end_abs}]")
 
-                if pd.notna(chunk_start_time) and pd.notna(chunk_end_time) and \
-                   (chunk_start_time <= anomaly_end_abs) and (chunk_end_time >= anomaly_start_abs):
-                    dl.debug_print(f"Anomaly '{setting.anomaly_type}' at {anomaly_start_abs} is within chunk [{chunk_start_time} - {chunk_end_time}].")
-                    chunk = injector.inject_anomaly(chunk, setting)
+                # Check for overlap: (StartA <= EndB) and (EndA >= StartB)
+                if (anomaly_start_abs <= chunk_end_time) and (anomaly_end_abs >= chunk_start_time):
+                    dl.debug_print(f"    OVERLAP: Anomaly '{setting.anomaly_type}' at {anomaly_start_abs} (duration {setting.duration}) IS within chunk {chunk_index_for_logging} [{chunk_start_time} to {chunk_end_time}]. Injecting.")
+                    try:
+                        modified_chunk = injector.inject_anomaly(modified_chunk, setting) # This should modify 'is_anomaly' and 'injected_anomaly' flags
+                        # Verify injection:
+                        # if 'injected_anomaly' in modified_chunk and modified_chunk['injected_anomaly'].any():
+                        #     dl.debug_print(f"      Successfully called inject_anomaly for setting {i}. 'injected_anomaly' flag set for some rows.")
+                        # else:
+                        #     dl.debug_print(f"      Called inject_anomaly for setting {i}, but 'injected_anomaly' flag not set or column missing.")
+                    except Exception as e_inject:
+                        dl.print_exception(f"    ERROR during injector.inject_anomaly for setting {i}: {e_inject}")
+                # else:
+                    # dl.debug_print(f"    NO OVERLAP for anomaly setting {i} with chunk {chunk_index_for_logging}.")
             
-            return chunk
+            return modified_chunk
         except Exception as e:
-            dl.print_exception(f"Error injecting anomalies into chunk: {e}")
-            return chunk
-
+            dl.print_exception(f"Error in inject_anomalies_into_chunk for chunk {chunk_index_for_logging}: {e}")
+            return chunk_df # Return original chunk on error
 
     def start_simulation(self, conn_params, anomaly_settings=None, table_name=None, timestamp_col_name=None, label_col_name=None):
         """
@@ -170,13 +221,63 @@ class BatchImporter:
         dl.debug_print(self.start_time)
         dl.debug_print("Starting to insert!")
 
-        # Preprocess anomaly settings to convert timestamps to absolute times
+        # Preprocess anomaly settings to convert timestamps to absolute UTC times
         if anomaly_settings:
-            for setting in anomaly_settings:
-                # Convert timestamp to absolute time if it's not already
-                if not isinstance(setting.timestamp, pd.Timestamp):
-                    setting.timestamp = self.start_time + pd.to_timedelta(setting.timestamp, unit='s')
+            dl.debug_print(f"Preprocessing {len(anomaly_settings)} anomaly settings for absolute UTC timestamps...")
+            for i, setting in enumerate(anomaly_settings):
+                original_setting_ts = setting.timestamp # For logging
 
+                # Step 1: Convert to absolute pd.Timestamp if it's a relative offset
+                if not isinstance(setting.timestamp, pd.Timestamp):
+                    try:
+                        # Assuming setting.timestamp is a numeric offset (int or string convertible to float)
+                        # representing seconds from self.start_time
+                        time_offset_seconds = float(str(setting.timestamp)) # Ensure it's floatable
+                        setting.timestamp = self.start_time + pd.to_timedelta(time_offset_seconds, unit='s')
+                        # dl.debug_print(f"  Anomaly setting {i}: Relative '{original_setting_ts}' + start_time '{self.start_time}' -> Absolute '{setting.timestamp}'")
+                    except ValueError as ve:
+                        dl.debug_print(f"  WARNING: Anomaly setting {i}: Could not convert timestamp offset '{original_setting_ts}' to timedelta. Error: {ve}. Skipping UTC conversion for this timestamp.")
+                        continue # Skip to next setting if offset conversion fails
+                    except TypeError as te: # E.g. if self.start_time is None
+                        dl.debug_print(f"  WARNING: Anomaly setting {i}: TypeError during offset calculation for timestamp '{original_setting_ts}' (start_time: {self.start_time}). Error: {te}. Skipping.")
+                        continue
+
+
+                # Step 2: Ensure the (now absolute) setting.timestamp is UTC-aware
+                if isinstance(setting.timestamp, pd.Timestamp):
+                    if setting.timestamp.tzinfo is None:
+                        # If self.start_time was naive, the resulting absolute timestamp is naive.
+                        # Assume it should be interpreted as UTC.
+                        try:
+                            setting.timestamp = setting.timestamp.tz_localize('UTC')
+                            # dl.debug_print(f"  Anomaly setting {i}: Localized naive timestamp to UTC: '{setting.timestamp}'")
+                        except (pytz.exceptions.AmbiguousTimeError, pytz.exceptions.NonExistentTimeError) as tze:
+                            # This can happen if the naive timestamp falls on a DST transition
+                            dl.debug_print(f"  WARNING: Anomaly setting {i}: Failed to localize naive timestamp {setting.timestamp} to UTC due to DST ambiguity/non-existence: {tze}. Attempting 'infer' or safe option.")
+                            try: # Try to handle DST transitions carefully
+                                setting.timestamp = setting.timestamp.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
+                                if pd.isna(setting.timestamp):
+                                    dl.debug_print(f"  ERROR: Anomaly setting {i}: Timestamp {original_setting_ts} resulted in NaT after tz_localize. Cannot use.")
+                                    # Potentially mark this setting as invalid or remove it
+                                    continue
+                            except Exception as e_loc_fallback:
+                                dl.debug_print(f"  ERROR: Anomaly setting {i}: Critical error localizing timestamp {original_setting_ts}: {e_loc_fallback}")
+                                continue
+
+                    elif str(setting.timestamp.tzinfo).upper() != 'UTC':
+                        # If it's already tz-aware but not UTC, convert it to UTC.
+                        try:
+                            setting.timestamp = setting.timestamp.tz_convert('UTC')
+                            # dl.debug_print(f"  Anomaly setting {i}: Converted timestamp from {original_setting_ts.tzinfo} to UTC: '{setting.timestamp}'")
+                        except Exception as e_conv:
+                            dl.debug_print(f"  WARNING: Anomaly setting {i}: Failed to convert timestamp {original_setting_ts} to UTC: {e_conv}")
+                            continue
+                    # else: It's already a pd.Timestamp and UTC-aware, no change needed.
+                    #    dl.debug_print(f"  Anomaly setting {i}: Timestamp '{setting.timestamp}' is already UTC-aware.")
+
+                else:
+                    dl.debug_print(f"  WARNING: Anomaly setting {i}: Its 'timestamp' attribute is not a pd.Timestamp after processing (type: {type(setting.timestamp)}, value: {setting.timestamp}). Cannot ensure UTC.")
+                    continue # Skip if not a valid timestamp object
         # Create a list to store results from async processes
         results = []
 
