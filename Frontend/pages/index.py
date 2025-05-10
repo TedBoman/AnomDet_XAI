@@ -123,7 +123,33 @@ def layout(handler):
                                 value=None,
                                 placeholder="Select a dataset",
                                 style={"width": "350px", "fontSize": "18px", "margin": "auto",}
-                            )
+                            ),
+                            html.Button(
+                                "Delete Selected Dataset",
+                                id="delete-dataset-button",
+                                n_clicks=0,
+                                style={ # Enhanced styling for the delete button
+                                    "backgroundColor": "#dc3545", # Bootstrap danger red
+                                    "color": "white",
+                                    "border": "none",
+                                    "padding": "10px 20px",
+                                    "textAlign": "center",
+                                    "textDecoration": "none",
+                                    "display": "inline-block",
+                                    "fontSize": "16px",
+                                    "margin": "10px 2px",
+                                    "cursor": "pointer",
+                                    "borderRadius": "5px",
+                                    "boxShadow": "0 2px 4px 0 rgba(0,0,0,0.2)"
+                                }
+                            ),
+                            # Confirmation Dialog for deletion
+                            dcc.ConfirmDialog(
+                                id='confirm-delete-dialog',
+                                message='Are you sure you want to delete this dataset? This action cannot be undone.',
+                            ),
+                            # Output for delete status
+                            html.Div(id='output-delete-state', style={"marginTop": "15px", "color": "#ffffff", "minHeight": "30px", "fontWeight": "bold"})
                         ], style={"textAlign": "center", "marginBottom": "5px"}),
 
                         # --- Labeled Dataset Section ---

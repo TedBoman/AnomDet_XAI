@@ -1,5 +1,6 @@
 # batchimport.py
 import sys
+import traceback
 import psycopg2
 import time as t
 import multiprocessing as mp
@@ -86,6 +87,7 @@ class BatchImporter:
         else: # result is None (error)
             print(f"Error reported by API during creation of table '{tb_name}'.")
             return None
+        
     def process_chunk(self, conn_params, table_name, chunk_df):
         # This function is called by multiprocessing, ensure it's self-contained or pickles correctly.
         # dl.debug_print(f"Process {mp.current_process().pid}: Processing chunk for table {table_name}. Chunk shape: {chunk_df.shape}")
@@ -130,78 +132,46 @@ class BatchImporter:
         except Exception as e_insert:
             dl.print_exception(f"Process {mp.current_process().pid}: Error inserting data into {table_name}: {e_insert}")
 
+    def inject_anomalies_into_chunk(self, chunk_df_input: pd.DataFrame, 
+                                    anomaly_settings_abs_utc: list, 
+                                    chunk_index_for_logging="N/A") -> pd.DataFrame:
+        
+        dl.debug_print(f"BatchImporter.inject_anomalies_into_chunk for chunk {chunk_index_for_logging}. Input chunk shape: {chunk_df_input.shape}")
+        sys.stdout.flush()
 
-    def inject_anomalies_into_chunk(self, chunk_df, anomaly_settings_abs_utc, chunk_index_for_logging="N/A"):
-        # dl.debug_print(f"Injection check for chunk {chunk_index_for_logging}. Chunk shape: {chunk_df.shape}")
-        if not isinstance(chunk_df, pd.DataFrame) or chunk_df.empty:
+        if not isinstance(chunk_df_input, pd.DataFrame) or chunk_df_input.empty:
             dl.debug_print(f"  Chunk {chunk_index_for_logging} is empty, skipping anomaly injection.")
-            return chunk_df
-        if not anomaly_settings_abs_utc: # If list is empty
-            # dl.debug_print(f"  No anomaly settings provided for chunk {chunk_index_for_logging}.")
-            return chunk_df
+            sys.stdout.flush()
+            return chunk_df_input
+        if not anomaly_settings_abs_utc:
+            return chunk_df_input
+        
+        injector = TimeSeriesAnomalyInjector() 
+        current_modified_chunk = chunk_df_input 
 
-        try:
-            injector = TimeSeriesAnomalyInjector()
-
-            if 'timestamp' not in chunk_df.columns or \
-            not pd.api.types.is_datetime64_any_dtype(chunk_df['timestamp']) or \
-            chunk_df['timestamp'].isna().all() or \
-            chunk_df['timestamp'].dt.tz is None or str(chunk_df['timestamp'].dt.tz).upper() != 'UTC':
-                dl.debug_print(f"  WARNING: Chunk {chunk_index_for_logging} timestamps invalid for anomaly injection (Not datetime, all NaT, or not UTC). TZ: {chunk_df['timestamp'].dt.tz if 'timestamp' in chunk_df.columns and pd.api.types.is_datetime64_any_dtype(chunk_df['timestamp']) else 'N/A'}. Skipping injection.")
-                return chunk_df
-
-            chunk_start_time = chunk_df['timestamp'].min()
-            chunk_end_time = chunk_df['timestamp'].max()
-
-            if pd.isna(chunk_start_time) or pd.isna(chunk_end_time):
-                dl.debug_print(f"  WARNING: Chunk {chunk_index_for_logging} has NaT start/end time. Skipping anomaly injection.")
-                return chunk_df
-
-            # dl.debug_print(f"  Chunk {chunk_index_for_logging} Time Range: [{chunk_start_time}] to [{chunk_end_time}]")
-
-            modified_chunk = chunk_df.copy() # Work on a copy
-
-            for i, setting in enumerate(anomaly_settings_abs_utc):
-                if not isinstance(setting.timestamp, pd.Timestamp) or pd.isna(setting.timestamp) or \
-                setting.timestamp.tzinfo is None or str(setting.timestamp.tzinfo).upper() != 'UTC':
-                    dl.debug_print(f"    Skipping anomaly setting {i} due to invalid/non-UTC absolute timestamp: {setting.timestamp}")
-                    continue
-
-                anomaly_start_abs = setting.timestamp
+        for i, setting in enumerate(anomaly_settings_abs_utc):
+            injected_sum_before_this_setting = current_modified_chunk['injected_anomaly'].sum() if 'injected_anomaly' in current_modified_chunk else 0
+            try:
+                chunk_after_this_setting = injector.inject_anomaly(current_modified_chunk, setting) 
                 
-                try:
-                    # Ensure ut.parse_duration exists and works as expected
-                    anomaly_duration_timedelta = ut.parse_duration(setting.duration) 
-                    if not isinstance(anomaly_duration_timedelta, pd.Timedelta) or anomaly_duration_timedelta.total_seconds() <= 0:
-                        dl.debug_print(f"    Skipping anomaly setting {i} ('{setting.anomaly_type}') due to invalid duration: {setting.duration} (parsed as {anomaly_duration_timedelta})")
-                        continue
-                    anomaly_end_abs = anomaly_start_abs + anomaly_duration_timedelta
-                except Exception as e_dur:
-                    dl.debug_print(f"    Skipping anomaly setting {i} ('{setting.anomaly_type}') due to error parsing duration '{setting.duration}': {e_dur}")
-                    continue
-                
-                # dl.debug_print(f"    Anomaly Setting {i} ('{setting.anomaly_type}'): Range [{anomaly_start_abs}] to [{anomaly_end_abs}]")
+                injected_sum_after_this_setting = chunk_after_this_setting['injected_anomaly'].astype(bool).sum() if 'injected_anomaly' in chunk_after_this_setting else 0
+                injected_sum_before_this_setting_bool = current_modified_chunk['injected_anomaly'].astype(bool).sum() if 'injected_anomaly' in current_modified_chunk else 0
+                num_newly_flagged_by_this_setting = injected_sum_after_this_setting - injected_sum_before_this_setting_bool
 
-                # Check for overlap: (StartA <= EndB) and (EndA >= StartB)
-                if (anomaly_start_abs <= chunk_end_time) and (anomaly_end_abs >= chunk_start_time):
-                    dl.debug_print(f"    OVERLAP: Anomaly '{setting.anomaly_type}' at {anomaly_start_abs} (duration {setting.duration}) IS within chunk {chunk_index_for_logging} [{chunk_start_time} to {chunk_end_time}]. Injecting.")
-                    try:
-                        modified_chunk = injector.inject_anomaly(modified_chunk, setting) # This should modify 'is_anomaly' and 'injected_anomaly' flags
-                        # Verify injection:
-                        # if 'injected_anomaly' in modified_chunk and modified_chunk['injected_anomaly'].any():
-                        #     dl.debug_print(f"      Successfully called inject_anomaly for setting {i}. 'injected_anomaly' flag set for some rows.")
-                        # else:
-                        #     dl.debug_print(f"      Called inject_anomaly for setting {i}, but 'injected_anomaly' flag not set or column missing.")
-                    except Exception as e_inject:
-                        dl.print_exception(f"    ERROR during injector.inject_anomaly for setting {i}: {e_inject}")
-                # else:
-                    # dl.debug_print(f"    NO OVERLAP for anomaly setting {i} with chunk {chunk_index_for_logging}.")
-            
-            return modified_chunk
-        except Exception as e:
-            dl.print_exception(f"Error in inject_anomalies_into_chunk for chunk {chunk_index_for_logging}: {e}")
-            return chunk_df # Return original chunk on error
 
+                if num_newly_flagged_by_this_setting > 0:
+                    dl.debug_print(f"    Processed setting {i} ('{setting.anomaly_type}'): {num_newly_flagged_by_this_setting} new 'injected_anomaly' flags set by injector in chunk {chunk_index_for_logging}.")
+                elif injected_sum_after_this_setting > 0 and injected_sum_before_this_setting_bool == 0 :
+                     dl.debug_print(f"    Processed setting {i} ('{setting.anomaly_type}'): 'injected_anomaly' flags set from zero by injector in chunk {chunk_index_for_logging}.")
+                sys.stdout.flush()
+                current_modified_chunk = chunk_after_this_setting 
+            except Exception as e_injector_call:
+                dl.print_exception(f"  Error calling TimeSeriesAnomalyInjector.inject_anomaly for setting {i} on chunk {chunk_index_for_logging}: {e_injector_call}")
+                sys.stdout.flush()
+        
+        return current_modified_chunk
+    
+    
     def start_simulation(self, conn_params, anomaly_settings=None, table_name=None, timestamp_col_name=None, label_col_name=None):
         """
         Starts the batch data import process.
@@ -394,19 +364,39 @@ class BatchImporter:
         # Create a new column to track anomalies
         full_df['injected_anomaly'] = False
         full_df['is_anomaly'] = False
+        
+        current_chunksize = int(self.chunksize) if self.chunksize is not None and self.chunksize > 0 else 10000 
+        if len(full_df) / current_chunksize > num_processes * 10 and len(full_df) > 100000 : 
+            current_chunksize = int(np.ceil(len(full_df) / (num_processes * 5)))
+        
+        results = []
+        chunk_list = [full_df[i:i + current_chunksize] for i in range(0, len(full_df), current_chunksize)]
+        dl.debug_print(f"Split DataFrame into {len(chunk_list)} chunks.")
+        sys.stdout.flush()
 
         # Process chunks with anomaly injection
-        for chunk in [full_df[i:i+int(self.chunksize)] for i in range(0, int(len(full_df)), int(self.chunksize))]:
+        for idx, chunk_original_slice in enumerate(chunk_list):
             if anomaly_settings:
-                chunk = chunk.copy()
+                chunk_to_process = chunk_original_slice.copy()
 
                 # Inject anomalies across chunk boundaries
-                chunk = self.inject_anomalies_into_chunk(chunk, anomaly_settings)
-
+                chunk_to_process = self.inject_anomalies_into_chunk(chunk_to_process, anomaly_settings,chunk_index_for_logging=str(idx+1))
+                if 'injected_anomaly' in chunk_to_process.columns:
+                    if 'is_anomaly' not in chunk_to_process.columns: 
+                        chunk_to_process.loc[:, 'is_anomaly'] = False
+                    is_anomaly_bool = chunk_to_process['is_anomaly'].astype(bool)
+                    injected_anomaly_bool = chunk_to_process['injected_anomaly'].astype(bool)
+                    chunk_to_process.loc[:, 'is_anomaly'] = (is_anomaly_bool | injected_anomaly_bool) # Result of OR is boolean
+                
+                dl.debug_print(f"  Chunk {idx+1} PREPARED for worker. injected_anomaly sum: {chunk_to_process['injected_anomaly'].sum()}, is_anomaly sum: {chunk_to_process['is_anomaly'].sum()}")
+                if chunk_to_process['injected_anomaly'].sum() > 0:
+                    dl.debug_print(f"    Sample of injected flags/data in chunk {idx+1} before sending to worker:\n{chunk_to_process[chunk_to_process['injected_anomaly']==1][['timestamp', 'V1', 'injected_anomaly', 'is_anomaly']].head()}") # Assuming V1 is a relevant column
+                sys.stdout.flush()
+                
             # Use apply_async and collect results
             result = pool.apply_async(
                 self.process_chunk,
-                args=(conn_params, table_name, chunk),
+                args=(conn_params, table_name, chunk_to_process),
             )
             results.append(result)
 
@@ -414,7 +404,7 @@ class BatchImporter:
         pool.close()
         pool.join()
 
-        # Optionally, check for any exceptions in the results
+        # Check for any exceptions in the results
         for result in results:
             result.get()  # This will raise any exceptions that occurred in the process
 
