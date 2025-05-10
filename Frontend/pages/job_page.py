@@ -144,7 +144,7 @@ def layout(handler, job_name):
                 
                 # Feature Selector Dropdown
                 html.Div([
-                    html.Label("Select Features to Plot:", style={'color': theme_colors['text_black'], 'marginRight': '10px', 'display':'block', 'marginBottom':'5px'}),
+                    html.Label("Select Features to Plot:", style={'color': theme_colors['text_light'], 'marginRight': '10px', 'display':'block', 'marginBottom':'5px'}),
                     dcc.Dropdown(
                         id='feature-selector-dropdown',
                         options=[], # Populated by callback
@@ -153,7 +153,7 @@ def layout(handler, job_name):
                         placeholder="Select features...",
                         style={ # Styles for the dropdown input box itself
                             'width': '100%',
-                            'color': theme_colors['text_dark'], # Text color inside input box (e.g. "Select...")
+                            'color': theme_colors['text_black'], # Text color inside input box (e.g. "Select...")
                         },
                         # To style the dropdown menu (options list), you might need external CSS
                         # targeting classes like .Select-menu-outer, .Select-option

@@ -201,7 +201,7 @@ def create_performance_metrics_explanation(metrics_data: dict, theme_colors: dic
     # Create the collapsible section using html.Details and html.Summary
     collapsible_section = html.Details([
         html.Summary(
-            "Understanding Performance Metrics",  # This is the clickable title
+            "Performance Metrics Definitions",  # This is the clickable title
             style={
                 'color': 'white',  # Text color: white
                 'fontWeight': 'bold',
@@ -930,8 +930,8 @@ def register_job_page_callbacks(app):
 
                 if len(x_axis_data) > INITIAL_POINTS_TO_SHOW:
                     # x_axis_data is sorted because df was sorted based on the time column
-                    x_start_zoom = x_axis_data.iloc[-INITIAL_POINTS_TO_SHOW]
-                    x_end_zoom = x_axis_data.iloc[-1]
+                    x_start_zoom = x_axis_data.iloc[0]
+                    x_end_zoom = x_axis_data.iloc[INITIAL_POINTS_TO_SHOW - 1]
                     
                     print(f"(Graph Update CB) Initial calculated zoom range: [{x_start_zoom}, {x_end_zoom}]") # DIAGNOSTIC
                     sys.stdout.flush()
