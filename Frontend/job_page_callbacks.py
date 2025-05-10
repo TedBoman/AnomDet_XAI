@@ -84,6 +84,145 @@ def create_info_section(title, data_dict, theme_colors, format_floats=True):
         *rows
     ], style={'padding': '15px', 'border': f"1px solid {theme_colors.get('border_light', '#444')}", 'borderRadius':'5px', 'backgroundColor': 'rgba(40,40,40,0.3)', 'marginBottom': '15px'}) # Slightly different background
 
+# --- Helper function to create the detailed performance metrics explanation section ---
+def create_performance_metrics_explanation(metrics_data: dict, theme_colors: dict):
+    """
+    Creates a collapsible HTML Div that explains common performance metrics,
+    their values from the provided data, descriptions, and formulas,
+    with all text styled white and larger equation fonts.
+    """
+    if not metrics_data:
+        return None
+
+    # This list will hold all the individual metric explanation Divs
+    metric_detail_elements = []
+
+    # --- Define the base components: TP, TN, FP, FN ---
+    base_components_details = [
+        {
+            "key": "correct_anomalies", "name": "True Positives (TP)",
+            "description": "Cases where the model correctly predicted an anomaly (actual anomaly, predicted anomaly)."
+        },
+        {
+            "key": "false_positives", "name": "False Positives (FP)",
+            "description": "Cases where the model incorrectly predicted an anomaly when it was actually normal (actual normal, predicted anomaly). Also known as a Type I error."
+        },
+        {
+            "key": "false_negatives", "name": "False Negatives (FN)",
+            "description": "Cases where the model incorrectly predicted normal when it was actually an anomaly (actual anomaly, predicted normal). Also known as a Type II error."
+        },
+        {
+            "key": "correct_non_anomalies", "name": "True Negatives (TN)",
+            "description": "Cases where the model correctly predicted a normal instance (actual normal, predicted normal)."
+        },
+        {
+            "key": "total_predictions", "name": "Total Predictions",
+            "description": "The total number of instances evaluated by the model."
+        }
+    ]
+
+    for detail in base_components_details:
+        key = detail["key"]
+        if key in metrics_data:
+            value = metrics_data[key]
+            metric_detail_elements.append(html.Div([
+                html.Strong(f"{detail['name']}: ", style={'color': 'white'}), # Text color: white
+                html.Span(str(value), style={'color': 'white', 'fontWeight': 'bold'}), # Text color: white
+                html.P(detail["description"], style={
+                    'fontSize': '1.2em',
+                    'color': 'white', # Text color: white
+                    'marginTop': '3px',
+                    'marginBottom': '10px',
+                    'marginLeft': '10px'
+                })
+            ], style={'marginBottom': '10px'}))
+
+    # --- Define the calculated metrics: Accuracy, Precision, Recall, F1, Specificity ---
+    tp_val = metrics_data.get("correct_anomalies", "TP")
+    tn_val = metrics_data.get("correct_non_anomalies", "TN")
+    fp_val = metrics_data.get("false_positives", "FP")
+    fn_val = metrics_data.get("false_negatives", "FN")
+
+    calculated_metrics_details = [
+        {
+            "key": "accuracy", "name": "Accuracy",
+            "description": "The proportion of all predictions that were correct. It's a general measure of how often the model is right.",
+            "formula": rf"$\text{{Accuracy}} = \frac{{{tp_val} + {tn_val}}}{{{tp_val} + {tn_val} + {fp_val} + {fn_val}}} = \frac{{\text{{TP + TN}}}}{{\text{{Total Predictions}}}}$"
+        },
+        {
+            "key": "precision", "name": "Precision (Positive Predictive Value)",
+            "description": "Of all instances the model predicted as anomalies, what proportion were actual anomalies? High precision indicates few false positives.",
+            "formula": rf"$\text{{Precision}} = \frac{{{tp_val}}}{{{tp_val} + {fp_val}}} = \frac{{\text{{TP}}}}{{\text{{TP + FP}}}}$"
+        },
+        {
+            "key": "recall_tpr", "name": "Recall (Sensitivity, True Positive Rate - TPR)",
+            "description": "Of all actual anomalies, what proportion did the model correctly identify? High recall indicates few false negatives.",
+            "formula": rf"$\text{{Recall (TPR)}} = \frac{{{tp_val}}}{{{tp_val} + {fn_val}}} = \frac{{\text{{TP}}}}{{\text{{TP + FN}}}}$"
+        },
+        {
+            "key": "f1_score", "name": "F1-Score",
+            "description": "The harmonic mean of Precision and Recall. It provides a balance between the two, especially useful when class distribution is uneven.",
+            "formula": r"$\text{F1-Score} = 2 \times \frac{\text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}}$"
+        },
+        {
+            "key": "specificity_tnr", "name": "Specificity (True Negative Rate - TNR)",
+            "description": "Of all actual normal instances, what proportion did the model correctly identify? High specificity indicates the model is good at identifying normal data.",
+            "formula": rf"$\text{{Specificity (TNR)}} = \frac{{{tn_val}}}{{{tn_val} + {fp_val}}} = \frac{{\text{{TN}}}}{{\text{{TN + FP}}}}$"
+        }
+    ]
+
+    for detail in calculated_metrics_details:
+        key = detail["key"]
+        if key in metrics_data:
+            value = metrics_data[key]
+            value_display = f"{value:.4f}" if isinstance(value, float) else str(value)
+            metric_detail_elements.append(html.Div([
+                html.Strong(f"{detail['name']}: ", style={'color': 'white'}), # Text color: white
+                html.Span(value_display, style={'color': 'white', 'fontWeight': 'bold'}), # Text color: white
+                html.P(detail["description"], style={
+                    'fontSize': '1.1em',
+                    'color': 'white', # Text color: white
+                    'marginTop': '3px',
+                    'marginLeft': '10px'
+                }),
+                dcc.Markdown(f"**Formula:** {detail['formula']}",
+                             mathjax=True, # Good to keep for explicitness
+                             style={
+                                 'fontSize': '1.2em',  # Increased font size for equations
+                                 'color': 'white',    # Text color: white
+                                 'marginBottom': '10px',
+                                 'marginLeft': '10px'
+                             })
+            ], style={'marginBottom': '15px'}))
+
+    if not metric_detail_elements: # If no metric details were actually generated
+        return None
+
+    # Create the collapsible section using html.Details and html.Summary
+    collapsible_section = html.Details([
+        html.Summary(
+            "Understanding Performance Metrics",  # This is the clickable title
+            style={
+                'color': 'white',  # Text color: white
+                'fontWeight': 'bold',
+                'fontSize': '1.1em', # Header-like font size
+                'cursor': 'pointer',
+                'paddingBottom': '10px',
+                'borderBottom': f"1px solid {theme_colors.get('border_light', '#444')}",
+                'marginBottom': '15px' # Space between summary and content when open
+            }
+        ),
+        html.Div(metric_detail_elements, style={'paddingTop': '10px'}) # Wrapper for the content elements
+    ], style={  # Styles for the overall <details> block
+        'padding': '20px',
+        'border': f"1px solid {theme_colors.get('border_light', '#444')}",
+        'borderRadius': '8px',
+        'backgroundColor': 'rgba(40,40,40,0.3)',
+        'marginBottom': '20px',
+        'gridColumn': '1 / -1' # Make this section span all columns in the grid
+    })
+
+    return collapsible_section
 
 # --- Helper Function for CSV Display ---
 def create_datatable(file_path):
@@ -399,7 +538,7 @@ def register_job_page_callbacks(app):
                 metrics = metadata.get("evaluation_metrics", {})
                 if metrics:
                     display_elements.append(create_info_section("Performance Metrics", metrics, theme_colors))
-
+                    
                 # 4. Execution Times
                 exec_times = {
                     "Total (s)": metadata.get("execution_time_total_seconds"),
@@ -411,6 +550,10 @@ def register_job_page_callbacks(app):
                 exec_times_filtered = {k: v for k, v in exec_times.items() if v is not None}
                 if exec_times_filtered:
                     display_elements.append(create_info_section("Execution Times", exec_times_filtered, theme_colors))
+
+                metrics_explanation_section = create_performance_metrics_explanation(metrics, theme_colors)
+                if metrics_explanation_section:
+                    display_elements.append(metrics_explanation_section)
 
                 # 5. Model Parameters (collapsible)
                 model_params = metadata.get("model_params")

@@ -35,6 +35,7 @@ def layout(handler, job_name):
         'content_background': '#104E78',
         'status_background': '#145E88',
         'text_light': '#E0E0E0',
+        'text_black': '000000',
         'text_medium': '#C0C0C0',
         'text_dark': '#FFFFFF', # White for high contrast on dark buttons
         'border_light': '#444'
@@ -143,7 +144,7 @@ def layout(handler, job_name):
                 
                 # Feature Selector Dropdown
                 html.Div([
-                    html.Label("Select Features to Plot:", style={'color': theme_colors['text_light'], 'marginRight': '10px', 'display':'block', 'marginBottom':'5px'}),
+                    html.Label("Select Features to Plot:", style={'color': theme_colors['text_black'], 'marginRight': '10px', 'display':'block', 'marginBottom':'5px'}),
                     dcc.Dropdown(
                         id='feature-selector-dropdown',
                         options=[], # Populated by callback

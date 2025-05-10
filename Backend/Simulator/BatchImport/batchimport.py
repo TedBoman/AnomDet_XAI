@@ -376,9 +376,8 @@ class BatchImporter:
 
         # Process chunks with anomaly injection
         for idx, chunk_original_slice in enumerate(chunk_list):
+            chunk_to_process = chunk_original_slice.copy()
             if anomaly_settings:
-                chunk_to_process = chunk_original_slice.copy()
-
                 # Inject anomalies across chunk boundaries
                 chunk_to_process = self.inject_anomalies_into_chunk(chunk_to_process, anomaly_settings,chunk_index_for_logging=str(idx+1))
                 if 'injected_anomaly' in chunk_to_process.columns:
