@@ -42,7 +42,7 @@ class SimulatorEngine:
 
     def main(self, db_conn_params, job, timestamp_col_name=None, label_col_name=None):
         # Set debug mode once for all files
-        dl.set_debug(job.debug)  # or False to disable debug prints
+        dl.set_debug(True)  # or False to disable debug prints
         print(job.table_name)
         sys.stdout.flush()
 

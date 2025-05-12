@@ -74,8 +74,20 @@ def create_active_jobs(active_jobs):
         html.H4("Active Job List", style={'color': '#C0C0C0', 'marginBottom': '10px'}),
         html.Div(job_divs) # The list of job divs is the second child
     ])
+    
+# Helper function to list datasets
+def get_available_datasets(upload_dir):
+    """Scans the upload directory and returns a list of dataset filenames."""
+    if not os.path.exists(upload_dir):
+        os.makedirs(upload_dir) # Create if it doesn't exist
+        return []
+    try:
+        return [f for f in os.listdir(upload_dir) if os.path.isfile(os.path.join(upload_dir, f))]
+    except Exception as e:
+        print(f"Error listing datasets in {upload_dir}: {e}")
+        return []
 
-# Define a function to handle saving and processing (outside the callback for clarity)
+# Define a function to handle saving and processing
 def save_file(name, content):
     """Decode and save a file uploaded with dcc.Upload."""
     data = content.encode("utf8").split(b";base64,")[1]
@@ -144,10 +156,10 @@ def build_xai_explanation_content(method_name, current_index, total_methods):
 # --- Callbacks for index page ---
 def get_index_callbacks(app):
 
-    # The actual callback
+    # Upload dataset callback
     @callback(
-        Output('dataset-dropdown', 'options'),
-        Output('dataset-dropdown', 'value'),
+        Output('dataset-dropdown', 'options', allow_duplicate=True),
+        Output('dataset-dropdown', 'value', allow_duplicate=True),
         Output('output-upload-state', 'children'),
         Input('upload-dataset', 'contents'),
         State('upload-dataset', 'filename'),
@@ -160,28 +172,10 @@ def get_index_callbacks(app):
             filepath = save_file(uploaded_filename, uploaded_contents)
 
             if filepath:
-                # --- Important: Inform your backend handler ---
-                # This step depends HEAVILY on how your `handler` object works.
-                # Ideally, the handler has a method to register/add datasets.
-                # Example (replace with your actual handler logic):
                 try:
-                    # Assuming handler has a method like this:
-                    # handler.register_uploaded_dataset(filepath, uploaded_filename)
-                    # OR maybe it just needs to know to rescan a directory.
-                    # For now, we'll just update the dropdown directly,
-                    # but the handler *needs* to know about the file eventually.
                     print(f"File {uploaded_filename} saved. Handler should be notified.")
 
-                    # --- Refresh dataset list (Option 1: Ask handler) ---
-                    # try:
-                    #     updated_datasets = handler.handle_get_datasets() # Ideal way
-                    #     new_options = [{"label": ds, "value": ds} for ds in updated_datasets]
-                    # except Exception as e:
-                    #     print(f"Error refreshing datasets via handler: {e}")
-                    #     # Fallback to manual update if handler fails
-                    #     new_options = existing_options + [{"label": uploaded_filename, "value": uploaded_filename}]
-
-                    # --- Refresh dataset list (Option 2: Manual Update - Simpler but less robust) ---
+                    # --- Refresh dataset list
                     # Check if the dataset is already in the options to avoid duplicates
                     is_new = True
                     for option in existing_options:
@@ -205,6 +199,69 @@ def get_index_callbacks(app):
         else:
             # Callback triggered without content (e.g., initial load, clearing upload)
             return existing_options, no_update, "" # No change, clear message
+
+
+    # Callback to display the confirmation dialog
+    @app.callback(
+        Output('confirm-delete-dialog', 'displayed'),
+        Input('delete-dataset-button', 'n_clicks'),
+        State('dataset-dropdown', 'value'), # Check if a dataset is selected
+        prevent_initial_call=True
+    )
+    def display_confirm_delete_dialog(n_clicks, selected_dataset):
+        if n_clicks > 0 and selected_dataset: # Only show if button clicked AND a dataset is selected
+            return True
+        return False
+
+    # Callback to handle the actual deletion after confirmation
+    @app.callback(
+        Output('dataset-dropdown', 'options', allow_duplicate=True),
+        Output('dataset-dropdown', 'value', allow_duplicate=True),
+        Output('output-delete-state', 'children'),
+        Input('confirm-delete-dialog', 'submit_n_clicks'),
+        State('dataset-dropdown', 'value'),
+        prevent_initial_call=True
+    )
+    def handle_delete_dataset(submit_n_clicks, selected_dataset_to_delete):
+        if submit_n_clicks and submit_n_clicks > 0:
+            if selected_dataset_to_delete:
+                file_to_delete_path = os.path.join(UPLOAD_DIRECTORY, selected_dataset_to_delete)
+                try:
+                    if os.path.exists(file_to_delete_path):
+                        os.remove(file_to_delete_path)
+                        print(f"Successfully deleted dataset: {file_to_delete_path}")
+
+                        # Refresh dataset list from the directory
+                        updated_datasets_list = get_available_datasets(UPLOAD_DIRECTORY)
+                        new_options = [{"label": ds, "value": ds} for ds in updated_datasets_list]
+
+                        # Determine the new value for the dropdown
+                        new_selected_value = new_options[0]['value'] if new_options else None
+
+                        return new_options, new_selected_value, f"Successfully deleted: {selected_dataset_to_delete}"
+                    else:
+                        # This case should ideally not happen if dropdown is synced with file system
+                        print(f"File not found for deletion: {file_to_delete_path}")
+                        # Refresh options anyway, as the file system is the source of truth
+                        updated_datasets_list = get_available_datasets(UPLOAD_DIRECTORY)
+                        new_options = [{"label": ds, "value": ds} for ds in updated_datasets_list]
+                        new_selected_value = new_options[0]['value'] if new_options else None
+                        return new_options, new_selected_value, f"Error: File '{selected_dataset_to_delete}' not found on server."
+
+                except Exception as e:
+                    print(f"Error deleting file {file_to_delete_path}: {e}")
+                    # Even on error, refresh options to reflect actual state
+                    updated_datasets_list = get_available_datasets(UPLOAD_DIRECTORY)
+                    new_options = [{"label": ds, "value": ds} for ds in updated_datasets_list]
+                    # Keep current selection if possible, or pick first if current was deleted
+                    current_selection_still_valid = any(opt['value'] == selected_dataset_to_delete for opt in new_options)
+                    new_selected_value = selected_dataset_to_delete if current_selection_still_valid else (new_options[0]['value'] if new_options else None)
+
+                    return new_options, new_selected_value, f"Error deleting '{selected_dataset_to_delete}': {e}"
+            else:
+                # No dataset was selected in the dropdown when delete was confirmed (should be rare)
+                return no_update, no_update, "No dataset selected to delete."
+        return no_update, no_update, "" # No action if dialog not submitted
 
     # --- Callback to update Parameter Explanation Box ---
     @app.callback(

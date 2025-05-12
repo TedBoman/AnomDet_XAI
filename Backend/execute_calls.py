@@ -39,6 +39,8 @@ UNSUPERVISED_MODELS = [
     'isolation_forest',
 ]
 
+PRIMARY_KEY_COLUMN = 'id'
+
 # --- Utility function to save results ---
 def save_run_summary(summary_dict: Dict[str, Any], job_name: str, output_dir: str) -> None:
     """Appends a run summary dictionary to a JSON Lines file."""
@@ -419,13 +421,65 @@ def run_batch(
         sim_start_time = time.perf_counter() # Start sim timer here
         if inj_params is not None:
             anomaly_settings = []
-            for params in inj_params:
-                 anomaly = AnomalySetting(
-                     params.get("anomaly_type"), int(params.get("timestamp")), int(params.get("magnitude")),
-                     int(params.get("percentage")), params.get("columns"), params.get("duration")
-                 )
-                 anomaly_settings.append(anomaly)
+            # inj_params is a list of lists of dictionaries, e.g., [[{...}, {...}], [{...}]]
+            for anomaly_group in inj_params: # Iterate through each group of anomalies
+                if not isinstance(anomaly_group, list):
+                    print(f"WARNING: Expected a list for an anomaly group, but got {type(anomaly_group)}. Skipping this group: {anomaly_group}")
+                    continue
+                for params_dict in anomaly_group: # Iterate through each anomaly definition (dict) in the group
+                    if not isinstance(params_dict, dict):
+                        print(f"WARNING: Expected a dictionary for anomaly parameters, but got {type(params_dict)}. Skipping this entry: {params_dict}")
+                        continue
+
+                    # Safely get parameters from the dictionary
+                    anomaly_type = params_dict.get("anomaly_type")
+                    timestamp_str = params_dict.get("timestamp")
+                    magnitude_str = params_dict.get("magnitude")
+                    percentage_str = params_dict.get("percentage")
+                    columns = params_dict.get("columns") # Should be a list, e.g., ['V7']
+                    duration = params_dict.get("duration") # String, e.g., '10s'
+
+                    # Validate required parameters and convert types
+                    missing_keys = []
+                    if anomaly_type is None: missing_keys.append("anomaly_type")
+                    if timestamp_str is None: missing_keys.append("timestamp")
+                    if magnitude_str is None: missing_keys.append("magnitude")
+                    if percentage_str is None: missing_keys.append("percentage")
+                    # columns and duration can be optional depending on AnomalySetting definition
+
+                    if missing_keys:
+                        print(f"WARNING: Missing required keys {missing_keys} in anomaly params: {params_dict}. Skipping.")
+                        continue
+                    
+                    try:
+                        timestamp = int(timestamp_str)
+                        magnitude = int(magnitude_str)
+                        percentage = int(percentage_str)
+                    except ValueError as ve:
+                        print(f"WARNING: Error converting string to int for anomaly params: {params_dict}. Error: {ve}. Skipping.")
+                        continue
+                    except TypeError as te: # Handles if any _str is None due to missing key not caught above
+                        print(f"WARNING: Non-string type encountered during int conversion for anomaly params: {params_dict}. Error: {te}. Skipping.")
+                        continue
+
+                    # Assuming AnomalySetting expects columns as a list and duration as a string.
+                    # Add validation for columns if it's expected to be a list.
+                    if columns is not None and not isinstance(columns, list):
+                        print(f"WARNING: 'columns' parameter expected to be a list, but got {type(columns)}: {columns}. Using as is or skipping.")
+                        # Decide how to handle: skip, or try to use, or wrap in a list if appropriate
+                        # For now, let's assume AnomalySetting can handle it or it's an error to be skipped.
+                        # If columns must be a list:
+                        # columns = [columns] if not isinstance(columns, list) else columns
+
+                    anomaly = AnomalySetting(
+                        anomaly_type, timestamp, magnitude,
+                        percentage, columns, duration
+                    )
+                    anomaly_settings.append(anomaly)
+            
+            # This line assumes 'path', 'name', 'debug' are defined elsewhere in your function
             batch_job = Job(filepath=path, anomaly_settings=anomaly_settings, simulation_type="batch", speedup=None, table_name=name, debug=debug)
+            print(f"Successfully processed {len(anomaly_settings)} anomaly settings.") # For feedback
         else:
             batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name, debug=debug)
 
@@ -445,6 +499,8 @@ def run_batch(
         print(f"Reading data for table/job: {name}")
         df = api.read_data(datetime.fromtimestamp(0), name)
         if df.empty: raise ValueError("DataFrame read from DB is empty.")
+        if PRIMARY_KEY_COLUMN not in df.columns:
+            raise ValueError(f"Primary key column '{PRIMARY_KEY_COLUMN}' not found in DataFrame read from table '{name}'.")
         print(f"DEBUG: Columns read from DB for job '{name}': {df.columns.tolist()}")
         # Ensure timestamp column exists and convert if necessary BEFORE splitting
         if timestamp_col_name and timestamp_col_name in df.columns:
@@ -466,8 +522,10 @@ def run_batch(
             # Handle fallback if needed
 
         # --- Feature Column Definition ---
-        cols_to_exclude = {timestamp_col_name, actual_label_col, 'injected_anomaly', 'is_anomaly'} # Set of columns to exclude
-        potential_feature_cols = [col for col in df.columns if col not in cols_to_exclude and not pd.api.types.is_datetime64_any_dtype(df[col])]
+        # Exclude ID, timestamp, labels, and existing flag columns from features
+        cols_to_exclude = {PRIMARY_KEY_COLUMN, timestamp_col_name, actual_label_col, 'injected_anomaly', 'is_anomaly'}
+        potential_feature_cols = [col for col in df.columns 
+                                  if col not in cols_to_exclude and not pd.api.types.is_datetime64_any_dtype(df[col])]
         if not potential_feature_cols:
              raise ValueError("Could not identify any feature columns after exclusion.")
         feature_columns = potential_feature_cols
@@ -571,13 +629,23 @@ def run_batch(
               df_eval['is_anomaly'][-min_len:] = list(res)[-min_len:] # Try aligning from end
 
         # Update anomalies in DB (using original timestamps)
-        anomaly_df_pred = df.loc[df_eval[df_eval["is_anomaly"] == True].index] # Get original rows for predicted anomalies
-        if timestamp_col_name and not anomaly_df_pred.empty:
-             # Convert timestamps back to the format expected by update_anomalies
-             arr_dt = [dt for dt in anomaly_df_pred[timestamp_col_name]] # Assuming they are datetime objects
-             # Format for TimescaleDB update - adjust formatting if needed! '+00' assumes UTC.
-             arr_str = [f"'{dt.strftime('%Y-%m-%d %H:%M:%S.%f')}{dt.strftime('%z') or '+00'}'" for dt in arr_dt]
-             api.update_anomalies(name, arr_str)
+        predicted_anomalies_mask = df_eval['is_anomaly'] == True
+        # Select rows from the original 'df' (which includes the PRIMARY_KEY_COLUMN)
+        anomaly_df_for_update = df.loc[predicted_anomalies_mask & df[PRIMARY_KEY_COLUMN].notna()]
+        
+        print(f'Found {len(anomaly_df_for_update)} anomalies to update in DB via PK.')
+        if not anomaly_df_for_update.empty:
+            anomaly_pk_values = anomaly_df_for_update[PRIMARY_KEY_COLUMN].tolist()
+            if anomaly_pk_values:
+                # Call the new DB API function that updates by primary key
+                # This method needs to be implemented in your TimescaleDBAPI class.
+                api.update_anomalies(table_name=name,
+                                           pk_column_name=PRIMARY_KEY_COLUMN,
+                                           anomaly_pk_values=anomaly_pk_values)
+            else:
+                print("No valid primary key values found for the detected anomalies.")
+        else:
+            print("No anomalies detected in current run, or no anomalies with valid PKs.")
 
         evaluation_results = evaluate_classification(df_eval) # Evaluate using actual and predicted labels
         print("Evaluation Results:", evaluation_results)

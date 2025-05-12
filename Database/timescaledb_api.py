@@ -1,3 +1,4 @@
+from typing import List, Optional
 import numpy as np
 from db_interface import DBInterface
 import pandas as pd
@@ -21,11 +22,26 @@ class TimescaleDBAPI(DBInterface):
     
     # Creates a hypertable called table_name with column-names columns copied from dataset
     # Also adds columns is_anomaly and injected_anomaly
-    def create_table(self, table_name: str, columns: list[str]) -> None:
-        length = len(columns)
-        
-        try: 
-            conn = psycopg2.connect(self.connection_string) # Connect to the database
+    def create_table(self, table_name: str, columns: List[str]) -> Optional[str]:
+        """
+        Creates a new table with an auto-incrementing ID, a timestamp column,
+        user-defined numeric columns, and standard boolean flag columns.
+        The primary key will be a composite of the timestamp column and the ID.
+        Converts the table to a TimescaleDB hypertable.
+
+        Args:
+            table_name: The name of the table to create.
+            columns: A list of column names. The first column in this list
+                     is treated as the primary timestamp column for hypertable
+                     partitioning AND part of the composite primary key.
+                     The rest are treated as NUMERIC data columns.
+
+        Returns:
+            The table_name if creation was successful, None otherwise.
+        """
+        conn = None
+        try:
+            conn = psycopg2.connect(self.connection_string)
             cursor = conn.cursor()
 
             # Check if table exists
@@ -40,32 +56,70 @@ class TimescaleDBAPI(DBInterface):
 
             if table_exists:
                 print(f"Info: Table '{table_name}' already exists.")
-                conn.close() # Close connection before returning
-                return None # Return None if table exists
+                return None
+
+            if not columns:
+                print(f"Error: No columns provided for table '{table_name}'. A timestamp column is required.")
+                return None
+
+            # --- Define column structures ---
+
+            # 1. Auto-incrementing ID column (will be part of the composite PK)
+            # Note: PRIMARY KEY is removed from here; it will be defined as a composite key later.
+            id_column_definition = '"id" BIGINT GENERATED ALWAYS AS IDENTITY'
             
-            # The first column is of type TIMESTAMPTZ NOT NULL and the rest are
-            columns[0] = f'\"{columns[0]}\" TIMESTAMPTZ NOT NULL'
-            for i in range(1, length):
-                columns[i] = f'\"{columns[i]}\" NUMERIC'
-            columns = columns + ["is_anomaly BOOLEAN"] + ["injected_anomaly BOOLEAN"]
+            final_column_definitions = [id_column_definition]
+
+            # 2. Timestamp column (from the first item in the input 'columns' list)
+            # This column will be used for hypertable partitioning and be part of the PK.
+            timestamp_col_name_from_input = columns[0]
+            final_column_definitions.append(f'"{timestamp_col_name_from_input}" TIMESTAMPTZ NOT NULL')
+
+            # 3. Other user-defined data columns (as NUMERIC)
+            for i in range(1, len(columns)):
+                final_column_definitions.append(f'"{columns[i]}" NUMERIC')
             
-            query_create_table = f'CREATE TABLE "{table_name}" ({",".join(columns)});'
+            # 4. Standard boolean flag columns
+            final_column_definitions.append("is_anomaly BOOLEAN DEFAULT FALSE")
+            final_column_definitions.append("injected_anomaly BOOLEAN DEFAULT FALSE")
+
+            # 5. Define the Composite Primary Key
+            # This includes the timestamp column and the auto-incrementing id.
+            # The order (timestamp, id) is generally good for time-series queries.
+            # Ensure the names used here exactly match how they are defined (including quotes if needed).
+            composite_pk_definition = f'PRIMARY KEY ("{timestamp_col_name_from_input}", "id")'
+            final_column_definitions.append(composite_pk_definition)
+            
+            # --- Create Table ---
+            query_create_table = f'CREATE TABLE "{table_name}" ({", ".join(final_column_definitions)});'
+            print(f"Executing: {query_create_table}")
             cursor.execute(query_create_table)
-        
-            # Make the table a hypertable partitioned by timestamp
-            query_create_hypertable = f'SELECT create_hypertable(\'{table_name}\', \'timestamp\');'
+            
+            # --- Make it a Hypertable ---
+            # Use the raw name of the timestamp column for create_hypertable
+            hypertable_partition_column = timestamp_col_name_from_input
+            
+            query_create_hypertable = f"SELECT create_hypertable('{table_name}', '{hypertable_partition_column}');"
+            print(f"Executing: {query_create_hypertable}")
             cursor.execute(query_create_hypertable)
 
             conn.commit()
-
+            print(f"Table '{table_name}' created successfully with composite PK, ID, and converted to hypertable.")
             return table_name
-                
-        except Exception as error:
-            print("Error: %s" % error)
-            conn.close() 
+
+        except psycopg2.Error as db_err:
+            print(f"Database error during table creation for '{table_name}': {db_err}")
+            if conn:
+                conn.rollback()
+            return None
+        except Exception as e:
+            print(f"An unexpected error occurred during table creation for '{table_name}': {e}")
+            if conn:
+                conn.rollback()
             return None
         finally:
-            conn.close()
+            if conn:
+                conn.close()
 
     def insert_data(self, table_name: str, data: pd.DataFrame):
         """
@@ -181,27 +235,43 @@ class TimescaleDBAPI(DBInterface):
             return columns
 
     # Updates rows of the table that have an anomaly detected
-    def update_anomalies(self, table_name: str, anomalies) -> None:
-    
+    def update_anomalies(self, table_name: str, pk_column_name, anomaly_pk_values) -> None:
+        updated_row_count_sum = 0
         try: 
             conn = psycopg2.connect(self.connection_string)
             cursor = conn.cursor()
 
-            queries = []
+            for pk_value in anomaly_pk_values:
+                # Construct query for a single row update
+                # Table and column names are quoted for safety (e.g. if they have spaces or are keywords)
+                # The actual pk_value is passed as a parameter to prevent SQL injection.
+                query = f"UPDATE \"{table_name}\" SET is_anomaly = TRUE WHERE \"{pk_column_name}\" = %s;"
+                
+                
+                try:
+                    cursor.execute(query, (pk_value,)) # Parameters must be a tuple
+                    updated_row_count_sum += cursor.rowcount
+                except psycopg2.Error as single_exec_err:
+                    print(f"Database error during single update for PK {pk_value} in table '{table_name}': {single_exec_err}")
+                    # Decide on error strategy: continue with others, or rollback and raise?
+                    # For now, we'll let it try others, and the final commit/rollback handles the transaction.
+                    # If one fails, the whole transaction will be rolled back in the outer except block.
 
-            for anomaly in anomalies:
-                queries.append(f"UPDATE {table_name} SET is_anomaly = TRUE WHERE timestamp = {anomaly};")
-
-
-            cursor.execute("".join(queries))
             conn.commit()
+            print(f"Attempted to update {len(anomaly_pk_values)} anomaly records in table '{table_name}'.")
+            print(f"Total rows reported as affected by database (sum of individual updates): {updated_row_count_sum}.")
 
+        except psycopg2.Error as db_err: # Catch specific psycopg2 errors
+            print(f"Database error during anomaly update for table '{table_name}': {db_err}")
+            if conn:
+                conn.rollback()
         except Exception as e:
-            conn.rollback()
-            conn.close()
-
+            print(f"An unexpected error occurred during anomaly update for table '{table_name}': {e}")
+            if conn: # Check if connection was established before trying to rollback
+                conn.rollback()
         finally:
-            conn.close()
+            if conn:
+                conn.close()
             
     def list_all_tables(self):
         tables = []
