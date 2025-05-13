@@ -58,7 +58,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
         self.shuffle_kfold = kwargs.get('shuffle_kfold', True)
         if self.n_splits <= 1:
             raise ValueError("n_splits for k-fold cross-validation must be greater than 1.")
-        self.validation_metrics = kwargs.get('validation_metrics', ['accuracy', 'f1'])
+        self.validation_metrics = kwargs.get('validation_metrics', ['accuracy', 'f1', 'roc_auc'])
 
         random_state = kwargs.get('random_state', 42)
 
