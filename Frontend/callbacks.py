@@ -981,7 +981,7 @@ def get_index_callbacks(app):
                     ], style={'marginBottom':'8px'}),
                     html.Div([
                         html.Label("Explainer method:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                        dcc.Dropdown(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'shap_method'}, options=[{'label': 'KernelShap (default)', 'value': 'kernel'},{'label': 'TreeShap', 'value': 'tree'},{'label': 'LinearShap', 'value': 'linear'},{'label': 'PartitionShap', 'value': 'partition'}], value='kernel', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
+                        dcc.Dropdown(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'shap_method'}, options=[{'label': 'KernelShap (default)', 'value': 'kernel'},{'label': 'TreeShap', 'value': 'tree'},], value='kernel', clearable=False, style={'width': '150px', 'display': 'inline-block', 'color': '#333'})
                     ], style={'marginBottom':'8px'})
                 ])
             elif selected_xai_method == "LimeExplainer":

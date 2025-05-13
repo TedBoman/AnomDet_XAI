@@ -370,7 +370,7 @@ def layout(handler):
                                 id="mode-selection",
                                 options=[
                                     {"label": "Batch", "value": "batch"},
-                                    {"label": "Stream", "value": "stream"}
+                                    #{"label": "Stream", "value": "stream"} # Streaming not supported by AnomDetX
                                 ],
                                 value="batch",  # Default selection
                                 labelStyle={"display": "inline-block", "marginRight": "20px"},
@@ -522,6 +522,6 @@ def layout(handler):
         ),
         # --- Explanation Box ---
 
-    ], id="main-settings-container", style={ "backgroundColor": "#105E90", "padding": "40px", "minHeight": "100vh", "display": "flex", "flexWrap": "nowrap", "alignItems": "flex-start"})
+    ], id="main-settings-container", style={ "backgroundColor": "#105E90", "padding": "40px", "minHeight": "100vh", "display": "flex", "flexWrap": "nowrap", "alignItems": "flex-start", "justifyContent": "center"})
 
     return layout

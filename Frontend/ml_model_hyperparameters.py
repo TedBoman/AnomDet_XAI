@@ -13,7 +13,7 @@ HYPERPARAMETER_DESCRIPTIONS = {
         "reg_lambda": "L2 regularization term on weights. Makes model weights smaller.",
         "booster": "Which booster to use: 'gbtree' (tree-based), 'gblinear' (linear function), or 'dart'.",
         "random_state": "Random number seed for reproducibility.",
-        "calibration_method": "Method ('isotonic' or 'sigmoid') used to calibrate predicted probabilities after base model training.",
+        "calibration_method": "NOT IMPLEMENTED! Method ('isotonic' or 'sigmoid') used to calibrate predicted probabilities after base model training",
         "n_jobs": "Number of CPU threads XGBoost will use. More = Faster but heavier load..",
         # Add others as needed
     },
