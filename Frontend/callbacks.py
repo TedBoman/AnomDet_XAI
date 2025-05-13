@@ -969,7 +969,7 @@ def get_index_callbacks(app):
                     ], style={'marginBottom':'8px'}),
                     html.Div([
                         html.Label("Num Samples (nsamples):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                        dcc.Input(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'nsamples'}, type="number", value=50, min=10, step=10, style={'width':'80px'})
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'nsamples'}, type="number", value=100, min=10, step=10, style={'width':'80px'})
                     ], style={'marginBottom':'8px'}),
                     html.Div([
                         html.Label("K for Background Summary (k_summary):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
@@ -1059,14 +1059,14 @@ def get_index_callbacks(app):
         return all_settings_children
 
     # --- Callback to toggle Speedup input based on mode ---
-    @app.callback(
-        Output("speedup-input-div", "style"),
-        Input("mode-selection", "value")
-    )
-    def toggle_speedup_input(selected_mode):
-        if selected_mode == "stream":
-            return {"display": "block", "marginTop": "10px", "textAlign": "center"}
-        return {"display": "none"}
+    # @app.callback(
+    #     Output("speedup-input-div", "style"),
+    #     Input("mode-selection", "value")
+    # )
+    # def toggle_speedup_input(selected_mode):
+    #     if selected_mode == "stream":
+    #         return {"display": "block", "marginTop": "10px", "textAlign": "center"}
+    #     return {"display": "none"}
 
     # --- Callback to toggle visibility of Active Jobs section ---
     @app.callback(
@@ -1205,7 +1205,7 @@ def get_index_callbacks(app):
             State("injection-method-dropdown", "value"), State("timestamp-input", "value"),
             State("magnitude-input", "value"), State("percentage-input", "value"),
             State("duration-input", "value"), State("injection-column-dropdown", "value"),
-            State("injection-check", "value"), State("speedup-input", "value"),
+            State("injection-check", "value"), #State("speedup-input", "value"),
             State("xai-sampling-strategy-dropdown", "value"), State("xai-sample-seed", "value"),
             State("popup", "style"),
             State("labeled-check", "value"), State("label-column-dropdown", "value"),
@@ -1220,7 +1220,7 @@ def get_index_callbacks(app):
             n_clicks, n_intervals,
             selected_dataset, selected_detection_model, selected_mode, job_name,
             selected_injection_method, timestamp, magnitude, percentage, duration,
-            injection_columns, inj_check, speedup, 
+            injection_columns, inj_check, #speedup, 
             xai_sampling_strategy, xai_sample_seed,
             style,
             labeled_check_val, selected_label_col,
@@ -1408,21 +1408,21 @@ def get_index_callbacks(app):
                     label_column=label_col_to_pass, xai_params=xai_settings, inj_params=inj_params_list,
                     model_params=model_params_to_pass
                 )
-            else: # stream
-                # Validate speedup for stream mode
-                speedup_val = 1.0 # Default
-                try:
-                     speedup_val = float(speedup) if speedup is not None else 1.0
-                     if speedup_val <= 0: raise ValueError("Speedup must be positive.")
-                except ValueError:
-                     style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
-                     return style_copy, False, "Invalid speedup value for stream mode."
+            # else: # stream
+            #     Validate speedup for stream mode
+            #     speedup_val = 1.0 # Default
+            #     try:
+            #          speedup_val = float(speedup) if speedup is not None else 1.0
+            #          if speedup_val <= 0: raise ValueError("Speedup must be positive.")
+            #     except ValueError:
+            #          style_copy.update({"backgroundColor": "#e74c3c", "display": "block"})
+            #          return style_copy, False, "Invalid speedup value for stream mode."
 
-                response = handler.handle_run_stream(
-                    selected_dataset, selected_detection_model, job_name,
-                    label_column=label_col_to_pass, xai_params=xai_settings, inj_params=inj_params_list,
-                    model_params=model_params_to_pass
-                )
+            #     response = handler.handle_run_stream(
+            #         selected_dataset, selected_detection_model, job_name,
+            #         label_column=label_col_to_pass, xai_params=xai_settings, inj_params=inj_params_list,
+            #         model_params=model_params_to_pass
+            #     )
 
             if response == "success":
                 style_copy.update({"backgroundColor": "#4CAF50", "display": "block"})

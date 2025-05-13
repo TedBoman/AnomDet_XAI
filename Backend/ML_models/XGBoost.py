@@ -64,7 +64,7 @@ class XGBoostModel(model_interface.ModelInterface):
             raise ValueError("n_splits for k-fold cross-validation must be greater than 1.")
 
         # Metrics for manual calculation and averaging after each fold
-        self.user_validation_metrics = kwargs.get('validation_metrics', ['roc_auc', 'f1'])
+        self.user_validation_metrics = kwargs.get('validation_metrics', ['roc_auc', 'f1', 'accuracy'])
 
 
         self.model_params = {
