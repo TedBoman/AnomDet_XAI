@@ -1,5 +1,6 @@
 # batchimport.py
 import sys
+import traceback
 import psycopg2
 import time as t
 import multiprocessing as mp
@@ -7,6 +8,7 @@ from pathlib import Path
 import datetime
 import numpy as np
 import pandas as pd
+import pytz
 
 #from Simulator.DBAPI.db_interface import DBInterface as db
 from timescaledb_api import TimescaleDBAPI as db
@@ -85,83 +87,91 @@ class BatchImporter:
         else: # result is None (error)
             print(f"Error reported by API during creation of table '{tb_name}'.")
             return None
+        
+    def process_chunk(self, conn_params, table_name, chunk_df):
+        # This function is called by multiprocessing, ensure it's self-contained or pickles correctly.
+        # dl.debug_print(f"Process {mp.current_process().pid}: Processing chunk for table {table_name}. Chunk shape: {chunk_df.shape}")
+        
+        if not isinstance(chunk_df, pd.DataFrame) or chunk_df.empty:
+            dl.debug_print(f"Process {mp.current_process().pid}: Chunk for table {table_name} is empty or not a DataFrame. Nothing to insert.")
+            return
 
-    def process_chunk(self, conn_params, table_name, chunk):
-        """
-        Processes a chunk of data by creating a DBInterface instance
-        and inserting the chunk into the database.
-
-        Args:
-            conn_params: The parameters needed to connect to the database.
-            table_name: The name of the table.
-            chunk (pd.DataFrame): A chunk of data to be inserted.
-        """
-        # Insert the row (modified or not) into the database
-        # Handle timestamp conversion safely
-        if 'timestamp' in chunk.columns and not pd.api.types.is_datetime64_any_dtype(chunk['timestamp']):
-            dl.debug_print(f"Process_chunk: Timestamp column in table {table_name} is not datetime. Attempting conversion.")
-            # Make a copy to avoid SettingWithCopyWarning if chunk is a view
-            timestamp_series = chunk['timestamp'].copy() 
+        # Critical check: Ensure timestamp column is present and in correct UTC format
+        if 'timestamp' not in chunk_df.columns:
+            dl.debug_print(f"CRITICAL ERROR in process_chunk: 'timestamp' column missing in chunk for table {table_name}. Skipping insertion.")
+            return
+        if not pd.api.types.is_datetime64_any_dtype(chunk_df['timestamp']):
+            dl.debug_print(f"CRITICAL ERROR in process_chunk: 'timestamp' column in chunk for table {table_name} is not datetime64. Dtype: {chunk_df['timestamp'].dtype}. Skipping insertion.")
+            return
+        if chunk_df['timestamp'].dt.tz is None or str(chunk_df['timestamp'].dt.tz).upper() != 'UTC':
+            dl.debug_print(f"CRITICAL WARNING in process_chunk: Timestamp for {table_name} not UTC. TZ: {chunk_df['timestamp'].dt.tz}. Attempting conversion.")
             try:
-                # First, try standard conversion (handles various string formats, including ISO)
-                converted_timestamps = pd.to_datetime(timestamp_series, errors='coerce')
-
-                # If standard conversion results in all NaT, and original wasn't all NaT,
-                # it might indicate numeric timestamps (e.g., Unix epochs in seconds).
-                if converted_timestamps.isna().all() and not timestamp_series.isna().all():
-                    dl.debug_print(f"Process_chunk: Standard to_datetime resulted in all NaT for non-NaT input for table {table_name}. Trying with unit='s'.")
-                    # This attempts to interpret numbers as seconds since epoch
-                    converted_timestamps = pd.to_datetime(timestamp_series, unit='s', errors='coerce')
-                
-                chunk.loc[:, 'timestamp'] = converted_timestamps
-                
-                # Optionally, handle rows where timestamp is still NaT (unconvertible)
-                # For example, by dropping them or logging them:
-                if chunk['timestamp'].isna().any():
-                    dl.debug_print(f"Process_chunk: {chunk['timestamp'].isna().sum()} rows in table {table_name} had unconvertible timestamps.")
-                    # chunk = chunk.dropna(subset=['timestamp']) # Uncomment to drop
-
-            except Exception as e:
-                dl.print_exception(f"Process_chunk: Critical error converting timestamp in table {table_name}: {e}. Coercing to NaT.")
-                chunk.loc[:, 'timestamp'] = pd.to_datetime(chunk['timestamp'], errors='coerce') # Fallback to coerce
-
-        db_instance = self.init_db(conn_params)
-        db_instance.insert_data(table_name, chunk)
-
-    def inject_anomalies_into_chunk(self, chunk, anomaly_settings):
-        """
-        Injects anomalies into a chunk of data.
-
-        Args:
-            chunk (pd.DataFrame): The chunk of data to inject anomalies into.
-            anomaly_settings (list): List of anomaly settings.
-
-        Returns:
-            pd.DataFrame: The modified chunk with injected anomalies.
-        """
-        try:
-            injector = TimeSeriesAnomalyInjector()
-            chunk_start_time = pd.to_datetime(chunk['timestamp'].min(), unit='s')
-            chunk_end_time = pd.to_datetime(chunk['timestamp'].max(), unit='s')
+                if chunk_df['timestamp'].dt.tz is None:
+                    chunk_df.loc[:, 'timestamp'] = chunk_df['timestamp'].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
+                else:
+                    chunk_df.loc[:, 'timestamp'] = chunk_df['timestamp'].dt.tz_convert('UTC')
+                chunk_df.dropna(subset=['timestamp'], inplace=True) # Drop if localization/conversion failed
+                if chunk_df.empty:
+                    dl.debug_print(f"Process {mp.current_process().pid}: Chunk became empty after UTC conversion for {table_name}.")
+                    return
+            except Exception as e_ts_conv:
+                dl.print_exception(f"Error converting chunk timestamp to UTC for {table_name}: {e_ts_conv}. Skipping insertion.")
+                return
+        
+        db_instance = self.init_db(conn_params) # init_db is part of BatchImporter, might need to be static or passed
+        if not db_instance:
+            dl.debug_print(f"Process {mp.current_process().pid}: DB connection failed in process_chunk for table {table_name}. Chunk not inserted.")
+            return 
             
-            for setting in anomaly_settings:
-                anomaly_start = setting.timestamp
-                anomaly_end = anomaly_start + pd.Timedelta(seconds=ut.parse_duration(setting.duration).total_seconds())
+        try:
+            if not chunk_df.empty:
+                # dl.debug_print(f"Process {mp.current_process().pid}: Inserting {len(chunk_df)} rows into {table_name}.")
+                db_instance.insert_data(table_name, chunk_df)
+            # else:
+                # dl.debug_print(f"Process {mp.current_process().pid}: Chunk for table {table_name} is empty. Nothing to insert.")
+        except Exception as e_insert:
+            dl.print_exception(f"Process {mp.current_process().pid}: Error inserting data into {table_name}: {e_insert}")
 
-                # Check if the chunk overlaps with the anomaly's time range
-                if (chunk_start_time <= anomaly_end) and (chunk_end_time >= anomaly_start):
-                    # Inject anomalies
-                    dl.debug_print("Anomaly within chunk!")
-                    
-                    chunk = injector.inject_anomaly(chunk, setting)
-                    dl.debug_print(chunk)
+    def inject_anomalies_into_chunk(self, chunk_df_input: pd.DataFrame, 
+                                    anomaly_settings_abs_utc: list, 
+                                    chunk_index_for_logging="N/A") -> pd.DataFrame:
+        
+        dl.debug_print(f"BatchImporter.inject_anomalies_into_chunk for chunk {chunk_index_for_logging}. Input chunk shape: {chunk_df_input.shape}")
+        sys.stdout.flush()
+
+        if not isinstance(chunk_df_input, pd.DataFrame) or chunk_df_input.empty:
+            dl.debug_print(f"  Chunk {chunk_index_for_logging} is empty, skipping anomaly injection.")
+            sys.stdout.flush()
+            return chunk_df_input
+        if not anomaly_settings_abs_utc:
+            return chunk_df_input
+        
+        injector = TimeSeriesAnomalyInjector() 
+        current_modified_chunk = chunk_df_input 
+
+        for i, setting in enumerate(anomaly_settings_abs_utc):
+            injected_sum_before_this_setting = current_modified_chunk['injected_anomaly'].sum() if 'injected_anomaly' in current_modified_chunk else 0
+            try:
+                chunk_after_this_setting = injector.inject_anomaly(current_modified_chunk, setting) 
                 
-            return chunk
+                injected_sum_after_this_setting = chunk_after_this_setting['injected_anomaly'].astype(bool).sum() if 'injected_anomaly' in chunk_after_this_setting else 0
+                injected_sum_before_this_setting_bool = current_modified_chunk['injected_anomaly'].astype(bool).sum() if 'injected_anomaly' in current_modified_chunk else 0
+                num_newly_flagged_by_this_setting = injected_sum_after_this_setting - injected_sum_before_this_setting_bool
 
-        except Exception as e:
-            dl.print_exception(f"Error injecting anomalies into chunk: {e}")
-            return chunk
 
+                if num_newly_flagged_by_this_setting > 0:
+                    dl.debug_print(f"    Processed setting {i} ('{setting.anomaly_type}'): {num_newly_flagged_by_this_setting} new 'injected_anomaly' flags set by injector in chunk {chunk_index_for_logging}.")
+                elif injected_sum_after_this_setting > 0 and injected_sum_before_this_setting_bool == 0 :
+                     dl.debug_print(f"    Processed setting {i} ('{setting.anomaly_type}'): 'injected_anomaly' flags set from zero by injector in chunk {chunk_index_for_logging}.")
+                sys.stdout.flush()
+                current_modified_chunk = chunk_after_this_setting 
+            except Exception as e_injector_call:
+                dl.print_exception(f"  Error calling TimeSeriesAnomalyInjector.inject_anomaly for setting {i} on chunk {chunk_index_for_logging}: {e_injector_call}")
+                sys.stdout.flush()
+        
+        return current_modified_chunk
+    
+    
     def start_simulation(self, conn_params, anomaly_settings=None, table_name=None, timestamp_col_name=None, label_col_name=None):
         """
         Starts the batch data import process.
@@ -181,13 +191,63 @@ class BatchImporter:
         dl.debug_print(self.start_time)
         dl.debug_print("Starting to insert!")
 
-        # Preprocess anomaly settings to convert timestamps to absolute times
+        # Preprocess anomaly settings to convert timestamps to absolute UTC times
         if anomaly_settings:
-            for setting in anomaly_settings:
-                # Convert timestamp to absolute time if it's not already
-                if not isinstance(setting.timestamp, pd.Timestamp):
-                    setting.timestamp = self.start_time + pd.to_timedelta(setting.timestamp, unit='s')
+            dl.debug_print(f"Preprocessing {len(anomaly_settings)} anomaly settings for absolute UTC timestamps...")
+            for i, setting in enumerate(anomaly_settings):
+                original_setting_ts = setting.timestamp # For logging
 
+                # Step 1: Convert to absolute pd.Timestamp if it's a relative offset
+                if not isinstance(setting.timestamp, pd.Timestamp):
+                    try:
+                        # Assuming setting.timestamp is a numeric offset (int or string convertible to float)
+                        # representing seconds from self.start_time
+                        time_offset_seconds = float(str(setting.timestamp)) # Ensure it's floatable
+                        setting.timestamp = self.start_time + pd.to_timedelta(time_offset_seconds, unit='s')
+                        # dl.debug_print(f"  Anomaly setting {i}: Relative '{original_setting_ts}' + start_time '{self.start_time}' -> Absolute '{setting.timestamp}'")
+                    except ValueError as ve:
+                        dl.debug_print(f"  WARNING: Anomaly setting {i}: Could not convert timestamp offset '{original_setting_ts}' to timedelta. Error: {ve}. Skipping UTC conversion for this timestamp.")
+                        continue # Skip to next setting if offset conversion fails
+                    except TypeError as te: # E.g. if self.start_time is None
+                        dl.debug_print(f"  WARNING: Anomaly setting {i}: TypeError during offset calculation for timestamp '{original_setting_ts}' (start_time: {self.start_time}). Error: {te}. Skipping.")
+                        continue
+
+
+                # Step 2: Ensure the (now absolute) setting.timestamp is UTC-aware
+                if isinstance(setting.timestamp, pd.Timestamp):
+                    if setting.timestamp.tzinfo is None:
+                        # If self.start_time was naive, the resulting absolute timestamp is naive.
+                        # Assume it should be interpreted as UTC.
+                        try:
+                            setting.timestamp = setting.timestamp.tz_localize('UTC')
+                            # dl.debug_print(f"  Anomaly setting {i}: Localized naive timestamp to UTC: '{setting.timestamp}'")
+                        except (pytz.exceptions.AmbiguousTimeError, pytz.exceptions.NonExistentTimeError) as tze:
+                            # This can happen if the naive timestamp falls on a DST transition
+                            dl.debug_print(f"  WARNING: Anomaly setting {i}: Failed to localize naive timestamp {setting.timestamp} to UTC due to DST ambiguity/non-existence: {tze}. Attempting 'infer' or safe option.")
+                            try: # Try to handle DST transitions carefully
+                                setting.timestamp = setting.timestamp.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
+                                if pd.isna(setting.timestamp):
+                                    dl.debug_print(f"  ERROR: Anomaly setting {i}: Timestamp {original_setting_ts} resulted in NaT after tz_localize. Cannot use.")
+                                    # Potentially mark this setting as invalid or remove it
+                                    continue
+                            except Exception as e_loc_fallback:
+                                dl.debug_print(f"  ERROR: Anomaly setting {i}: Critical error localizing timestamp {original_setting_ts}: {e_loc_fallback}")
+                                continue
+
+                    elif str(setting.timestamp.tzinfo).upper() != 'UTC':
+                        # If it's already tz-aware but not UTC, convert it to UTC.
+                        try:
+                            setting.timestamp = setting.timestamp.tz_convert('UTC')
+                            # dl.debug_print(f"  Anomaly setting {i}: Converted timestamp from {original_setting_ts.tzinfo} to UTC: '{setting.timestamp}'")
+                        except Exception as e_conv:
+                            dl.debug_print(f"  WARNING: Anomaly setting {i}: Failed to convert timestamp {original_setting_ts} to UTC: {e_conv}")
+                            continue
+                    # else: It's already a pd.Timestamp and UTC-aware, no change needed.
+                    #    dl.debug_print(f"  Anomaly setting {i}: Timestamp '{setting.timestamp}' is already UTC-aware.")
+
+                else:
+                    dl.debug_print(f"  WARNING: Anomaly setting {i}: Its 'timestamp' attribute is not a pd.Timestamp after processing (type: {type(setting.timestamp)}, value: {setting.timestamp}). Cannot ensure UTC.")
+                    continue # Skip if not a valid timestamp object
         # Create a list to store results from async processes
         results = []
 
@@ -203,9 +263,49 @@ class BatchImporter:
         dl.debug_print("Dropped unnamed columns.")
         # --- End Drop Unnamed Columns ---
         
-        #full_df = full_df.rename(columns={timestamp_col_name: 'timestamp'}) # Uncomment when passing timestamp column
-        full_df.columns.values[0] = "timestamp"
+        #Time column renaming
+        original_first_col_name = full_df.columns[0]
+        if original_first_col_name != 'timestamp':
+            dl.debug_print(f"Renaming first column '{original_first_col_name}' to 'timestamp'.")
+            full_df.columns.values[0] = "timestamp"
+        
+        # --- DataFrame Timestamp Conversion ---
+        if 'timestamp' in full_df.columns:
+            timestamp_col = full_df['timestamp']
+            if pd.api.types.is_numeric_dtype(timestamp_col):
+                dl.debug_print("Numeric 'timestamp' column in DataFrame. Interpreting as seconds since Unix epoch.")
+                # Using pd.to_numeric to handle potential strings that are numbers, then to_datetime
+                full_df.loc[:, 'timestamp'] = pd.to_datetime(pd.to_numeric(timestamp_col, errors='coerce'), unit='s', utc=True, errors='coerce')
+            elif not pd.api.types.is_datetime64_any_dtype(timestamp_col): # It's object/string etc.
+                dl.debug_print("Non-numeric, non-datetime 'timestamp' column in DataFrame. Attempting to parse as datetime strings.")
+                full_df.loc[:, 'timestamp'] = pd.to_datetime(timestamp_col, utc=True, errors='coerce')
+            else: # Already datetime64; ensure UTC
+                dl.debug_print("'timestamp' column is already datetime. Ensuring it is UTC.")
+                if timestamp_col.dt.tz is None:
+                    full_df.loc[:, 'timestamp'] = timestamp_col.dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
+                elif str(timestamp_col.dt.tz).upper() != 'UTC':
+                    full_df.loc[:, 'timestamp'] = timestamp_col.dt.tz_convert('UTC')
+            
+            # Handle NaTs from conversion
+            initial_rows = len(full_df)
+            full_df.dropna(subset=['timestamp'], inplace=True)
+            if len(full_df) < initial_rows:
+                dl.debug_print(f"Dropped {initial_rows - len(full_df)} rows due to NaT timestamps after conversion.")
+            if full_df.empty:
+                dl.debug_print("DataFrame became empty after dropping NaT timestamps. Canceling job.")
+                pool.close()
+                pool.join()
+                return 0 # Indicate failure
+        else:
+            dl.debug_print("CRITICAL: 'timestamp' column not found in DataFrame. Cannot proceed.")
+            pool.close()
+            pool.join()
+            return 0 # Indicate failure
 
+        dl.debug_print("Sample of DataFrame after all timestamp processing (should be datetime64[ns, UTC]):")
+        dl.debug_print(full_df.head())
+        
+        
         print(f"renaming columns '{label_col_name}'")
         rename_map = {}
         if label_col_name != 'label':
@@ -247,7 +347,6 @@ class BatchImporter:
         else:
             dl.debug_print("'label' column not found or specified. Skipping label conversion.")
 
-        
         columns = list(full_df.columns.values)
         
         table_name = self.create_table(conn_params, Path(self.file_path).stem if table_name is None else table_name, columns)
@@ -265,19 +364,38 @@ class BatchImporter:
         # Create a new column to track anomalies
         full_df['injected_anomaly'] = False
         full_df['is_anomaly'] = False
+        
+        current_chunksize = int(self.chunksize) if self.chunksize is not None and self.chunksize > 0 else 10000 
+        if len(full_df) / current_chunksize > num_processes * 10 and len(full_df) > 100000 : 
+            current_chunksize = int(np.ceil(len(full_df) / (num_processes * 5)))
+        
+        results = []
+        chunk_list = [full_df[i:i + current_chunksize] for i in range(0, len(full_df), current_chunksize)]
+        dl.debug_print(f"Split DataFrame into {len(chunk_list)} chunks.")
+        sys.stdout.flush()
 
         # Process chunks with anomaly injection
-        for chunk in [full_df[i:i+int(self.chunksize)] for i in range(0, int(len(full_df)), int(self.chunksize))]:
+        for idx, chunk_original_slice in enumerate(chunk_list):
+            chunk_to_process = chunk_original_slice.copy()
             if anomaly_settings:
-                chunk = chunk.copy()
-
                 # Inject anomalies across chunk boundaries
-                chunk = self.inject_anomalies_into_chunk(chunk, anomaly_settings)
-
+                chunk_to_process = self.inject_anomalies_into_chunk(chunk_to_process, anomaly_settings,chunk_index_for_logging=str(idx+1))
+                if 'injected_anomaly' in chunk_to_process.columns:
+                    if 'is_anomaly' not in chunk_to_process.columns: 
+                        chunk_to_process.loc[:, 'is_anomaly'] = False
+                    is_anomaly_bool = chunk_to_process['is_anomaly'].astype(bool)
+                    injected_anomaly_bool = chunk_to_process['injected_anomaly'].astype(bool)
+                    chunk_to_process.loc[:, 'is_anomaly'] = (is_anomaly_bool | injected_anomaly_bool) # Result of OR is boolean
+                
+                dl.debug_print(f"  Chunk {idx+1} PREPARED for worker. injected_anomaly sum: {chunk_to_process['injected_anomaly'].sum()}, is_anomaly sum: {chunk_to_process['is_anomaly'].sum()}")
+                if chunk_to_process['injected_anomaly'].sum() > 0:
+                    dl.debug_print(f"    Sample of injected flags/data in chunk {idx+1} before sending to worker:\n{chunk_to_process[chunk_to_process['injected_anomaly']==1][['timestamp', 'V1', 'injected_anomaly', 'is_anomaly']].head()}") # Assuming V1 is a relevant column
+                sys.stdout.flush()
+                
             # Use apply_async and collect results
             result = pool.apply_async(
                 self.process_chunk,
-                args=(conn_params, table_name, chunk),
+                args=(conn_params, table_name, chunk_to_process),
             )
             results.append(result)
 
@@ -285,7 +403,7 @@ class BatchImporter:
         pool.close()
         pool.join()
 
-        # Optionally, check for any exceptions in the results
+        # Check for any exceptions in the results
         for result in results:
             result.get()  # This will raise any exceptions that occurred in the process
 
