@@ -370,7 +370,7 @@ def layout(handler):
                                 id="mode-selection",
                                 options=[
                                     {"label": "Batch", "value": "batch"},
-                                    {"label": "Stream", "value": "stream"}
+                                    #{"label": "Stream", "value": "stream"} # Streaming not supported by AnomDetX
                                 ],
                                 value="batch",  # Default selection
                                 labelStyle={"display": "inline-block", "marginRight": "20px"},
@@ -380,23 +380,23 @@ def layout(handler):
                         ], style={"textAlign": "center", "marginTop": "20px"}),
 
                         # --- Speedup Input ---
-                        html.Div([
-                            html.Label("Select Speedup for Stream (Default: 1):", style={"fontSize": "22px", "color": "#ffffff"}),
-                            dcc.Input(
-                                id="speedup-input",
-                                type="number",
-                                value=1,
-                                step=0.1,
-                                style={"width": "200px", "marginTop": "10px"}
-                            )
-                        ], style={"marginTop": "20px", "textAlign": "center"}),
+                        # html.Div([
+                        #     html.Label("Select Speedup for Stream (Default: 1):", style={"fontSize": "22px", "color": "#ffffff"}),
+                        #     dcc.Input(
+                        #         id="speedup-input",
+                        #         type="number",
+                        #         value=1,
+                        #         step=0.1,
+                        #         style={"width": "200px", "marginTop": "10px"}
+                        #     )
+                        # ], style={"marginTop": "20px", "textAlign": "center"}), # Streaming not supported by AnomDetX
                         
                         # --- SEPARATOR ---
                         html.Hr(style={'borderColor': '#446e92', }),
                         
                         html.Div( # Wrap label in a Div for better spacing control & consistent centering
                             html.Label(
-                                "Note: Job processing time may vary depending on the model and XAI methods selected.", 
+                                "Note: Job processing time may vary depending on the model and XAI methods selected. Dont press the button twice!", 
                                 style={
                                     "fontSize": "14px",         # Reduced font size for a note
                                     "color": "#cccccc",         # Softer than pure white, good on dark backgrounds
@@ -522,6 +522,6 @@ def layout(handler):
         ),
         # --- Explanation Box ---
 
-    ], id="main-settings-container", style={ "backgroundColor": "#105E90", "padding": "40px", "minHeight": "100vh", "display": "flex", "flexWrap": "nowrap", "alignItems": "flex-start"})
+    ], id="main-settings-container", style={ "backgroundColor": "#105E90", "padding": "40px", "minHeight": "100vh", "display": "flex", "flexWrap": "nowrap", "alignItems": "flex-start", "justifyContent": "center"})
 
     return layout

@@ -4,11 +4,13 @@ import sys
 import threading
 from time import sleep
 import os
+import traceback
 import execute_calls
 from timescaledb_api import TimescaleDBAPI
 from datetime import datetime, timezone
 from dotenv import load_dotenv
-import requests
+from pathlib import Path
+import shutil
 from Simulator.FileFormats.read_csv import read_csv
 
 load_dotenv()
@@ -23,6 +25,7 @@ DATABASE = {
 }
 
 DATASET_DIRECTORY = "./Datasets/"
+OUTPUT_DIR = "/data"
 
 backend_data = {
     "started-jobs": [],
@@ -419,13 +422,47 @@ def __handle_api_call(conn, data: dict) -> None:
             
 def __cancel_job(job_name: str) -> None:
     print("Cancelling job...")
+    job_found = False
     for job in backend_data["running-jobs"]:
         if job["name"] == job_name:
-            #if job["type"] == "stream" and job["thread"].is_alive():
-                # Stop the streaming thread if it's a running stream job
-            backend_data["db_api"].drop_table(job_name)
+            job_found = True
+            print(f"Found job '{job_name}'. Proceeding with cancellation.")
+            # Remove job-related data from the database
+            try:
+                backend_data["db_api"].drop_table(job_name)
+                print(f"Successfully dropped database table for job '{job_name}'.")
+            except Exception as e:
+                print(f"Error dropping database table for job '{job_name}': {e}")
+                traceback.print_exc()
+
+            # Remove the job from the list of running jobs
             backend_data["running-jobs"].remove(job)
-            break
+            print(f"Removed job '{job_name}' from the list of running jobs.")
+            # --- End Job Cancellation Logic ---
+            
+            # --- Directory Deletion Logic ---
+            # Construct the full path to the job's output directory
+            job_output_directory = os.path.join(OUTPUT_DIR, job_name)
+            print(f"Attempting to delete directory: {job_output_directory}")
+
+            try:
+                # Check if the directory exists
+                if os.path.exists(job_output_directory) and os.path.isdir(job_output_directory):
+                    # Recursively delete the directory and all its contents
+                    shutil.rmtree(job_output_directory)
+                    print(f"Successfully deleted directory: {job_output_directory}")
+                elif not os.path.exists(job_output_directory):
+                    print(f"Directory not found (already deleted or never existed): {job_output_directory}")
+                else:
+                    # This case handles if the path exists but is not a directory
+                    print(f"Path exists but is not a directory: {job_output_directory}. Manual check required.")
+            except Exception as e:
+                print(f"Error deleting directory {job_output_directory}: {e}")
+                traceback.print_exc()
+            # --- End Directory Deletion Logic ---
+            break # Exit loop once the job is found and processed
+    if not job_found:
+        print(f"Job '{job_name}' not found in running jobs.")
 
 if __name__ == "__main__": 
     main()
