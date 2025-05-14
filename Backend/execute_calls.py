@@ -391,7 +391,7 @@ def run_batch(
     label_column: Optional[str] = None, 
     xai_settings: Optional[Dict[str, Any]] = None,
     model_params: Optional[Dict[str, Any]] = None,
-) -> int: # Return 1 for success, 0 for failure as per original logic
+) -> int: # Return 1 for success, 0 for failure
     """
     Runs a batch job including data simulation/import, model training, detection,
     evaluation, optional XAI, and logs summary statistics and metadata.
