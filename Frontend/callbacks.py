@@ -415,6 +415,15 @@ def get_index_callbacks(app):
         if selected_model == "XGBoost":
                 # Based on XGBoostModel in XGBoost.py which uses xgb.XGBClassifier
             settings_children.extend([
+                html.Div([
+                    html.Label("Auto Tune:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight": "10px", "display": "inline-block", "width": "180px"}),
+                    dcc.Checklist(
+                        id={**setting_id_base, 'param': 'auto_tune'},
+                        options=[{'label': '', 'value': 'auto'}],
+                        value=[],
+                        style={'display': 'inline-block', 'verticalAlign': 'middle'}
+                    ),
+                ], style={'marginBottom': '8px', 'textAlign': 'left'}),
                 # --- Core Booster Params ---
                 html.Div([
                     html.Label("Num Estimators (n_estimators):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "210px"}),
@@ -517,8 +526,67 @@ def get_index_callbacks(app):
                                 type="number", value=-1, min=-1, step=1, # Default -1 (all threads)
                                 )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
-                # Note: scale_pos_weight is handled automatically in the backend XGBoostModel run method based on labels
-                # Note: objective and eval_metric are fixed in the backend XGBoostModel __init__ for now ('binary:logistic', 'logloss')
+                # --- Common wrapper parameters ---
+                html.Hr(style={'borderColor': '#555', 'margin': '15px 0'}),
+                html.P("Preprocessing & Cross-Validation (Wrapper):", style={"fontSize": "16px", "color": "#e0e0e0", "fontWeight": "bold"}),
+
+                html.Div([
+                    html.Label("Imputer Strategy:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Dropdown(id={**setting_id_base, 'param': 'imputer_strategy'},
+                                    options=[{'label': s, 'value': s} for s in ['mean', 'median', 'most_frequent', 'constant']],
+                                    value='mean', clearable=False,
+                                    style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                html.Div([
+                    html.Label("CV n_splits (>=2):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'n_splits'}, type="number", value=5, min=2, step=1,
+                                style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                html.Div([
+                    html.Label("CV Shuffle KFold:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight": "10px", "display": "inline-block", "width": "180px"}),
+                    dcc.Checklist(id={**setting_id_base, 'param': 'shuffle_kfold'}, options=[{'label': '', 'value': 'true'}], value=['true'],
+                                    style={'display': 'inline-block', 'verticalAlign': 'middle'}),
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                html.Div([
+                    html.Label("CV Validation Metrics:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px", 'verticalAlign':'top'}),
+                    dcc.Checklist(
+                        id={**setting_id_base, 'param': 'validation_metrics'},
+                        options=[
+                            {'label': 'Accuracy', 'value': 'accuracy'},
+                            {'label': 'F1-score (macro)', 'value': 'f1'},
+                            {'label': 'ROC AUC', 'value': 'roc_auc'}
+                        ],
+                        value=['accuracy', 'f1', 'roc_auc'],
+                        style={'display': 'inline-block', 'color': '#e0e0e0'},
+                        labelStyle={'display': 'block', 'marginBottom': '5px'}
+                    )
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                # Parameters for RandomizedSearchCV (conditional display can be handled in callback based on auto_tune)
+                html.Div([
+                    html.Label("Search n_iter (AutoTune):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'search_n_iter'}, type="number", value=10, min=1, step=1,
+                                style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'},
+                id={**setting_id_base,}
+                ),
+
+                html.Div([
+                    html.Label("Search Scoring (AutoTune):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Dropdown(id={**setting_id_base, 'param': 'search_scoring'},
+                                    options=[
+                                        {'label': 'F1 (macro)', 'value': 'f1'},
+                                        {'label': 'ROC AUC', 'value': 'roc_auc'},
+                                        {'label': 'Accuracy', 'value': 'accuracy'}
+                                    ],
+                                    value='f1', clearable=False,
+                                    style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'},
+                id={**setting_id_base,}
+                ),
             ])
         elif selected_model == "lstm":
             # Based on LSTMModel in lstm.py
@@ -555,7 +623,7 @@ def get_index_callbacks(app):
                     html.Div([
                     html.Label("Time Steps (Sequence Len):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "190px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'time_steps'},
-                                type="number", value=10, min=2, step=1, # Default from backend
+                                type="number", value=10, min=1, step=1, # Default from backend
                                 )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
                     html.Div([
@@ -767,6 +835,16 @@ def get_index_callbacks(app):
             ])
         elif selected_model == "decision_tree":
             settings_children.extend([
+                html.Div([
+                    html.Label("Auto Tune:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight": "10px", "display": "inline-block", "width": "180px"}),
+                    dcc.Checklist(
+                        id={**setting_id_base, 'param': 'auto_tune'},
+                        options=[{'label': '', 'value': 'auto'}],
+                        value=[],
+                        style={'display': 'inline-block', 'verticalAlign': 'middle'}
+                    ),
+                ], style={'marginBottom': '8px', 'textAlign': 'left'}),
+                
                 # --- Criterion ---
                 html.Div([
                     html.Label("Criterion:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
@@ -862,8 +940,295 @@ def get_index_callbacks(app):
                                 )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
-                # Add more settings if needed...
-                # Note: class_weight is handled in the backend DecisionTreeModel __init__ based on labels
+                # --- Common wrapper parameters ---
+                html.Hr(style={'borderColor': '#555', 'margin': '15px 0'}),
+                html.P("Preprocessing & Cross-Validation (Wrapper):", style={"fontSize": "16px", "color": "#e0e0e0", "fontWeight": "bold"}),
+
+                html.Div([
+                    html.Label("Imputer Strategy:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Dropdown(id={**setting_id_base, 'param': 'imputer_strategy'},
+                                    options=[{'label': s, 'value': s} for s in ['mean', 'median', 'most_frequent', 'constant']],
+                                    value='mean', clearable=False,
+                                    style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                html.Div([
+                    html.Label("CV n_splits (>=2):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'n_splits'}, type="number", value=5, min=2, step=1,
+                                style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                html.Div([
+                    html.Label("CV Shuffle KFold:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight": "10px", "display": "inline-block", "width": "180px"}),
+                    dcc.Checklist(id={**setting_id_base, 'param': 'shuffle_kfold'}, options=[{'label': '', 'value': 'true'}], value=['true'],
+                                    style={'display': 'inline-block', 'verticalAlign': 'middle'}),
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                html.Div([
+                    html.Label("CV Validation Metrics:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px", 'verticalAlign':'top'}),
+                    dcc.Checklist(
+                        id={**setting_id_base, 'param': 'validation_metrics'},
+                        options=[
+                            {'label': 'Accuracy', 'value': 'accuracy'},
+                            {'label': 'F1-score (macro)', 'value': 'f1'},
+                            {'label': 'ROC AUC', 'value': 'roc_auc'}
+                        ],
+                        value=['accuracy', 'f1', 'roc_auc'],
+                        style={'display': 'inline-block', 'color': '#e0e0e0'},
+                        labelStyle={'display': 'block', 'marginBottom': '5px'}
+                    )
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                # Parameters for RandomizedSearchCV (conditional display can be handled in callback based on auto_tune)
+                html.Div([
+                    html.Label("Search n_iter (AutoTune):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'search_n_iter'}, type="number", value=10, min=1, step=1,
+                                style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'},
+                id={**setting_id_base,}
+                ),
+
+                html.Div([
+                    html.Label("Search Scoring (AutoTune):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Dropdown(id={**setting_id_base, 'param': 'search_scoring'},
+                                    options=[
+                                        {'label': 'F1 (macro)', 'value': 'f1'},
+                                        {'label': 'ROC AUC', 'value': 'roc_auc'},
+                                        {'label': 'Accuracy', 'value': 'accuracy'}
+                                    ],
+                                    value='f1', clearable=False,
+                                    style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'},
+                id={**setting_id_base,}
+                ),
+            ])
+        elif selected_model == "SGDClassifier":
+            settings_children.extend([
+                html.Div([
+                    html.Label("Auto Tune:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight": "10px", "display": "inline-block", "width": "180px"}),
+                    dcc.Checklist(
+                        id={**setting_id_base, 'param': 'auto_tune'},
+                        options=[{'label': '', 'value': 'auto'}],
+                        value=[],
+                        style={'display': 'inline-block', 'verticalAlign': 'middle'}
+                    ),
+                ], style={'marginBottom': '8px', 'textAlign': 'left'}),
+
+                # --- Loss Function ---
+                html.Div([
+                    html.Label("Loss Function:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Dropdown(id={**setting_id_base, 'param': 'loss'},
+                                    options=[
+                                        {'label': 'Hinge (Linear SVM)', 'value': 'hinge'},
+                                        {'label': 'Log Loss (Logistic Regression)', 'value': 'log_loss'},
+                                        {'label': 'Modified Huber', 'value': 'modified_huber'},
+                                        {'label': 'Squared Hinge', 'value': 'squared_hinge'},
+                                        {'label': 'Perceptron', 'value': 'perceptron'}
+                                    ],
+                                    value='hinge', clearable=False,
+                                    style={'width': '250px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                # --- Penalty (Regularization) ---
+                html.Div([
+                    html.Label("Penalty:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Dropdown(id={**setting_id_base, 'param': 'penalty'},
+                                    options=[
+                                        {'label': 'L2', 'value': 'l2'},
+                                        {'label': 'L1', 'value': 'l1'},
+                                        {'label': 'ElasticNet', 'value': 'elasticnet'}
+                                    ],
+                                    value='l2', clearable=False,
+                                    style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                # --- Alpha (Regularization Strength) ---
+                html.Div([
+                    html.Label("Alpha (Reg. Strength):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'alpha'},
+                                type="number", value=0.0001, min=0.0, step='any', # Positive float
+                                style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                # --- Max Iterations ---
+                html.Div([
+                    html.Label("Max Iterations (Epochs):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'max_iter'},
+                                type="number", value=1000, min=1, step=1, # Positive integer
+                                style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                # --- Tolerance (tol) ---
+                html.Div([
+                    html.Label("Tolerance (tol):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'tol'},
+                                type="number", value=0.001, min=0.0, step='any', # Positive float
+                                style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                # --- Learning Rate Schedule ---
+                html.Div([
+                    html.Label("Learning Rate Schedule:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Dropdown(id={**setting_id_base, 'param': 'learning_rate'},
+                                    options=[
+                                        {'label': 'Optimal', 'value': 'optimal'},
+                                        {'label': 'Constant', 'value': 'constant'},
+                                        {'label': 'Inverse Scaling', 'value': 'invscaling'},
+                                        {'label': 'Adaptive', 'value': 'adaptive'}
+                                    ],
+                                    value='optimal', clearable=False,
+                                    style={'width': '180px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                # --- Eta0 (Initial Learning Rate) ---
+                html.Div([ # This could be conditionally displayed based on learning_rate selection
+                    html.Label("Eta0 (Initial LR):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'eta0'},
+                                type="number", value=0.0, min=0.0, step='any',
+                                placeholder="For const, invscaling, adaptive",
+                                style={'width': '180px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                # --- Early Stopping ---
+                html.Div([
+                    html.Label("Early Stopping:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight": "10px", "display": "inline-block", "width": "180px"}),
+                    dcc.Checklist(
+                        id={**setting_id_base, 'param': 'early_stopping'},
+                        options=[{'label': '', 'value': 'true'}],
+                        value=[], # Default is False
+                        style={'display': 'inline-block', 'verticalAlign': 'middle'}
+                    ),
+                ], style={'marginBottom': '8px', 'textAlign': 'left'}),
+
+                # --- Validation Fraction (for early stopping) ---
+                html.Div([ # This could be conditionally displayed based on early_stopping
+                    html.Label("Validation Fraction:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'validation_fraction'},
+                                type="number", value=0.1, min=0.01, max=0.99, step=0.01,
+                                style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                # --- N Iter No Change (for early stopping) ---
+                html.Div([ # This could be conditionally displayed based on early_stopping
+                    html.Label("N Iter No Change:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'n_iter_no_change'},
+                                type="number", value=5, min=1, step=1,
+                                style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+
+                # --- Class Weight ---
+                html.Div([
+                    html.Label("Class Weight:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Dropdown(id={**setting_id_base, 'param': 'class_weight'},
+                                    options=[
+                                        {'label': 'balanced', 'value': 'balanced'},
+                                        {'label': 'None', 'value': 'None'}
+                                    ],
+                                    value='balanced', clearable=False,
+                                    style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                # --- Calibrate Probabilities ---
+                html.Div([
+                    html.Label("Calibrate Probabilities:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight": "10px", "display": "inline-block", "width": "180px"}),
+                    dcc.Checklist(
+                        id={**setting_id_base, 'param': 'calibrate_probabilities'},
+                        options=[{'label': '(for hinge/sq_hinge loss)', 'value': 'true'}],
+                        value=['true'], # Default is True in the model
+                        style={'display': 'inline-block', 'verticalAlign': 'middle'}
+                    ),
+                ], style={'marginBottom': '8px', 'textAlign': 'left'}),
+
+                # --- Random State ---
+                html.Div([
+                    html.Label("Random State (int):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'random_state'},
+                                type="number", placeholder="e.g., 42", step=1,
+                                style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                # --- n_jobs (for OvA in multiclass) ---
+                html.Div([
+                    html.Label("N Jobs (OvA multiclass):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'n_jobs'},
+                                type="number", value=-1, step=1,
+                                style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+
+                # --- Common wrapper parameters (shared across models) ---
+                html.Hr(style={'borderColor': '#555', 'margin': '15px 0'}),
+                html.P("Preprocessing & Cross-Validation (Wrapper):", style={"fontSize": "16px", "color": "#e0e0e0", "fontWeight": "bold"}),
+
+                html.Div([
+                    html.Label("Scaler Type:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Dropdown(id={**setting_id_base, 'param': 'scaler_type'},
+                                    options=[
+                                        {'label': 'StandardScaler', 'value': 'standard'},
+                                        {'label': 'MinMaxScaler', 'value': 'minmax'}
+                                    ],
+                                    value='standard', clearable=False,
+                                    style={'width': '180px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                html.Div([
+                    html.Label("Imputer Strategy:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Dropdown(id={**setting_id_base, 'param': 'imputer_strategy'},
+                                    options=[{'label': s, 'value': s} for s in ['mean', 'median', 'most_frequent', 'constant']],
+                                    value='mean', clearable=False,
+                                    style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                html.Div([
+                    html.Label("CV n_splits (>=2):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'n_splits'}, type="number", value=5, min=2, step=1,
+                                style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                html.Div([
+                    html.Label("CV Shuffle KFold:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight": "10px", "display": "inline-block", "width": "180px"}),
+                    dcc.Checklist(id={**setting_id_base, 'param': 'shuffle_kfold'}, options=[{'label': '', 'value': 'true'}], value=['true'],
+                                    style={'display': 'inline-block', 'verticalAlign': 'middle'}),
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                html.Div([
+                    html.Label("CV Validation Metrics:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px", 'verticalAlign':'top'}),
+                    dcc.Checklist(
+                        id={**setting_id_base, 'param': 'validation_metrics'},
+                        options=[
+                            {'label': 'Accuracy', 'value': 'accuracy'},
+                            {'label': 'F1-score (macro)', 'value': 'f1'},
+                            {'label': 'ROC AUC', 'value': 'roc_auc'}
+                        ],
+                        value=['accuracy', 'f1', 'roc_auc'],
+                        style={'display': 'inline-block', 'color': '#e0e0e0'},
+                        labelStyle={'display': 'block', 'marginBottom': '5px'}
+                    )
+                ], style={'marginBottom':'8px', 'textAlign':'left'}),
+
+                # Parameters for RandomizedSearchCV (conditional display can be handled in callback based on auto_tune)
+                html.Div([
+                    html.Label("Search n_iter (AutoTune):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Input(id={**setting_id_base, 'param': 'search_n_iter'}, type="number", value=10, min=1, step=1,
+                                style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'},
+                id={**setting_id_base,}
+                ),
+
+                html.Div([
+                    html.Label("Search Scoring (AutoTune):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
+                    dcc.Dropdown(id={**setting_id_base, 'param': 'search_scoring'},
+                                    options=[
+                                        {'label': 'F1 (macro)', 'value': 'f1'},
+                                        {'label': 'ROC AUC', 'value': 'roc_auc'},
+                                        {'label': 'Accuracy', 'value': 'accuracy'}
+                                    ],
+                                    value='f1', clearable=False,
+                                    style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
+                ], style={'marginBottom':'8px', 'textAlign':'left'},
+                id={**setting_id_base,}
+                ),
             ])
         # Add elif blocks for other models (LSTM, SVM, Isolation Forest, Decision Tree)
 
@@ -1368,18 +1733,37 @@ def get_index_callbacks(app):
             for id_dict, value in zip(ml_settings_ids, ml_settings_values):
                 # Ensure we only parse settings for the *currently selected* model
                 if id_dict['model'] == selected_detection_model:
+                    actual_value = value
                     param_name = id_dict['param']
+                    
                     # Basic type conversion or validation could happen here if needed
                     # e.g., convert 'None' string placeholder for max_depth to None
-                    if selected_detection_model == 'Decision Tree' and param_name == 'max_depth' and value is None:
-                        actual_value = None
+                    if selected_detection_model == 'decision_tree':
+                        if param_name == 'max_depth' and value is None:
+                            actual_value = None
+                        elif param_name == 'shuffle_kfold' and isinstance(value, list): # For the wrapper
+                            actual_value = 'true' in value
                     # e.g., handle 'auto' or float for contamination/max_samples
-                    elif selected_detection_model == 'Isolation Forest' and param_name in ['contamination', 'max_samples'] and isinstance(value, str) and value.lower() != 'auto':
+                    elif selected_detection_model == 'isolation_forest' and param_name in ['contamination', 'max_samples'] and isinstance(value, str) and value.lower() != 'auto':
                         try:
                             actual_value = float(value)
                         except ValueError:
                             print(f"Warning: Invalid float value '{value}' for {param_name}. Using default.")
                             actual_value = 'auto' # Or keep the string, depending on backend expectation
+                    elif selected_detection_model == 'SGDClassifier':
+                        if param_name == 'shuffle_kfold' and isinstance(value, list): # For the wrapper
+                            actual_value = 'true' in value
+                        elif param_name == 'early_stopping' and isinstance(value, list):
+                            actual_value = 'true' in value
+                        elif param_name == 'calibrate_probabilities' and isinstance(value, list):
+                            actual_value = 'true' in value
+                        elif param_name == 'random_state' and value == '': # For the model itself
+                            actual_value = None
+                        elif param_name == 'class_weight' and value == 'None': # For the model itself
+                             actual_value = None
+                    elif selected_detection_model == 'XGBoost':
+                        if param_name == 'shuffle_kfold' and isinstance(value, list): # For the wrapper
+                            actual_value = 'true' in value
                     else:
                         actual_value = value
 

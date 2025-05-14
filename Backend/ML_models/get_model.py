@@ -3,6 +3,7 @@ from ML_models import lstm
 from ML_models import svm
 from ML_models import XGBoost
 from ML_models import decision_tree
+from ML_models import SGDClassifier
 def get_model(model, **model_params):
     match model:
         case "lstm":
@@ -26,9 +27,14 @@ def get_model(model, **model_params):
             return XGBoost_instance
 
         case "decision_tree":
-             # Pass unpacked model_params to the constructor
-             DT_instance = decision_tree.DecisionTreeModel(**model_params)
-             return DT_instance
+            # Pass unpacked model_params to the constructor
+            DT_instance = decision_tree.DecisionTreeModel(**model_params)
+            return DT_instance
+         
+        case "SGDClassifier":
+            # Pass unpacked model_params to the constructor
+            svc_instance = SGDClassifier.SGDLinearModel(**model_params)
+            return svc_instance
 
         # Add a default case to handle unknown model types gracefully
         case _:
