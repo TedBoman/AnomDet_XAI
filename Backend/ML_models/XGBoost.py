@@ -81,13 +81,14 @@ class XGBoostModel(model_interface.ModelInterface):
         if self.auto_tune:
             if self.hyperparam_grid is None:
                 self.hyperparam_grid = {
-                    'n_estimators': [50, 100, 150, 200, 250],
-                    'learning_rate': [0.01, 0.05, 0.1, 0.15, 0.2],
-                    'max_depth': [3, 4, 5, 6, 7, 8],
+                    'n_estimators': [50, 100, 150, 200, 250, 500, 1000],
+                    'learning_rate': [0.01, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5],
+                    'max_depth': [3, 4, 5, 6, 7, 8, 10, 12],
                     'subsample': [0.7, 0.8, 0.9, 1.0],
                     'colsample_bytree': [0.7, 0.8, 0.9, 1.0],
                     'gamma': [0, 0.1, 0.2, 0.3],
-                    'min_child_weight': [1, 3, 5, 7]
+                    'min_child_weight': [1, 3, 5, 7],
+                    'reg_alpha':[0.001, 0.01, 0.1, 1],
                 }
                 print("XGBoostModel auto_tune=True: Using default hyperparameter grid.")
             else:
@@ -556,10 +557,6 @@ class XGBoostModel(model_interface.ModelInterface):
         if self.early_stopping_rounds and self.avg_best_iteration_cv_ is not None and self.avg_best_iteration_cv_ > 0:
             candidate_n_estimators = max(1, int(np.ceil(self.avg_best_iteration_cv_)))
             
-            # If n_estimators was part of tuning, be cautious about overriding it too much.
-            # The tuned n_estimators already represents a "max" value for early stopping.
-            # avg_best_iteration_cv_ is an average from folds; on full data, it might be different.
-            # We could use the minimum of tuned n_estimators and avg_best_iteration_cv_ + a small margin.
             if self.auto_tune and 'n_estimators' in self.hyperparam_grid:
                  # If n_estimators was tuned, use the tuned value as the upper bound
                  # and avg_best_iteration_cv_ as a potentially lower value found by early stopping.
