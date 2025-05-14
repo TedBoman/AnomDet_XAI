@@ -405,6 +405,7 @@ def get_index_callbacks(app):
         if not selected_model:
             return [], {"display": "none"} # Hide if no model selected
 
+        settings_children = []
         settings_children = [html.H5(f"Settings for {selected_model}:", style={'color':'#ffffff', 'marginBottom': '15px'})]
         panel_style = {"marginTop": "15px", "padding": "15px", "border": "1px solid #444", "borderRadius": "5px", "backgroundColor": "#145E88", "display": "block"} # Style to show panel
 
@@ -571,7 +572,7 @@ def get_index_callbacks(app):
                     dcc.Input(id={**setting_id_base, 'param': 'search_n_iter'}, type="number", value=10, min=1, step=1,
                                 style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
                 ], style={'marginBottom':'8px', 'textAlign':'left'},
-                id={**setting_id_base,}
+                id={**setting_id_base, 'element': 'search_n_iterxgboost'}
                 ),
 
                 html.Div([
@@ -979,13 +980,13 @@ def get_index_callbacks(app):
                     )
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
-                # Parameters for RandomizedSearchCV (conditional display can be handled in callback based on auto_tune)
+                # Parameters for RandomizedSearchCV
                 html.Div([
                     html.Label("Search n_iter (AutoTune):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'search_n_iter'}, type="number", value=10, min=1, step=1,
                                 style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
                 ], style={'marginBottom':'8px', 'textAlign':'left'},
-                id={**setting_id_base,}
+                id={**setting_id_base, 'element': 'search_n_iter_decitree'}
                 ),
 
                 html.Div([
@@ -1081,7 +1082,7 @@ def get_index_callbacks(app):
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- Eta0 (Initial Learning Rate) ---
-                html.Div([ # This could be conditionally displayed based on learning_rate selection
+                html.Div([
                     html.Label("Eta0 (Initial LR):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'eta0'},
                                 type="number", value=0.0, min=0.0, step='any',
@@ -1101,7 +1102,7 @@ def get_index_callbacks(app):
                 ], style={'marginBottom': '8px', 'textAlign': 'left'}),
 
                 # --- Validation Fraction (for early stopping) ---
-                html.Div([ # This could be conditionally displayed based on early_stopping
+                html.Div([
                     html.Label("Validation Fraction:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'validation_fraction'},
                                 type="number", value=0.1, min=0.01, max=0.99, step=0.01,
@@ -1109,7 +1110,7 @@ def get_index_callbacks(app):
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
                 # --- N Iter No Change (for early stopping) ---
-                html.Div([ # This could be conditionally displayed based on early_stopping
+                html.Div([
                     html.Label("N Iter No Change:", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px", "display": "inline-block", "width": "180px"}),
                     dcc.Input(id={**setting_id_base, 'param': 'n_iter_no_change'},
                                 type="number", value=5, min=1, step=1,
@@ -1157,7 +1158,7 @@ def get_index_callbacks(app):
                 ], style={'marginBottom':'8px', 'textAlign':'left'}),
 
 
-                # --- Common wrapper parameters (shared across models) ---
+                # --- Common wrapper parameters ---
                 html.Hr(style={'borderColor': '#555', 'margin': '15px 0'}),
                 html.P("Preprocessing & Cross-Validation (Wrapper):", style={"fontSize": "16px", "color": "#e0e0e0", "fontWeight": "bold"}),
 
@@ -1213,7 +1214,7 @@ def get_index_callbacks(app):
                     dcc.Input(id={**setting_id_base, 'param': 'search_n_iter'}, type="number", value=10, min=1, step=1,
                                 style={'width': '150px', 'display': 'inline-block', 'color': '#333', 'verticalAlign':'middle'})
                 ], style={'marginBottom':'8px', 'textAlign':'left'},
-                id={**setting_id_base,}
+                id={**setting_id_base, 'element': 'search_n_iter_sgdclassifier'}
                 ),
 
                 html.Div([
@@ -1330,7 +1331,7 @@ def get_index_callbacks(app):
                 method_settings.extend([
                     html.Div([
                         html.Label("Indices to explain (n_explain_max):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),
-                        dcc.Input(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'n_explain_max'}, type="number", value=1000, min=100, step=100, style={'width':'80px'})
+                        dcc.Input(id={'type': 'xai-setting', 'method': 'ShapExplainer', 'param': 'n_explain_max'}, type="number", value=1000, min=1, step=100, style={'width':'80px'})
                     ], style={'marginBottom':'8px'}),
                     html.Div([
                         html.Label("Num Samples (nsamples):", style={"fontSize": "16px", "color": "#e0e0e0", "marginRight":"5px"}),

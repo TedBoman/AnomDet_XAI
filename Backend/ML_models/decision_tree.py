@@ -9,7 +9,6 @@ from ML_models import model_interface
 from typing import Dict, List, Optional, Tuple, Union
 import warnings
 import traceback # Added for better error printing
-from scipy.stats import uniform, randint, loguniform
 
 class DecisionTreeModel(model_interface.ModelInterface): 
     """
@@ -93,15 +92,12 @@ class DecisionTreeModel(model_interface.ModelInterface):
             default_param_dist_dt = {
                 'criterion': ['gini', 'entropy'],
                 'splitter': ['best', 'random'],
-                'max_depth': [None] + list(range(2, 61, 5)),  # Explore depths from 2 to 60
-                'min_samples_split': randint(2, 41),  # Explore integer splits from 2 to 40
-                'min_samples_leaf': randint(1, 21),   # Explore integer leaves from 1 to 20
-                'min_weight_fraction_leaf': uniform(0, 0.5), # Explore float fractions from 0 to 0.5
-                'max_features': [None, 'sqrt', 'log2'] + list(uniform(0.1, 1.0).rvs(5)), # Include fractions of features
-                'random_state': [None],  # Typically set outside the search for reproducibility
-                'max_leaf_nodes': [None] + list(range(10, 201, 20)), # Explore different numbers of leaf nodes
-                'min_impurity_decrease': uniform(0, 0.05), # Explore small impurity decrease values
-                'ccp_alpha': loguniform(1e-5, 0.1) # Explore a logarithmic range for pruning
+                'max_depth': [None, 5, 10, 15, 20, 30, 50],
+                'min_weight_fraction_leaf': [0.0001, 0.001, 0.01, 0.1, 1],
+                'min_samples_split': [2, 5, 10, 20, 30],
+                'min_samples_leaf': [1, 2, 5, 10, 15],
+                'max_features': [None, 'sqrt', 'log2'],
+                'ccp_alpha': [0.0, 0.001, 0.01, 0.1]
             }
             self.param_dist = kwargs.pop('param_dist', default_param_dist_dt)
             print(f"DecisionTreeModel: Auto-tuning ENABLED. Search iterations: {self.search_n_iter}, Main scoring: '{self.search_scoring}'")
