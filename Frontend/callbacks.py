@@ -1252,8 +1252,10 @@ def get_index_callbacks(app):
     # --- Callback to populate columns for Injection Dropdown AND Label Dropdown ---
     @app.callback(
         Output("injection-column-dropdown", "options"),
+        Output("time-column-dropdown", "options"),
         Output("label-column-dropdown", "options"),
         Output("label-column-dropdown", "value"), # Reset label value when dataset changes
+        Output("time-column-dropdown", "value"), # reset this aswell
         Input("dataset-dropdown", "value"),
         prevent_initial_call=True
     )
@@ -1276,14 +1278,14 @@ def get_index_callbacks(app):
 
             if not isinstance(columns, list):
                 print("Warning: Handler did not return a list for columns. Returning empty options.")
-                return [], [], None
+                return [], [], None, None
 
             options = [{"label": col, "value": col} for col in columns]
             print(f"Generated options for dropdowns: {options}")
 
             if not options: print("Warning: No column options remaining.")
 
-            return options, options, None # Return options for both, reset label value
+            return options, options, options, None, None # Return options for all three, reset label value
 
         except Exception as e:
             print(f"!!! ERROR inside update_column_dropdown try block: {e}")
@@ -1575,6 +1577,7 @@ def get_index_callbacks(app):
             State("xai-sampling-strategy-dropdown", "value"), State("xai-sample-seed", "value"),
             State("popup", "style"),
             State("labeled-check", "value"), State("label-column-dropdown", "value"),
+            State("time-column-dropdown", "value"),
             State("xai-check", "value"), State("xai-method-dropdown", "value"),
             State({'type': 'xai-setting', 'method': ALL, 'param': ALL}, 'value'),
             State({'type': 'xai-setting', 'method': ALL, 'param': ALL}, 'id'),
@@ -1590,6 +1593,7 @@ def get_index_callbacks(app):
             xai_sampling_strategy, xai_sample_seed,
             style,
             labeled_check_val, selected_label_col,
+            selected_time_col,
             # --- ARGS for pattern-matching states ---
             xai_check_val,
             selected_xai_methods,
@@ -1779,6 +1783,7 @@ def get_index_callbacks(app):
             print(f"Sending job '{job_name}' with mode '{selected_mode}'...")
             print(f"  Dataset: {selected_dataset}, Model: {selected_detection_model}")
             print(f"  Label Column: {label_col_to_pass}")
+            print(f"  Time Column: {selected_time_col if selected_time_col != None else 'None'}")
             print(f"  XAI Params: {xai_settings}")
             print(f"  Injection Params: {inj_params_list}")
             print(f"  ML Model Params: {ml_params_dict}") # Print new params
@@ -1790,7 +1795,7 @@ def get_index_callbacks(app):
             if selected_mode == "batch":
                 response = handler.handle_run_batch(
                     selected_dataset, selected_detection_model, job_name,
-                    label_column=label_col_to_pass, xai_params=xai_settings, inj_params=inj_params_list,
+                    label_column=label_col_to_pass, time_column=selected_time_col, xai_params=xai_settings, inj_params=inj_params_list,
                     model_params=model_params_to_pass
                 )
             # else: # stream

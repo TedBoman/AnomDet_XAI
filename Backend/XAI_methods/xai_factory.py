@@ -40,11 +40,11 @@ def xai_factory(
         RuntimeError: If instantiation fails.
     """
     method_key = method_name.lower()
-    print(f"get_explainer factory called for: '{method_key}'")
+    #print(f"get_explainer factory called for: '{method_key}'")
 
     match method_key:
         case "shapexplainer":
-            print(f"Attempting to instantiate ShapExplainer...")
+            # print(f"Attempting to instantiate ShapExplainer...")
             try:
                 # Pass the received arguments TO the ShapExplainer constructor
                 explainer_instance = ShapExplainer(
@@ -59,14 +59,14 @@ def xai_factory(
 
                 return explainer_instance
             except KeyError as e:
-                 print(f"Error instantiating ShapExplainer: Missing required parameter in kwargs: {e}")
+                #  print(f"Error instantiating ShapExplainer: Missing required parameter in kwargs: {e}")
                  raise ValueError(f"Missing required parameter for ShapExplainer: {e}") from e
             except Exception as e:
-                 print(f"Error instantiating ShapExplainer: {e}")
+                #  print(f"Error instantiating ShapExplainer: {e}")
                  raise RuntimeError(f"Failed to instantiate ShapExplainer for method '{method_key}'") from e
 
         case "limeexplainer":
-            print(f"Attempting to instantiate LimeExplainer...")
+            # print(f"Attempting to instantiate LimeExplainer...")
             try:
                 # Pass the received arguments TO the LimeExplainer constructor
                 explainer_instance = LimeExplainer(
@@ -81,11 +81,11 @@ def xai_factory(
                 return explainer_instance
             
             except Exception as e:
-                print(f"Error instantiating LimeExplainer: {e}")
+                # print(f"Error instantiating LimeExplainer: {e}")
                 raise RuntimeError(f"Failed to instantiate LimeExplainer for method '{method_key}'") from e
 
         case "diceexplainer":
-            print(f"Attempting to instantiate DiceExplainer...")
+            # print(f"Attempting to instantiate DiceExplainer...")
             try:
                 # Pass the received arguments TO the LimeExplainer constructor
                 explainer_instance = DiceExplainer(
@@ -100,7 +100,7 @@ def xai_factory(
                 return explainer_instance
             
             except Exception as e:
-                print(f"Error instantiating DiceExplainer: {e}")
+                # print(f"Error instantiating DiceExplainer: {e}")
                 raise RuntimeError(f"Failed to instantiate DiceExplainer for method '{method_key}'") from e
 
         case _:

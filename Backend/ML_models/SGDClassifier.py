@@ -125,8 +125,8 @@ class SGDLinearModel(model_interface.ModelInterface):
                 'class_weight': ['balanced', None],
             }
             self.param_dist = kwargs.pop('param_dist', default_param_dist_sgd)
-            print(f"SGDLinearModel: Auto-tuning ENABLED. Search iterations: {self.search_n_iter}, Main scoring: '{self.search_scoring}'")
-            print(f"Parameter distribution for tuning: {self.param_dist}")
+            # print(f"SGDLinearModel: Auto-tuning ENABLED. Search iterations: {self.search_n_iter}, Main scoring: '{self.search_scoring}'")
+            # print(f"Parameter distribution for tuning: {self.param_dist}")
             # (Validation metric mapping logic for search_scoring, similar to other models)
             if self.search_scoring not in self.validation_metrics:
                  original_search_scoring = self.search_scoring
@@ -146,11 +146,11 @@ class SGDLinearModel(model_interface.ModelInterface):
         }
         self.model_params.update(extra_sgd_params)
 
-        print(f"SGDLinearModel Initialized with base params: {self.model_params}")
-        print(f"Imputer Strategy: {self._imputer_strategy}, Scaler Type: {self._scaler_type}")
-        print(f"K-fold CV / Search CV: n_splits={self.n_splits}, shuffle={self.shuffle_kfold}")
-        print(f"Validation metrics to report: {self.validation_metrics}")
-        print(f"Calibrate probabilities for hinge/squared_hinge loss: {self.calibrate_probabilities}")
+        # print(f"SGDLinearModel Initialized with base params: {self.model_params}")
+        # print(f"Imputer Strategy: {self._imputer_strategy}, Scaler Type: {self._scaler_type}")
+        # print(f"K-fold CV / Search CV: n_splits={self.n_splits}, shuffle={self.shuffle_kfold}")
+        # print(f"Validation metrics to report: {self.validation_metrics}")
+        # print(f"Calibrate probabilities for hinge/squared_hinge loss: {self.calibrate_probabilities}")
 
 
     def _prepare_data_for_model(
@@ -279,9 +279,9 @@ class SGDLinearModel(model_interface.ModelInterface):
         Otherwise, performs k-fold CV for performance estimation.
         Then, trains a final SGDClassifier (possibly calibrated) on the entire dataset.
         """
-        print(f"Running training for SGDLinearModel (Input: {'DataFrame' if isinstance(X, pd.DataFrame) else 'NumPy'})...")
-        if self.auto_tune: print(f"Hyperparameter auto-tuning ENABLED.")
-        else: print(f"Hyperparameter auto-tuning DISABLED. Using fixed parameters: {self.model_params}")
+        # print(f"Running training for SGDLinearModel (Input: {'DataFrame' if isinstance(X, pd.DataFrame) else 'NumPy'})...")
+        # if self.auto_tune: print(f"Hyperparameter auto-tuning ENABLED.")
+        # else: print(f"Hyperparameter auto-tuning DISABLED. Using fixed parameters: {self.model_params}")
 
         if isinstance(X, np.ndarray):
             if original_feature_names is None: raise ValueError("`original_feature_names` required for NumPy `X`.")
@@ -303,7 +303,7 @@ class SGDLinearModel(model_interface.ModelInterface):
         self._is_calibrated = False # Reset calibration flag
 
         if self.auto_tune:
-            print(f"\nStarting RandomizedSearchCV for SGD hyperparameter tuning...")
+            # print(f"\nStarting RandomizedSearchCV for SGD hyperparameter tuning...")
             # (RandomizedSearchCV setup similar to other models, using SGDClassifier)
             base_estimator_params = {
                 'random_state': current_model_params.get('random_state'),
@@ -350,7 +350,7 @@ class SGDLinearModel(model_interface.ModelInterface):
             try:
                 random_search.fit(X_processed_full, y_aligned_full)
                 self.tuned_best_params_ = random_search.best_params_
-                print(f"  Best parameters from RandomizedSearchCV: {self.tuned_best_params_}")
+                # print(f"  Best parameters from RandomizedSearchCV: {self.tuned_best_params_}")
                 current_model_params.update(self.tuned_best_params_)
                 # (Populate validation_scores_ from random_search.cv_results_ - similar to other models)
                 self.validation_scores_ = {}
@@ -364,7 +364,7 @@ class SGDLinearModel(model_interface.ModelInterface):
                         avg_score = results_df.loc[best_idx, mean_score_col]
                         std_score = results_df.loc[best_idx, std_score_col] if std_score_col in results_df.columns else np.nan
                         self.validation_scores_[metric_key_user] = avg_score
-                        print(f"  Avg {metric_key_user} (as {scorer_name_sklearn}): {avg_score:.4f} (Std: {std_score:.4f})")
+                        # print(f"  Avg {metric_key_user} (as {scorer_name_sklearn}): {avg_score:.4f} (Std: {std_score:.4f})")
 
             except Exception as e:
                 warnings.warn(f"RandomizedSearchCV failed: {e}. Using base params.", RuntimeWarning)
@@ -375,7 +375,7 @@ class SGDLinearModel(model_interface.ModelInterface):
         else: # K-Fold CV without auto-tuning
             skf = StratifiedKFold(n_splits=self.n_splits, shuffle=self.shuffle_kfold, random_state=current_model_params.get('random_state'))
             fold_scores: Dict[str, List[float]] = {metric: [] for metric in self.validation_metrics}
-            print(f"\nStarting {self.n_splits}-fold CV with fixed SGD parameters: {current_model_params}")
+            # print(f"\nStarting {self.n_splits}-fold CV with fixed SGD parameters: {current_model_params}")
             for fold_idx, (train_index, val_index) in enumerate(skf.split(X_processed_full, y_aligned_full)):
                 X_train_fold, X_val_fold = X_processed_full[train_index], X_processed_full[val_index]
                 y_train_fold, y_val_fold = y_aligned_full[train_index], y_aligned_full[val_index]
@@ -415,12 +415,12 @@ class SGDLinearModel(model_interface.ModelInterface):
             for metric_name in self.validation_metrics:
                 valid_scores = [s for s in fold_scores[metric_name] if not np.isnan(s)]
                 self.validation_scores_[metric_name] = np.mean(valid_scores) if valid_scores else np.nan
-                print(f"  Avg {metric_name}: {self.validation_scores_[metric_name]:.4f}")
-        print("-" * 30)
+                # print(f"  Avg {metric_name}: {self.validation_scores_[metric_name]:.4f}")
+        # print("-" * 30)
 
         # --- Training the FINAL Model ---
-        print(f"Training final SGDLinearModel on {X_processed_full.shape[0]} samples...")
-        print(f"Using final parameters: {current_model_params}")
+        # print(f"Training final SGDLinearModel on {X_processed_full.shape[0]} samples...")
+        # print(f"Using final parameters: {current_model_params}")
         
         final_sgd_model = SGDClassifier(**current_model_params)
         try:
@@ -432,7 +432,7 @@ class SGDLinearModel(model_interface.ModelInterface):
         # Conditionally wrap with CalibratedClassifierCV for better probabilities if loss is hinge/squared_hinge
         loss_function = current_model_params.get('loss', 'hinge')
         if self.calibrate_probabilities and loss_function in ['hinge', 'squared_hinge']:
-            print(f"Calibrating probabilities for final model (loss: {loss_function})...")
+            # print(f"Calibrating probabilities for final model (loss: {loss_function})...")
             # Use a new StratifiedKFold for calibration's internal CV
             # Ensure n_splits for calibration is reasonable, e.g., min(5, self.n_splits, num_samples_per_class)
             # For simplicity, using fixed 3 or 5, or self.n_splits if large enough.
@@ -448,7 +448,7 @@ class SGDLinearModel(model_interface.ModelInterface):
                     self.model = CalibratedClassifierCV(final_sgd_model, method='isotonic', cv=calib_cv_splits, n_jobs=current_model_params.get('n_jobs'))
                     self.model.fit(X_processed_full, y_aligned_full)
                     self._is_calibrated = True
-                    print("Probability calibration complete.")
+                    # print("Probability calibration complete.")
                 except Exception as cal_e:
                     warnings.warn(f"Calibration failed: {cal_e}. Using uncalibrated SGD model.", RuntimeWarning)
                     self.model = final_sgd_model # Fallback to uncalibrated
@@ -465,8 +465,8 @@ class SGDLinearModel(model_interface.ModelInterface):
                 warnings.warn(f"Loss function is '{loss_function}'. Probabilities from predict_proba might not be well-calibrated unless 'calibrate_probabilities' was True (for hinge) or loss is log_loss/modified_huber.", UserWarning)
 
 
-        print("Final model training complete.")
-        if hasattr(self.model, 'classes_'): print(f"Final model classes: {self.model.classes_}")
+        # print("Final model training complete.")
+        # if hasattr(self.model, 'classes_'): print(f"Final model classes: {self.model.classes_}")
         self.model_params = current_model_params.copy() # Store effective params
 
     def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
@@ -625,5 +625,5 @@ class SGDLinearModel(model_interface.ModelInterface):
                 return {self.processed_feature_names_[i]: importances[i] for i in range(max_len)}
             return dict(zip(self.processed_feature_names_, importances))
         else:
-            print("Model does not have 'coef_' attribute for feature importances.")
+            # print("Model does not have 'coef_' attribute for feature importances.")
             return None

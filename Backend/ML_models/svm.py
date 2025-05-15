@@ -69,7 +69,7 @@ class SVMModel(model_interface.ModelInterface):
         )
         # ---
 
-        print(f"SVMModel Initialized with config: {self.config}")
+        # print(f"SVMModel Initialized with config: {self.config}")
 
     def __build_autoencoder(self, input_dim):
         """ Builds AE using parameters stored in self.config """
@@ -80,7 +80,7 @@ class SVMModel(model_interface.ModelInterface):
         learning_rate = self.config['learning_rate']
         loss_function = self.config['loss']
 
-        print(f"Building Autoencoder: input_dim={input_dim}, encoding_dim={encoding_dim}, activation={activation}, output_activation={output_activation}")
+        # print(f"Building Autoencoder: input_dim={input_dim}, encoding_dim={encoding_dim}, activation={activation}, output_activation={output_activation}")
 
         input_layer = Input(shape=(input_dim,), name='input_layer')
         encoded = Dense(encoding_dim, activation=activation, name='encoder_output')(input_layer)
@@ -100,7 +100,7 @@ class SVMModel(model_interface.ModelInterface):
             optimizer = optimizer_name
 
         autoencoder.compile(optimizer=optimizer, loss=loss_function) # Use config
-        print("Autoencoder Architecture:")
+        # print("Autoencoder Architecture:")
         autoencoder.summary(print_fn=print)
         return autoencoder, encoder
 
@@ -114,43 +114,43 @@ class SVMModel(model_interface.ModelInterface):
         batch_size = self.config['batch_size']
         # ---
 
-        print(f"Running SVMModel training on data shape: {df.shape}, AE epochs={epochs}, batch_size={batch_size}")
+        # print(f"Running SVMModel training on data shape: {df.shape}, AE epochs={epochs}, batch_size={batch_size}")
         self.n_features = df.shape[1]
         if self.n_features == 0: raise ValueError("Input DataFrame has no feature columns.")
 
         # --- Scaling ---
-        print("Fitting and transforming scaler...")
+        # print("Fitting and transforming scaler...")
         X_train_scaled = self.scaler.fit_transform(df)
         X_train_scaled = X_train_scaled.astype(np.float32)
 
         # --- Train Autoencoder (builds model internally using config) ---
         self.autoencoder, self.encoder = self.__build_autoencoder(self.n_features)
-        print(f"Fitting Autoencoder for {epochs} epochs...")
+        # print(f"Fitting Autoencoder for {epochs} epochs...")
         self.autoencoder.fit(X_train_scaled, X_train_scaled,
                              epochs=epochs, batch_size=batch_size, # Use config
                              validation_split=0.1, shuffle=True, verbose=1)
-        print("Autoencoder fitting complete.")
+        # print("Autoencoder fitting complete.")
 
         # --- Get Encoded Representation & Train SVM ---
-        print("Encoding training data...")
+        # print("Encoding training data...")
         train_encoded_data = self.encoder.predict(X_train_scaled)
-        print(f"Encoded training data shape: {train_encoded_data.shape}")
+        # print(f"Encoded training data shape: {train_encoded_data.shape}")
 
         # SVM Model was already initialized with params in __init__
         if self.svm_model is None:
             raise RuntimeError("SVM model was not initialized correctly.")
 
-        print(f"Fitting OneClassSVM with parameters: {self.svm_model.get_params()}")
+        # print(f"Fitting OneClassSVM with parameters: {self.svm_model.get_params()}")
         self.svm_model.fit(train_encoded_data)
-        print("OneClassSVM fitting complete.")
+        # print("OneClassSVM fitting complete.")
 
         # --- Set Threshold ---
-        print("Calculating anomaly threshold...")
+        # print("Calculating anomaly threshold...")
         decision_values_train = self.svm_model.decision_function(train_encoded_data)
         # Use svm_nu directly from config as it's the expected error rate
         self.threshold = np.percentile(decision_values_train, 100 * self.config['svm_nu'])
-        print(f"Anomaly threshold set to: {self.threshold:.6f} (based on nu={self.config['svm_nu']})")
-        print("--- SVMModel Training Finished ---")
+        # print(f"Anomaly threshold set to: {self.threshold:.6f} (based on nu={self.config['svm_nu']})")
+        # print("--- SVMModel Training Finished ---")
 
     def _preprocess_and_encode(self, data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """ Internal helper: Scales (using fitted scaler) and encodes input data. """
@@ -174,13 +174,13 @@ class SVMModel(model_interface.ModelInterface):
             input_np = data
         else: raise TypeError("Input must be a pandas DataFrame or a 2D NumPy array.")
 
-        #print(f"Preprocessing {input_np.shape[0]} samples...")
+        ## print(f"Preprocessing {input_np.shape[0]} samples...")
         data_scaled = self.scaler.transform(input_np) # Use TRANSFORM only
         data_scaled = data_scaled.astype(np.float32)
 
-        #print(f"Encoding {data_scaled.shape[0]} scaled samples...")
+        ## print(f"Encoding {data_scaled.shape[0]} scaled samples...")
         encoded_data = self.encoder.predict(data_scaled)
-        #print(f"Encoded data shape: {encoded_data.shape}")
+        ## print(f"Encoded data shape: {encoded_data.shape}")
         return encoded_data
 
     def detect(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
@@ -188,7 +188,7 @@ class SVMModel(model_interface.ModelInterface):
         if self.threshold is None: raise RuntimeError("Threshold not set. Call run() first.")
         scores = self.get_anomaly_score(detection_data)
         anomalies = scores < self.threshold
-        print(f"Detected {np.sum(anomalies)} anomalies using threshold {self.threshold:.6f}.")
+        # print(f"Detected {np.sum(anomalies)} anomalies using threshold {self.threshold:.6f}.")
         return anomalies # Returns 1D boolean array
     
     def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
@@ -205,7 +205,7 @@ class SVMModel(model_interface.ModelInterface):
         """
         # Reuse the internal preprocessing and encoding helper
         # This ensures scaling and encoding are done consistently
-        print("Calculating anomaly scores via get_anomaly_score...")
+        # print("Calculating anomaly scores via get_anomaly_score...")
         # Ensure model is trained before calling helper
         if self.scaler is None or self.encoder is None or self.svm_model is None:
              raise RuntimeError("Model components (scaler/encoder/svm) not available. Call run() first.")
@@ -286,5 +286,5 @@ class SVMModel(model_interface.ModelInterface):
         # Stack probabilities into the desired (n_samples, 2) shape
         probabilities = np.vstack([prob_normal, prob_anomaly]).T
 
-        #print(f"Calculated anomaly probabilities for {probabilities.shape[0]} samples.") # Optional print
+        ## print(f"Calculated anomaly probabilities for {probabilities.shape[0]} samples.") # Optional print
         return probabilities

@@ -25,15 +25,15 @@ class FrontendHandler:
             return "error-checking-name"
 
 
-    def handle_run_batch(self, selected_dataset, selected_model, job_name, inj_params: dict=None, label_column=None, xai_params=None, model_params=None) -> str:
+    def handle_run_batch(self, selected_dataset, selected_model, job_name, inj_params: dict=None, label_column=None, time_column=None, xai_params=None, model_params=None) -> str:
 
         response = self.check_name(job_name)
         if response == "success":
             try:
                 if inj_params is None:
-                     self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=None, label_column=label_column, xai_params=xai_params, model_params=model_params)
+                     self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=None, label_column=label_column, time_column=time_column,xai_params=xai_params, model_params=model_params)
                 else:
-                    self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=[inj_params], label_column=label_column, xai_params=xai_params, model_params=model_params)
+                    self.api.run_batch(selected_model, selected_dataset, job_name, inj_params=[inj_params], label_column=label_column, time_column=time_column, xai_params=xai_params, model_params=model_params)
             except Exception as e:
                  print(f"Error calling self.api.run_batch: {e}")
                  return f"Error starting batch job: {e}"

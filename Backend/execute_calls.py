@@ -131,7 +131,7 @@ def get_anomaly_rows(
         # SettingWithCopyWarning if the returned DataFrame is modified later.
         anomaly_rows = data.loc[anomaly_mask].copy()
 
-        print(f"Found {len(anomaly_rows)} rows where '{label_column}' == {anomaly_value}.")
+        #print(f"Found {len(anomaly_rows)} rows where '{label_column}' == {anomaly_value}.")
 
     except Exception as e:
         # Catch potential errors during comparison or indexing
@@ -389,6 +389,7 @@ def run_batch(
     inj_params: Optional[List[Dict[str, Any]]] = None, 
     debug: bool = False,
     label_column: Optional[str] = None, 
+    time_column: Optional[str] = None,
     xai_settings: Optional[Dict[str, Any]] = None,
     model_params: Optional[Dict[str, Any]] = None,
 ) -> int: # Return 1 for success, 0 for failure
@@ -414,13 +415,16 @@ def run_batch(
     df_eval = pd.DataFrame()
     actual_label_col = label_column or 'label' # Use provided or default 'label'
     sequence_length = None # Initialize
-    timestamp_col_name = 'timestamp'
+    timestamp_col_name = time_column if time_column != None else 'timestamp'
 
     try:
         # --- Simulation / Data Import ---
         sim_start_time = time.perf_counter() # Start sim timer here
-        if inj_params is not None:
-            anomaly_settings = []
+        actual_inj_params_for_xairunner = None # For passing to XAIRunner
+        if inj_params is not None:            
+            processed_anomaly_settings_for_sim = []
+            actual_inj_params_for_xairunner = inj_params # Pass the raw structure
+            
             # inj_params is a list of lists of dictionaries, e.g., [[{...}, {...}], [{...}]]
             for anomaly_group in inj_params: # Iterate through each group of anomalies
                 if not isinstance(anomaly_group, list):
@@ -471,15 +475,15 @@ def run_batch(
                         # If columns must be a list:
                         # columns = [columns] if not isinstance(columns, list) else columns
 
-                    anomaly = AnomalySetting(
+                    current_anomaly_setting = AnomalySetting(
                         anomaly_type, timestamp, magnitude,
                         percentage, columns, duration
                     )
-                    anomaly_settings.append(anomaly)
+                    processed_anomaly_settings_for_sim.append(current_anomaly_setting)
             
             # This line assumes 'path', 'name', 'debug' are defined elsewhere in your function
-            batch_job = Job(filepath=path, anomaly_settings=anomaly_settings, simulation_type="batch", speedup=None, table_name=name, debug=debug)
-            print(f"Successfully processed {len(anomaly_settings)} anomaly settings.") # For feedback
+            batch_job = Job(filepath=path, anomaly_settings=processed_anomaly_settings_for_sim, simulation_type="batch", speedup=None, table_name=name, debug=debug)
+            # print(f"Successfully processed {len(processed_anomaly_settings_for_sim)} anomaly settings.") # For feedback
         else:
             batch_job = Job(filepath=path, simulation_type="batch", anomaly_settings=None, speedup=None, table_name=name, debug=debug)
 
@@ -488,7 +492,7 @@ def run_batch(
         result = sim_engine.main(db_conn_params=db_conn_params, job=batch_job, timestamp_col_name=None, label_col_name=actual_label_col)
         sim_end_time = time.perf_counter()
         sim_duration = sim_end_time - sim_start_time # Use sim_start_time
-        print(f"Batch import/simulation took {sim_duration:.2f}s")
+        # print(f"Batch import/simulation took {sim_duration:.2f}s")
         actual_label_col = 'label'
 
         if result != 1:
@@ -496,24 +500,24 @@ def run_batch(
 
         # --- Read Data from DB ---
         api = TimescaleDBAPI(db_conn_params)
-        print(f"Reading data for table/job: {name}")
+        # print(f"Reading data for table/job: {name}")
         df = api.read_data(datetime.fromtimestamp(0), name)
         if df.empty: raise ValueError("DataFrame read from DB is empty.")
         if PRIMARY_KEY_COLUMN not in df.columns:
             raise ValueError(f"Primary key column '{PRIMARY_KEY_COLUMN}' not found in DataFrame read from table '{name}'.")
-        print(f"DEBUG: Columns read from DB for job '{name}': {df.columns.tolist()}")
+        # print(f"DEBUG: Columns read from DB for job '{name}': {df.columns.tolist()}")
         # Ensure timestamp column exists and convert if necessary BEFORE splitting
         if timestamp_col_name and timestamp_col_name in df.columns:
             # Assuming read_data returns timezone-aware timestamps if applicable
-             df[timestamp_col_name] = pd.to_datetime(df[timestamp_col_name])
-             print(f"Timestamp column '{timestamp_col_name}' read and converted.")
+            df[timestamp_col_name] = pd.to_datetime(df[timestamp_col_name])
+            # print(f"Timestamp column '{timestamp_col_name}' read and converted.")
         elif 'timestamp' in df.columns:
-             df['timestamp'] = pd.to_datetime(df['timestamp'])
-             timestamp_col_name = 'timestamp' # Use default if found
-             print("Default 'timestamp' column read and converted.")
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            timestamp_col_name = 'timestamp' # Use default if found
+            # print("Default 'timestamp' column read and converted.")
         else:
-             warnings.warn("Timestamp column not found or specified. Time-based operations might fail.", RuntimeWarning)
-             # Handle case where timestamp is missing - maybe default to index?
+            warnings.warn("Timestamp column not found or specified. Time-based operations might fail.", RuntimeWarning)
+            # Handle case where timestamp is missing - maybe default to index?
 
         # --- Data Splitting ---
         training_data, testing_data = split_data(df)
@@ -529,39 +533,62 @@ def run_batch(
         if not potential_feature_cols:
              raise ValueError("Could not identify any feature columns after exclusion.")
         feature_columns = potential_feature_cols
-        print(f"Identified Features ({len(feature_columns)}): {feature_columns}")
+        # print(f"Identified Features ({len(feature_columns)}): {feature_columns}")
 
         # Use defensive selection in case columns were dropped
         training_features_df = training_data[[col for col in feature_columns if col in training_data.columns]]
         testing_features_df = testing_data[[col for col in feature_columns if col in testing_data.columns]]
         all_features_df = df[[col for col in feature_columns if col in df.columns]] # For detection
 
+        # --- Impute NaNs ---
+        print(f"DEBUG run_batch: Imputing NaNs in training_features_df (shape: {training_features_df.shape}) using mean.")
+        print(f"DEBUG run_batch: NaNs before imputation: {training_features_df.isna().sum().sum()}")
+        # Simple mean imputation, you might choose a different strategy
+        for col in training_features_df.columns:
+            if training_features_df[col].isnull().any():
+                if pd.api.types.is_numeric_dtype(training_features_df[col]):
+                    training_features_df[col] = training_features_df[col].fillna(training_features_df[col].mean())
+                else: # For non-numeric, fill with mode or a placeholder
+                    training_features_df[col] = training_features_df[col].fillna(training_features_df[col].mode()[0] if not training_features_df[col].mode().empty else 'missing')
+        print(f"DEBUG run_batch: NaNs after imputation: {training_features_df.isna().sum().sum()}")
+        # Also impute for all_features_df if it's used by LIME/SHAP directly for explanation instances
+        # Though LIME uses background_data for stats, and explains instances passed at runtime.
+        # SHAP Kernel also uses background_data. SHAP Tree might use the data directly.
+        # It's good practice to have clean data for explanations too.
+        print(f"DEBUG run_batch: Imputing NaNs in all_features_df (shape: {all_features_df.shape}) using mean.")
+        for col in all_features_df.columns:
+            if all_features_df[col].isnull().any():
+                if pd.api.types.is_numeric_dtype(all_features_df[col]):
+                    all_features_df[col] = all_features_df[col].fillna(all_features_df[col].mean())
+                else:
+                    all_features_df[col] = all_features_df[col].fillna(all_features_df[col].mode()[0] if not all_features_df[col].mode().empty else 'missing')
+
         # --- Anomaly Row Extraction (Ground Truth) ---
         if actual_label_col in df.columns:
             anomaly_rows = get_anomaly_rows(df, label_column=actual_label_col, anomaly_value=1)
-            print(f"Found {len(anomaly_rows)} ground truth anomaly rows using label '{actual_label_col}'.")
+            # print(f"Found {len(anomaly_rows)} ground truth anomaly rows using label '{actual_label_col}'.")
         else:
-             print(f"Warning: Label column '{actual_label_col}' not found. Cannot extract ground truth anomalies.")
+            print(f"Warning: Label column '{actual_label_col}' not found. Cannot extract ground truth anomalies.")
 
         # --- Model Training ---
         training_start_time = time.perf_counter()
         effective_model_params = model_params or {}
-        print(f"Getting model '{model}' with parameters: {effective_model_params}")
+        # print(f"Getting model '{model}' with parameters: {effective_model_params}")
         model_instance = get_model(model, **effective_model_params) # Assumes get_model handles params
 
         model_name_lower = model.lower()
 
         if model_name_lower in UNSUPERVISED_MODELS:
             # --- Unsupervised Model ---
-            print(f"Model '{model}' identified as unsupervised. Training on features only.")
+            # print(f"Model '{model}' identified as unsupervised. Training on features only.")
             if training_features_df.empty:
                 raise ValueError("Training features DataFrame is empty, cannot train unsupervised model.")
-            print(f"Calling model.run with features-only data. Shape: {training_features_df.shape}")
+            # print(f"Calling model.run with features-only data. Shape: {training_features_df.shape}")
             # Pass only features to the unsupervised model's run method
             model_instance.run(training_features_df)
         else:
             # --- Supervised Model (or unknown, default to supervised) ---
-            print(f"Model '{model}' identified as supervised/unknown. Training with features and label.")
+            # print(f"Model '{model}' identified as supervised/unknown. Training with features and label.")
             if training_data.empty:
                 raise ValueError("Training data DataFrame is empty for supervised model.")
             if actual_label_col not in training_data.columns:
@@ -584,18 +611,18 @@ def run_batch(
             if training_data_for_model.empty:
                  raise ValueError("DataFrame prepared for supervised model training (features + label) is empty.")
 
-            print(f"Calling model.run with training data containing ONLY specific features and label '{actual_label_col}'. Shape: {training_data_for_model.shape}")
+            # print(f"Calling model.run with training data containing ONLY specific features and label '{actual_label_col}'. Shape: {training_data_for_model.shape}")
             # Pass the filtered DataFrame (only features + label) to the model's run method
             model_instance.run(training_data_for_model)
 
         train_end_time = time.perf_counter()
         training_duration = train_end_time - training_start_time
-        print(f"Training took {training_duration:.2f}s")
+        # print(f"Training took {training_duration:.2f}s")
 
         # --- Sequence Length ---
         sequence_length = getattr(model_instance, 'sequence_length', 1) # Default to 1 if not found
         if not isinstance(sequence_length, int) or sequence_length <= 0: sequence_length = 1
-        print(f"Using sequence_length: {sequence_length}")
+        # print(f"Using sequence_length: {sequence_length}")
 
         # --- Anomaly Detection ---
         detect_start_time = time.perf_counter()
@@ -605,7 +632,7 @@ def run_batch(
         res = model_instance.detect(all_features_df)
         detect_end_time = time.perf_counter()
         detection_duration = detect_end_time - detect_start_time
-        print(f"Anomaly detection took {detection_duration:.2f}s. Results length: {len(res)}")
+        # print(f"Anomaly detection took {detection_duration:.2f}s. Results length: {len(res)}")
 
         # --- Assign Results & Evaluate ---
         # Prepare df_eval with original index and label for evaluation
@@ -614,26 +641,26 @@ def run_batch(
 
         expected_padding = sequence_length - 1
         if len(res) == len(df_eval):
-             print("Assigning detection results directly.")
-             df_eval['is_anomaly'] = res.values if isinstance(res, pd.Series) else res
+            # print("Assigning detection results directly.")
+            df_eval['is_anomaly'] = res.values if isinstance(res, pd.Series) else res
         elif len(res) == len(df_eval) - expected_padding and expected_padding >= 0 :
-             print(f"Padding detection results with {expected_padding} 'False' values at the beginning.")
-             padding = [False] * expected_padding
-             res_list = list(res.values) if isinstance(res, pd.Series) else list(res)
-             df_eval['is_anomaly'] = padding + res_list
+            # print(f"Padding detection results with {expected_padding} 'False' values at the beginning.")
+            padding = [False] * expected_padding
+            res_list = list(res.values) if isinstance(res, pd.Series) else list(res)
+            df_eval['is_anomaly'] = padding + res_list
         else:
-             # Handle unexpected length difference more robustly
-              warnings.warn(f"Unexpected length difference: results ({len(res)}), df ({len(df_eval)}), expected padding ({expected_padding}). Check model's detect output and sequence_length.", RuntimeWarning)
-              # Attempt assignment if possible, otherwise evaluation might fail
-              min_len = min(len(res), len(df_eval))
-              df_eval['is_anomaly'][-min_len:] = list(res)[-min_len:] # Try aligning from end
+            # Handle unexpected length difference more robustly
+            warnings.warn(f"Unexpected length difference: results ({len(res)}), df ({len(df_eval)}), expected padding ({expected_padding}). Check model's detect output and sequence_length.", RuntimeWarning)
+            # Attempt assignment if possible, otherwise evaluation might fail
+            min_len = min(len(res), len(df_eval))
+            df_eval['is_anomaly'][-min_len:] = list(res)[-min_len:] # Try aligning from end
 
         # Update anomalies in DB (using original timestamps)
         predicted_anomalies_mask = df_eval['is_anomaly'] == True
         # Select rows from the original 'df' (which includes the PRIMARY_KEY_COLUMN)
         anomaly_df_for_update = df.loc[predicted_anomalies_mask & df[PRIMARY_KEY_COLUMN].notna()]
         
-        print(f'Found {len(anomaly_df_for_update)} anomalies to update in DB via PK.')
+        # print(f'Found {len(anomaly_df_for_update)} anomalies to update in DB via PK.')
         if not anomaly_df_for_update.empty:
             anomaly_pk_values = anomaly_df_for_update[PRIMARY_KEY_COLUMN].tolist()
             if anomaly_pk_values:
@@ -648,32 +675,32 @@ def run_batch(
             print("No anomalies detected in current run, or no anomalies with valid PKs.")
 
         evaluation_results = evaluate_classification(df_eval) # Evaluate using actual and predicted labels
-        print("Evaluation Results:", evaluation_results)
+        # print("Evaluation Results:", evaluation_results)
 
         # --- XAI Execution (Conditional) ---
         xai_start_time = time.perf_counter() # Start XAI timer here
         model_wrapper = None # Initialize
+        avg_ndcg_scores = {} # Initialize NDCG results dict
+        
+        interpretation_list = ['lstm', 'xgboost', 'decision_tree'] # higher_is_anomaly
+        
         if xai_settings and isinstance(xai_settings, dict):
             interpretation = 'higher_is_anomaly' # Default
             # Determine interpretation based on model name string
-            if 'svm' in model.lower(): interpretation = 'lower_is_anomaly'
-            elif 'lstm' in model.lower(): interpretation = 'higher_is_anomaly'
-            elif 'xgboost' in model.lower(): interpretation = 'higher_is_anomaly'
-            elif 'decision_tree' in model.lower(): interpretation = 'higher_is_anomaly'
-            elif 'isolation_forest' in model.lower(): interpretation = 'lower_is_anomaly'
+            if model.lower() not in interpretation_list: interpretation = 'lower_is_anomaly'
             # Add other model types here
             else: warnings.warn(f"Unknown model type '{model}' for score interpretation. Assuming higher score is anomaly.", RuntimeWarning)
 
             try:
-                print("Wrapping model for XAI...")
+                # print("Wrapping model for XAI...")
                 model_wrapper = ModelWrapperForXAI(
                     actual_model_instance=model_instance,
                     feature_names=feature_columns,
                     score_interpretation=interpretation
                 )
-                print(f"Model wrapped. Interpretation: '{interpretation}'")
+                # print(f"Model wrapped. Interpretation: '{interpretation}'")
 
-                print("Instantiating XAIRunner...")
+                # print("Instantiating XAIRunner...")
                 xai_runner_instance = XAIRunner(
                     xai_settings=xai_settings,
                     model_wrapper=model_wrapper,
@@ -685,33 +712,56 @@ def run_batch(
                     job_name=name,
                     mode='classification',
                     output_dir=OUTPUT_DIR, # Use defined output dir
+                    # --- Pass params for NDCG ---
+                    inj_params=actual_inj_params_for_xairunner, # Pass the original inj_params
+                    timestamp_col_name=timestamp_col_name
                 )
 
-                print("Running XAI explanations...")
+                # print("Running XAI explanations...")
                 # Prepare dataframes needed by XAIRunner
                 # Assuming training_data/testing_data include labels and timestamps if needed by XAIRunner internals
                 # Choose the data to explain (e.g., testing data, all data, or specific anomalies)
-                data_source_for_exp = df[1:] # Example: explain testing data
-
+                data_source_for_exp = df.copy() # Make a copy to be safe
+                if timestamp_col_name in data_source_for_exp.columns and \
+                   not pd.api.types.is_datetime64_any_dtype(data_source_for_exp[timestamp_col_name]):
+                    # print(f"DEBUG run_batch: Converting data_source_for_exp['{timestamp_col_name}'] to datetime again.")
+                    data_source_for_exp[timestamp_col_name] = pd.to_datetime(data_source_for_exp[timestamp_col_name])
+                
+                # print(f"DEBUG run_batch: data_source_for_exp for XAIRunner: shape={data_source_for_exp.shape}")
+                # print(f"DEBUG run_batch: data_source_for_exp '{timestamp_col_name}' MIN: {data_source_for_exp[timestamp_col_name].min() if timestamp_col_name in data_source_for_exp else 'N/A'}")
+                # print(f"DEBUG run_batch: data_source_for_exp '{timestamp_col_name}' MAX: {data_source_for_exp[timestamp_col_name].max() if timestamp_col_name in data_source_for_exp else 'N/A'}")
+                
                 xai_runner_instance.run_explanations(
-                    training_features_df=training_features_df, # Features only for background
-                    training_df_with_labels=training_data,    # Full training data for context
-                    data_source_for_explanation=data_source_for_exp # Data to explain
+                    training_features_df=training_features_df,
+                    training_df_with_labels=training_data,
+                    data_source_for_explanation=data_source_for_exp # df used here
                 )
-                print("XAI execution completed.")
+                # print("XAI execution completed.")
+
+                # --- Collect NDCG Results ---
+                if xai_runner_instance.ndcg_results:
+                    # print("Aggregating NDCG results...")
+                    for method, k_map in xai_runner_instance.ndcg_results.items():
+                        avg_ndcg_scores.setdefault(method, {})
+                        for k, scores_list in k_map.items():
+                            if scores_list: # Ensure not empty
+                                avg_ndcg_scores[method][f"NDCG@{k}"] = np.mean(scores_list)
+                            else:
+                                avg_ndcg_scores[method][f"NDCG@{k}"] = 0.0 # Or None/NaN
+                    # print(f"Average NDCG Scores: {avg_ndcg_scores}")
+
 
             except Exception as xai_err:
                 print(f"ERROR during XAI setup or execution: {xai_err}")
                 traceback.print_exc()
-                # Continue without XAI results, but log the error later
-
+            
             xai_end_time = time.perf_counter()
             xai_duration = xai_end_time - xai_start_time
         else:
-            print("Skipping XAI (no settings provided or error during setup).")
-            xai_end_time = detect_end_time # Set XAI end time for consistent total time calculation
+            # print("Skipping XAI (no settings provided or error during setup).")
+            xai_end_time = detect_end_time 
 
-        run_status = "Success" 
+        run_status = "Success"
 
     except Exception as e:
         print(f"An error occurred during run_batch for job '{name}': {e}")
@@ -721,7 +771,7 @@ def run_batch(
     finally:
         overall_end_time = time.perf_counter()
         overall_duration = overall_end_time - overall_start_time
-        print(f"Total run_batch execution for job '{name}' took {overall_duration:.2f}s. Status: {run_status}")
+        # print(f"Total run_batch execution for job '{name}' took {overall_duration:.2f}s. Status: {run_status}")
 
         # --- Gather Summary Data ---
         # Calculate additional metrics if evaluation succeeded
@@ -757,6 +807,11 @@ def run_batch(
                 cv_metrics['avg_best_score_cv_from_xgb_eval_metric'] = model_instance.avg_best_score_cv_
         else:
             print("Warning: model_instance is None, cannot retrieve CV metrics.")
+            
+        # Add avg_ndcg_scores to run_summary
+        xai_eval_metrics = {}
+        if avg_ndcg_scores:
+             xai_eval_metrics["ndcg_scores"] = avg_ndcg_scores
 
         run_summary = {
             "job_name": name,
@@ -766,6 +821,7 @@ def run_batch(
             "model_name": model,
             "model_params": model_params or {},
             "xai_settings": xai_settings or {},
+            "xai_evaluation_metrics": xai_eval_metrics, # NDCG
             "anomaly_injection_params": inj_params or [],
             "label_column_used": actual_label_col,
             "data_total_rows": len(df),

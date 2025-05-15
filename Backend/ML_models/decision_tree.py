@@ -100,8 +100,8 @@ class DecisionTreeModel(model_interface.ModelInterface):
                 'ccp_alpha': [0.0, 0.001, 0.01, 0.1]
             }
             self.param_dist = kwargs.pop('param_dist', default_param_dist_dt)
-            print(f"DecisionTreeModel: Auto-tuning ENABLED. Search iterations: {self.search_n_iter}, Main scoring: '{self.search_scoring}'")
-            print(f"Parameter distribution for tuning: {self.param_dist}")
+            # # print(f"DecisionTreeModel: Auto-tuning ENABLED. Search iterations: {self.search_n_iter}, Main scoring: '{self.search_scoring}'")
+            # # print(f"Parameter distribution for tuning: {self.param_dist}")
             if self.search_scoring not in self.validation_metrics:
                  original_search_scoring = self.search_scoring
                  # Attempt to map to a primary validation metric if possible (e.g., if user passes 'f1_macro' but 'f1' is in validation_metrics)
@@ -136,10 +136,10 @@ class DecisionTreeModel(model_interface.ModelInterface):
             warnings.warn("class_weight was None, setting to 'balanced' by default.", UserWarning)
             self.model_params['class_weight'] = 'balanced'
 
-        print(f"DecisionTreeModel Initialized with base params: {self.model_params}")
-        print(f"Imputer Strategy: {self._imputer_strategy}")
-        print(f"K-fold CV / Search CV: n_splits={self.n_splits}, shuffle={self.shuffle_kfold}")
-        print(f"Validation metrics to report: {self.validation_metrics}")
+        # print(f"DecisionTreeModel Initialized with base params: {self.model_params}")
+        # print(f"Imputer Strategy: {self._imputer_strategy}")
+        # print(f"K-fold CV / Search CV: n_splits={self.n_splits}, shuffle={self.shuffle_kfold}")
+        # print(f"Validation metrics to report: {self.validation_metrics}")
 
     def _prepare_data_for_model(
         self, X: Union[pd.DataFrame, np.ndarray],
@@ -301,11 +301,11 @@ class DecisionTreeModel(model_interface.ModelInterface):
         Then, trains a final Decision Tree classifier on the entire dataset using
         the best (if tuned) or initial parameters.
         """
-        print(f"Running training for DecisionTreeModel (Input type: {'DataFrame' if isinstance(X, pd.DataFrame) else 'NumPy'})...")
-        if self.auto_tune:
-            print(f"Hyperparameter auto-tuning is ENABLED.")
-        else:
-            print(f"Hyperparameter auto-tuning is DISABLED. Using fixed parameters: {self.model_params}")
+        # print(f"Running training for DecisionTreeModel (Input type: {'DataFrame' if isinstance(X, pd.DataFrame) else 'NumPy'})...")
+        # if self.auto_tune:
+        #     # print(f"Hyperparameter auto-tuning is ENABLED.")
+        # else:
+        #     # print(f"Hyperparameter auto-tuning is DISABLED. Using fixed parameters: {self.model_params}")
 
         if isinstance(X, np.ndarray):
             if original_feature_names is None:
@@ -332,8 +332,8 @@ class DecisionTreeModel(model_interface.ModelInterface):
 
         if self.auto_tune:
             # --- Step 2a: Hyperparameter Tuning with RandomizedSearchCV ---
-            print(f"\nStarting RandomizedSearchCV for hyperparameter tuning...")
-            print(f"  n_iter={self.search_n_iter}, cv_folds={self.n_splits}, refit_scoring='{self.search_scoring}'")
+            # print(f"\nStarting RandomizedSearchCV for hyperparameter tuning...")
+            # print(f"  n_iter={self.search_n_iter}, cv_folds={self.n_splits}, refit_scoring='{self.search_scoring}'")
 
             # Base estimator for tuning - use only non-tunable params like random_state, class_weight
             # Tunable params will come from param_dist.
@@ -421,9 +421,9 @@ class DecisionTreeModel(model_interface.ModelInterface):
                     f"Original user 'search_scoring': '{self.search_scoring}'."
                  )
 
-            print(f"  RandomizedSearchCV will use metrics for scoring: {scoring_dict_for_search}")
-            print(f"  It will refit the best model based on the metric KEY: '{refit_metric_key}' "
-                  f"(which corresponds to scikit-learn scorer: '{scoring_dict_for_search[refit_metric_key]}')")
+            # print(f"  RandomizedSearchCV will use metrics for scoring: {scoring_dict_for_search}")
+            # print(f"  It will refit the best model based on the metric KEY: '{refit_metric_key}' "
+                #   f"(which corresponds to scikit-learn scorer: '{scoring_dict_for_search[refit_metric_key]}')")
 
             search_cv_strategy = StratifiedKFold(n_splits=self.n_splits, shuffle=self.shuffle_kfold,
                                         random_state=current_model_params.get('random_state'))
@@ -443,15 +443,15 @@ class DecisionTreeModel(model_interface.ModelInterface):
             try:
                 random_search.fit(X_processed_full, y_aligned_full)
                 self.tuned_best_params_ = random_search.best_params_
-                print(f"  Best parameters found by RandomizedSearchCV: {self.tuned_best_params_}")
+                # print(f"  Best parameters found by RandomizedSearchCV: {self.tuned_best_params_}")
                 
                 # Update current_model_params with the best ones found for the final model
                 current_model_params.update(self.tuned_best_params_)
-                print(f"  Model parameters for final training updated to: {current_model_params}")
+                # print(f"  Model parameters for final training updated to: {current_model_params}")
 
                 # Populate validation_scores_ from cv_results_ of the best estimator
                 self.validation_scores_ = {}
-                print("\nCross-validation summary from RandomizedSearchCV (for best parameter set):")
+                # print("\nCross-validation summary from RandomizedSearchCV (for best parameter set):")
                 results_df = pd.DataFrame(random_search.cv_results_)
                 best_idx = random_search.best_index_
 
@@ -465,11 +465,11 @@ class DecisionTreeModel(model_interface.ModelInterface):
                         avg_score = results_df.loc[best_idx, mean_score_col]
                         std_score = results_df.loc[best_idx, std_score_col] if std_score_col in results_df.columns else np.nan
                         self.validation_scores_[metric_key_user] = avg_score # Store with user's original metric name
-                        print(f"  Average {metric_key_user} (as {scorer_name_sklearn}): {avg_score:.4f} (Std: {std_score:.4f})")
+                        # print(f"  Average {metric_key_user} (as {scorer_name_sklearn}): {avg_score:.4f} (Std: {std_score:.4f})")
                     else:
                         self.validation_scores_[metric_key_user] = np.nan
                         # This case should be rare if scoring_dict_for_search was constructed correctly
-                        print(f"  Average {metric_key_user}: Score not found in cv_results_ (expected col like {mean_score_col}).")
+                        # print(f"  Average {metric_key_user}: Score not found in cv_results_ (expected col like {mean_score_col}).")
                 
                 if np.isnan(random_search.best_score_):
                     warnings.warn(f"RandomizedSearchCV best_score_ is NaN for refit metric '{refit_metric_key}'. "
@@ -492,10 +492,10 @@ class DecisionTreeModel(model_interface.ModelInterface):
             fold_scores: Dict[str, List[float]] = {metric: [] for metric in self.validation_metrics}
             fold_count = 0
 
-            print(f"\nStarting {self.n_splits}-fold cross-validation with fixed parameters: {current_model_params}")
+            # print(f"\nStarting {self.n_splits}-fold cross-validation with fixed parameters: {current_model_params}")
             for fold_idx, (train_index, val_index) in enumerate(skf.split(X_processed_full, y_aligned_full)):
                 fold_count += 1
-                print(f"  Fold {fold_idx + 1}/{self.n_splits}...")
+                # print(f"  Fold {fold_idx + 1}/{self.n_splits}...")
                 X_train_fold, X_val_fold = X_processed_full[train_index], X_processed_full[val_index]
                 y_train_fold, y_val_fold = y_aligned_full[train_index], y_aligned_full[val_index]
 
@@ -505,7 +505,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
                     continue
                 
                 n_neg_train_fold = np.sum(y_train_fold == 0); n_pos_train_fold = np.sum(y_train_fold == 1)
-                # print(f"    Training fold {fold_idx+1} label composition: {n_neg_train_fold} negative, {n_pos_train_fold} positive.")
+                # # print(f"    Training fold {fold_idx+1} label composition: {n_neg_train_fold} negative, {n_pos_train_fold} positive.")
                 if n_pos_train_fold == 0: warnings.warn(f"    No positive samples in training part of fold {fold_idx+1}.", RuntimeWarning)
                 if n_neg_train_fold == 0: warnings.warn(f"    No negative samples in training part of fold {fold_idx+1}.", RuntimeWarning)
 
@@ -543,8 +543,8 @@ class DecisionTreeModel(model_interface.ModelInterface):
                                     warnings.warn(f"    Unsupported/failed validation metric '{metric_name}' in fold {fold_idx + 1}. Skipping.", UserWarning)
                             
                             fold_scores[metric_name].append(score)
-                            if not np.isnan(score): print(f"    Fold {fold_idx + 1} {metric_name}: {score:.4f}")
-                            else: print(f"    Fold {fold_idx + 1} {metric_name}: NaN")
+                            # if not np.isnan(score): print(f"    Fold {fold_idx + 1} {metric_name}: {score:.4f}")
+                            # else: print(f"    Fold {fold_idx + 1} {metric_name}: NaN")
 
                         except Exception as metric_e:
                             # print(f"    Failed to calculate metric '{metric_name}' for fold {fold_idx + 1}: {metric_e}")
@@ -558,26 +558,26 @@ class DecisionTreeModel(model_interface.ModelInterface):
                 warnings.warn("K-fold cross-validation completed but no folds were successfully processed. Validation scores will be empty or NaN.", RuntimeWarning)
                 self.validation_scores_ = {metric: np.nan for metric in self.validation_metrics}
             else:
-                print("\nCross-validation summary (fixed parameters):")
+                # print("\nCross-validation summary (fixed parameters):")
                 for metric_name in self.validation_metrics:
                     valid_fold_metric_scores = [s for s in fold_scores[metric_name] if not np.isnan(s)]
                     if valid_fold_metric_scores:
                         avg_score = np.mean(valid_fold_metric_scores)
                         std_score = np.std(valid_fold_metric_scores)
                         self.validation_scores_[metric_name] = avg_score
-                        print(f"  Average {metric_name}: {avg_score:.4f} (Std: {std_score:.4f})")
+                        # print(f"  Average {metric_name}: {avg_score:.4f} (Std: {std_score:.4f})")
                     else:
                         self.validation_scores_[metric_name] = np.nan
-                        print(f"  Average {metric_name}: NaN (no valid scores from folds)")
-        print("-" * 30)
+                        # print(f"  Average {metric_name}: NaN (no valid scores from folds)")
+        # print("-" * 30)
 
         # --- Step 3: Training the FINAL Classifier on the ENTIRE Prepared Dataset ---
         # This step uses `current_model_params`, which are either initial or updated by RandomizedSearchCV.
-        print(f"Training final DecisionTreeClassifier on {X_processed_full.shape[0]} samples, {X_processed_full.shape[1]} features...")
-        print(f"Using final parameters: {current_model_params}")
+        # print(f"Training final DecisionTreeClassifier on {X_processed_full.shape[0]} samples, {X_processed_full.shape[1]} features...")
+        # print(f"Using final parameters: {current_model_params}")
         
         n_neg_full = np.sum(y_aligned_full == 0); n_pos_full = np.sum(y_aligned_full == 1)
-        print(f"Full dataset label composition for final training: {n_neg_full} negative, {n_pos_full} positive.")
+        # print(f"Full dataset label composition for final training: {n_neg_full} negative, {n_pos_full} positive.")
         if n_pos_full == 0: warnings.warn(f"No positive samples ({self.label_col or 'label'}=1) found in the ENTIRE dataset for final model training.", RuntimeWarning)
         if n_neg_full == 0: warnings.warn(f"No negative samples ({self.label_col or 'label'}=0) found in the ENTIRE dataset for final model training.", RuntimeWarning)
 
@@ -588,8 +588,8 @@ class DecisionTreeModel(model_interface.ModelInterface):
             self.model = None 
             raise RuntimeError(f"Final Decision Tree fitting failed on the full dataset: {e}") from e
 
-        print("Final model training complete.")
-        if hasattr(self.model, 'classes_'): print(f"Final model trained with classes: {self.model.classes_}")
+        # print("Final model training complete.")
+        # if hasattr(self.model, 'classes_'): print(f"Final model trained with classes: {self.model.classes_}")
         
         # Store the effective parameters used for the final model
         self.model_params = current_model_params.copy()
@@ -724,7 +724,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
                         if n_feat != self.n_original_features:
                              raise ValueError(f"XAI 3D input feature mismatch: got {n_feat} features, expected {self.n_original_features}")
                         # Reshape (n_instances, 1, n_features) to (n_instances, n_features)
-                        print(f"DEBUG (predict_proba DF): Reshaping XAI input {X_xai.shape} to 2D.") 
+                        # print(f"DEBUG (predict_proba DF): Reshaping XAI input {X_xai.shape} to 2D.") 
                         X_to_process_2d = X_xai.reshape(n_inst, n_feat)
                     else:
                         # If seq_len is not 1, then it's an invalid 3D shape for DF model
@@ -750,7 +750,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
 
                 # Flatten 3D input to 2D for internal model
                 n_flattened = seq_len_np * n_feat_np
-                # print(f"DEBUG (predict_proba NP): Reshaping XAI input {X_xai.shape} to 2D ({n_inst_np}, {n_flattened}).") # Optional debug
+                # # print(f"DEBUG (predict_proba NP): Reshaping XAI input {X_xai.shape} to 2D ({n_inst_np}, {n_flattened}).") # Optional debug
                 X_to_process_2d = X_xai.reshape(n_inst_np, n_flattened)
 
             else:
@@ -782,7 +782,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
         except Exception as e:
             # Catch errors during preprocessing or prediction within XAI
             # Log detailed error before raising generic one
-            print(f"ERROR during predict_proba execution: {type(e).__name__} - {e}")
+            # print(f"ERROR during predict_proba execution: {type(e).__name__} - {e}")
             traceback.print_exc() # Print full traceback for debugging
             raise RuntimeError(f"XAI prediction failed during preprocessing or model prediction. Error: {e}") from e
 
@@ -809,7 +809,7 @@ class DecisionTreeModel(model_interface.ModelInterface):
     def get_validation_scores(self) -> Dict[str, float]:
         """Returns the computed validation scores."""
         if not hasattr(self, 'validation_scores_') or not self.validation_scores_:
-             print("Validation scores not available (model not run, validation failed, or validation_set_size=0).")
+             # print("Validation scores not available (model not run, validation failed, or validation_set_size=0).")
              return {}
         return self.validation_scores_
         
@@ -818,16 +818,16 @@ class DecisionTreeModel(model_interface.ModelInterface):
         """Returns feature importances from the trained decision tree, 
            using the processed (potentially flattened) feature names."""
         if self.model is None:
-            print("Model not trained yet.")
+            # print("Model not trained yet.")
             return None
             
         if not hasattr(self.model, 'feature_importances_'):
-            print("Model does not have feature_importances_ attribute.")
+            # print("Model does not have feature_importances_ attribute.")
             return None
 
         # Use the processed_feature_names which correspond to the model's input
         if self.processed_feature_names is None:
-            print("Processed feature names not available.")
+            # print("Processed feature names not available.")
             # Return importances without names if names aren't stored
             return {f"feature_{i}": imp for i, imp in enumerate(self.model.feature_importances_)}
 
@@ -843,24 +843,24 @@ class DecisionTreeModel(model_interface.ModelInterface):
     def get_validation_scores(self) -> Dict[str, float]:
         """Returns the average validation scores from k-fold cross-validation."""
         if not self.validation_scores_: # Checks if dict is empty
-             print("K-fold cross-validation scores not available (model not run or CV failed).")
+             # print("K-fold cross-validation scores not available (model not run or CV failed).")
              return {}
         # Check if scores are NaN, which might happen if all folds failed for a metric
-        if all(np.isnan(score) for score in self.validation_scores_.values()):
-            print("K-fold cross-validation scores are all NaN (likely due to issues in all folds).")
+        # if all(np.isnan(score) for score in self.validation_scores_.values()):
+            # print("K-fold cross-validation scores are all NaN (likely due to issues in all folds).")
         return self.validation_scores_
 
     def get_feature_importances(self) -> Optional[Dict[str, float]]:
         # This method uses the final self.model trained on the full dataset.
         # Its internal logic remains the same.
         if self.model is None:
-            print("Model not trained yet (final model).")
+            # print("Model not trained yet (final model).")
             return None
         if not hasattr(self.model, 'feature_importances_'):
-            print("Final model does not have feature_importances_ attribute.")
+            # print("Final model does not have feature_importances_ attribute.")
             return None
         if self.processed_feature_names is None:
-            print("Processed feature names not available for final model.")
+            # print("Processed feature names not available for final model.")
             return {f"feature_{i}": imp for i, imp in enumerate(self.model.feature_importances_)}
 
         importances = self.model.feature_importances_

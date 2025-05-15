@@ -47,7 +47,7 @@ class LSTMModel(model_interface.ModelInterface):
         # Set initial sequence length if provided
         self.sequence_length = self.config['time_steps']
 
-        print(f"LSTMModel Initialized with config: {self.config}")
+        # print(f"LSTMModel Initialized with config: {self.config}")
         # --- End __init__ ---
 
 
@@ -80,7 +80,7 @@ class LSTMModel(model_interface.ModelInterface):
             raise ValueError("Configured 'time_steps' must be positive.")
         self.sequence_length = time_steps # Ensure instance variable is set
 
-        print(f"Running LSTMModel training with time_steps={self.sequence_length}, epochs={epochs}, batch_size={batch_size}...")
+        # print(f"Running LSTMModel training with time_steps={self.sequence_length}, epochs={epochs}, batch_size={batch_size}...")
 
         features = df.shape[1]
         if features == 0:
@@ -110,7 +110,7 @@ class LSTMModel(model_interface.ModelInterface):
 
         autoencoder.compile(optimizer=optimizer, loss=loss_function) # Use config
         self.model = autoencoder
-        print("LSTM Autoencoder Model Compiled:")
+        # print("LSTM Autoencoder Model Compiled:")
         self.model.summary()
         # --- End Model Definition ---
 
@@ -118,11 +118,11 @@ class LSTMModel(model_interface.ModelInterface):
         self.scaler = MinMaxScaler()
         data_normalized = self.scaler.fit_transform(df)
 
-        print(f"Creating sequences with length {self.sequence_length}...")
+        # print(f"Creating sequences with length {self.sequence_length}...")
         X = self.__create_sequences(data_normalized, self.sequence_length)
         if X.size == 0:
             raise ValueError(f"Data is too short ({len(df)} rows) to create sequences of length {self.sequence_length}.")
-        print(f"Created {X.shape[0]} sequences with shape {X.shape[1:]}")
+        # print(f"Created {X.shape[0]} sequences with shape {X.shape[1:]}")
         # --- End Data Preprocessing ---
 
         # --- Training ---
@@ -136,7 +136,7 @@ class LSTMModel(model_interface.ModelInterface):
             self.threshold = np.inf
             return
 
-        print(f"Fitting model on {X_train.shape[0]} training sequences...")
+        # print(f"Fitting model on {X_train.shape[0]} training sequences...")
         self.model.fit(
             X_train, X_train,
             epochs=epochs,       # Use config
@@ -145,33 +145,33 @@ class LSTMModel(model_interface.ModelInterface):
             verbose=1,
             shuffle=True
         )
-        print("Model fitting complete.")
+        # print("Model fitting complete.")
         # --- End Training ---
 
         # --- Threshold Calculation ---
         if X_test_threshold.size > 0:
-            print(f"Calculating threshold on {X_test_threshold.shape[0]} test sequences...")
+            # print(f"Calculating threshold on {X_test_threshold.shape[0]} test sequences...")
             reconstructed = self.model.predict(X_test_threshold)
             reconstruction_error = np.mean(np.square(X_test_threshold - reconstructed), axis=(1, 2))
             self.threshold = np.percentile(reconstruction_error, 95)
-            print(f"Anomaly threshold set to: {self.threshold:.6f}")
+            # print(f"Anomaly threshold set to: {self.threshold:.6f}")
         else:
             warnings.warn("Test split for threshold calculation is empty. Threshold may be unreliable.", RuntimeWarning)
             if X_train.size > 0:
                 reconstructed_train = self.model.predict(X_train)
                 reconstruction_error_train = np.mean(np.square(X_train - reconstructed_train), axis=(1, 2))
                 self.threshold = np.percentile(reconstruction_error_train, 95)
-                print(f"Anomaly threshold set from training data: {self.threshold:.6f}")
+                # print(f"Anomaly threshold set from training data: {self.threshold:.6f}")
             else:
                 self.threshold = np.inf
-                print("Error: Cannot set threshold - no data available.")
+                # print("Error: Cannot set threshold - no data available.")
 
     def __create_sequences(self, data: np.ndarray, sequence_length: int) -> np.ndarray:
         """ Helper method to create 3D windowed sequences from 2D data. """
         sequences = []
         n_samples_total = data.shape[0]
         if n_samples_total < sequence_length:
-            print(f"Warning in __create_sequences: Data length ({n_samples_total}) < sequence_length ({sequence_length}).")
+            # print(f"Warning in __create_sequences: Data length ({n_samples_total}) < sequence_length ({sequence_length}).")
             # Return empty array with correct feature dimension if possible
             n_features = data.shape[1] if data.ndim == 2 else 0
             return np.empty((0, sequence_length, n_features))
@@ -195,7 +195,7 @@ class LSTMModel(model_interface.ModelInterface):
         X: Optional[np.ndarray] = None # Initialize X
 
         if isinstance(input_data, pd.DataFrame):
-            print("Preprocessing DataFrame...") # Optional print
+            # print("Preprocessing DataFrame...") # Optional print
             if input_data.shape[1] != n_features_expected:
                 raise ValueError(f"Input DataFrame has {input_data.shape[1]} features, model expects {n_features_expected}.")
             try:
@@ -208,7 +208,7 @@ class LSTMModel(model_interface.ModelInterface):
                 raise RuntimeError(f"Failed to scale/sequence DataFrame: {e}") from e
 
         elif isinstance(input_data, np.ndarray):
-            print(f"Preprocessing NumPy array with {input_data.ndim} dimensions...") # Optional print
+            # print(f"Preprocessing NumPy array with {input_data.ndim} dimensions...") # Optional print
 
             # --- NEW: Handle 2D NumPy array ---
             if input_data.ndim == 2:
@@ -219,7 +219,7 @@ class LSTMModel(model_interface.ModelInterface):
                     data_normalized = self.scaler.transform(input_data)
                     # Create 3D sequences from scaled 2D data
                     X = self.__create_sequences(data_normalized, self.sequence_length)
-                    print(f"Created {X.shape[0]} sequences from 2D NumPy input.")
+                    # print(f"Created {X.shape[0]} sequences from 2D NumPy input.")
                 except Exception as e:
                     raise RuntimeError(f"Failed to scale/sequence 2D NumPy array: {e}") from e
             # --- End New 2D Handling ---
@@ -241,7 +241,7 @@ class LSTMModel(model_interface.ModelInterface):
                     X_scaled_2d = self.scaler.transform(X_reshaped_2d)
                     # Reshape back to 3D [n_samples, seq_len, n_feat]
                     X = X_scaled_2d.reshape(n_samples, seq_len, n_feat)
-                    print(f"Scaled features within {X.shape[0]} existing 3D sequences.")
+                    # print(f"Scaled features within {X.shape[0]} existing 3D sequences.")
                 except Exception as e:
                     raise RuntimeError(f"Failed to scale features within 3D NumPy input: {e}") from e
             # --- End 3D Handling ---
@@ -278,14 +278,14 @@ class LSTMModel(model_interface.ModelInterface):
         Returns:
             np.ndarray: 1D array of reconstruction errors per sequence (shape: (n_sequences,)).
         """
-        #print("Calculating anomaly scores (reconstruction error)...") # Optional print
+        ## print("Calculating anomaly scores (reconstruction error)...") # Optional print
         # Preprocess input data into scaled 3D sequences
         X = self._preprocess_and_create_sequences(detection_data)
 
         if X.size == 0: return np.array([]) # No sequences to score
 
         # Get reconstruction from autoencoder
-        #print(f"Predicting reconstructions for {X.shape[0]} sequences...") # Optional print
+        ## print(f"Predicting reconstructions for {X.shape[0]} sequences...") # Optional print
         try:
             reconstructed = self.model.predict(X)
         except Exception as e:
@@ -302,7 +302,7 @@ class LSTMModel(model_interface.ModelInterface):
             # Calculate reconstruction error (MSE per sequence)
             reconstruction_error = np.mean(np.square(X - reconstructed), axis=(1, 2))
 
-        #print(f"Calculated {len(reconstruction_error)} scores.") # Optional print
+        ## print(f"Calculated {len(reconstruction_error)} scores.") # Optional print
         return reconstruction_error # Return 1D scores
 
     # Detects anomalies and returns a list of boolean values
@@ -324,7 +324,7 @@ class LSTMModel(model_interface.ModelInterface):
 
         # Compare scores to threshold (higher error = anomaly for reconstruction)
         anomalies = scores > self.threshold
-        print(f"Detected {np.sum(anomalies)} anomalies using threshold {self.threshold:.6f}.")
+        # print(f"Detected {np.sum(anomalies)} anomalies using threshold {self.threshold:.6f}.")
         return np.array(anomalies) # Return 1D boolean array
     
     
@@ -384,5 +384,5 @@ class LSTMModel(model_interface.ModelInterface):
         # Stack probabilities into the desired (n_sequences, 2) shape
         probabilities = np.vstack([prob_normal, prob_anomaly]).T
 
-        #print(f"Calculated anomaly probabilities for {probabilities.shape[0]} sequences.") # Optional print
+        ## print(f"Calculated anomaly probabilities for {probabilities.shape[0]} sequences.") # Optional print
         return probabilities
