@@ -44,9 +44,9 @@ class TimeSeriesExplainer:
         """
 
         if not hasattr(model, 'predict'):
-             raise TypeError("Model must have a 'predict' method.")
+            raise TypeError("Model must have a 'predict' method.")
         if mode == 'classification' and not hasattr(model, 'predict_proba'):
-             print("Warning: Classification mode but model lacks 'predict_proba'. Some explainers might behave unexpectedly.")
+            print("Warning: Classification mode but model lacks 'predict_proba'. Some explainers might behave unexpectedly.")
 
         self._model = model
         self._background_data = background_data
@@ -65,14 +65,12 @@ class TimeSeriesExplainer:
         self._outcome_name_for_dice = outcome_name_for_dice
         # Default to all features being continuous if not specified for DiCE
         self._continuous_features_for_dice = continuous_features_for_dice if continuous_features_for_dice is not None else feature_names
-        print(f"TimeSeriesExplainer Init: DiCE context received - training_df: {'Yes' if self._training_df_for_dice is not None else 'No'}, outcome: {self._outcome_name_for_dice}")
+        # print(f"TimeSeriesExplainer Init: DiCE context received - training_df: {'Yes' if self._training_df_for_dice is not None else 'No'}, outcome: {self._outcome_name_for_dice}")
         # ---
 
         # Cache to store initialized explainer objects returned by get_method
         self._explainer_cache: Dict[str, ExplainerMethodAPI] = {}
-        print("TimeSeriesExplainer manager initialized.")
-
-        print("TimeSeriesExplainer manager initialized.")
+        # print("TimeSeriesExplainer manager initialized.")
 
     # --- Public properties to access configuration ---
     @property
@@ -117,7 +115,7 @@ class TimeSeriesExplainer:
             })
 
         if method_key not in self._explainer_cache:
-            print(f"Initializing explainer for '{method_key}' via get_method...")
+            # print(f"Initializing explainer for '{method_key}' via get_method...")
             try:
                 # Call the external factory, passing all necessary context
                 # get_method should handle which params are needed for which method
@@ -133,13 +131,13 @@ class TimeSeriesExplainer:
                     **explainer_params_for_factory # Pass the constructed dictionary
                 )
                 self._explainer_cache[method_key] = explainer_object
-                print(f"Initialized and cached explainer for '{method_key}'. Type: {type(explainer_object).__name__}")
+                # print(f"Initialized and cached explainer for '{method_key}'. Type: {type(explainer_object).__name__}")
 
             except (ValueError, RuntimeError, TypeError, ImportError) as e:
-                print(f"Error initializing explainer '{method_key}': {e}")
+                # print(f"Error initializing explainer '{method_key}': {e}")
                 raise RuntimeError(f"Failed to get/initialize explainer '{method_key}'") from e
-        else:
-            print(f"Using cached explainer for '{method_key}'.")
+        # else:
+            # print(f"Using cached explainer for '{method_key}'.")
 
         return self._explainer_cache[method_key]
 
@@ -178,7 +176,7 @@ class TimeSeriesExplainer:
             ValueError: If instance shapes are inconsistent.
             Any exceptions raised by the specific explainer object's `explain` method.
         """
-        print(f"\n--- TimeSeriesExplainer: Requesting explanation via method '{method_name}' ---")
+        # print(f"\n--- TimeSeriesExplainer: Requesting explanation via method '{method_name}' ---")
 
         # Add explicit type check at the entry point for clarity
         if not isinstance(instances_to_explain, np.ndarray):
@@ -189,10 +187,10 @@ class TimeSeriesExplainer:
             explainer = self._get_or_initialize_explainer(method_name)
 
             # Step 2: Delegate to the specific object's explain method
-            print(f"Calling '{method_name}' explainer's (.explain) method...")
+            # print(f"Calling '{method_name}' explainer's (.explain) method...")
             result = explainer.explain(instances_to_explain, **kwargs) # Pass the validated NumPy array
 
-            print(f"--- TimeSeriesExplainer: Explanation finished for '{method_name}' ---")
+            # print(f"--- TimeSeriesExplainer: Explanation finished for '{method_name}' ---")
             return result
 
         except Exception as e:

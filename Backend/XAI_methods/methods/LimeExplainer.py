@@ -36,7 +36,7 @@ class LimeExplainer(ExplainerMethodAPI):
                 - class_names (List[str], optional): List of class names for classification mode.
                 # Other potential LimeTabularExplainer init args can be passed here.
         """
-        print("Initializing LimeExplainer...")
+        # print("Initializing LimeExplainer...")
         self.model = model 
         self.mode = params.get('mode', None)
         self.feature_names = params.get('feature_names', None)
@@ -119,7 +119,7 @@ class LimeExplainer(ExplainerMethodAPI):
         self._predict_fn_lime = _predict_fn_lime
 
         # --- Initialize LimeTabularExplainer ---
-        print("Initializing lime.lime_tabular.LimeTabularExplainer...")
+        # print("Initializing lime.lime_tabular.LimeTabularExplainer...")
         # Extract relevant init kwargs from params
         lime_init_kwargs = {
              k: v for k, v in params.items()
@@ -135,9 +135,9 @@ class LimeExplainer(ExplainerMethodAPI):
                 mode=self.mode,                          # 'classification' or 'regression'
                 **lime_init_kwargs                       # Pass other init args
             )
-            print("LimeExplainer initialization complete.")
+            # print("LimeExplainer initialization complete.")
         except Exception as e:
-            print(f"Error initializing LimeTabularExplainer: {e}")
+            # print(f"Error initializing LimeTabularExplainer: {e}")
             raise RuntimeError("Failed to initialize LIME Tabular Explainer.") from e
 
 
@@ -173,7 +173,7 @@ class LimeExplainer(ExplainerMethodAPI):
             TypeError: If input is not a NumPy array.
             Any exceptions from the underlying LIME `explain_instance` call.
         """
-        print(f"LimeExplainer: Received instance data with shape {instances_to_explain.shape} to explain.")
+        # print(f"LimeExplainer: Received instance data with shape {instances_to_explain.shape} to explain.")
 
         # --- Input Validation for LIME (expects single instance) ---
         if not isinstance(instances_to_explain, np.ndarray):
@@ -197,7 +197,7 @@ class LimeExplainer(ExplainerMethodAPI):
         top_labels = kwargs.get('top_labels', None) 
         other_lime_kwargs = {k: v for k, v in kwargs.items() if k not in ['num_features', 'num_samples', 'labels', 'top_labels']}
 
-        print(f"Calling LIME explain_instance (num_features={num_features}, num_samples={num_samples})...")
+        # print(f"Calling LIME explain_instance (num_features={num_features}, num_samples={num_samples})...")
         try:
             explanation = self._explainer.explain_instance(
                 data_row=instance_1d_flat,           # The flattened instance data
@@ -208,10 +208,10 @@ class LimeExplainer(ExplainerMethodAPI):
                 top_labels=top_labels,               # Pass top_labels if provided
                 **other_lime_kwargs                  # Pass any other valid LIME kwargs
             )
-            print("LIME explanation finished.")
+            # print("LIME explanation finished.")
             return explanation
         except Exception as e:
-            print(f"Error during LIME explain_instance calculation: {e}")
+            # print(f"Error during LIME explain_instance calculation: {e}")
             import traceback
             traceback.print_exc() # Print full traceback for debugging LIME issues
             raise RuntimeError("LIME explanation failed.") from e

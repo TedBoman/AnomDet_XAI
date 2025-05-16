@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
-from typing import Any, List, Optional, Tuple, Union
+import re
+from typing import Any, Dict, List, Optional, Tuple, Union
 import warnings
 
 def select_explanation_indices(
@@ -140,7 +141,7 @@ def select_explanation_indices(
     # Although sampling without replacement should prevent duplicates here.
     # selected_indices = np.unique(selected_indices) 
     
-    print(f"Selected {len(selected_indices)} indices using strategy '{strategy}'.")
+    # print(f"Selected {len(selected_indices)} indices using strategy '{strategy}'.")
     return selected_indices.astype(int) # Ensure integer type
 
 def dataframe_to_sequences(
@@ -239,14 +240,14 @@ def dataframe_to_sequences(
 
     # --- Apply processing ---
     if id_col:
-        print(f"Processing data grouped by '{id_col}'...")
+        # print(f"Processing data grouped by '{id_col}'...")
         grouped = df.groupby(id_col)
         for group_id, group_df in grouped:
              if time_col and not group_df[time_col].is_monotonic_increasing:
                  warnings.warn(f"Time series for ID '{group_id}' not sorted by '{time_col}'. Ensure data is pre-sorted.", UserWarning)
              process_group(group_df)
     else:
-        print("Processing data as a single time series...")
+        # print("Processing data as a single time series...")
         if time_col and not df[time_col].is_monotonic_increasing:
              warnings.warn(f"Time series data not sorted by '{time_col}'. Ensure data is pre-sorted.", UserWarning)
         process_group(df)
@@ -274,10 +275,120 @@ def dataframe_to_sequences(
              y_final = y_final.astype(float) # Convert bool to float (0.0/1.0)
         # Keep as object if non-numeric/non-bool and not easily convertible
 
-        print(f"Generated X shape: {X_final.shape}, y shape: {y_final.shape}")
+        # print(f"Generated X shape: {X_final.shape}, y shape: {y_final.shape}")
         return X_final, y_final
     else:
-        print(f"Generated X shape: {X_final.shape}")
+        # print(f"Generated X shape: {X_final.shape}")
         return X_final
+    
+def calculate_dcg_at_k(ranked_relevances: List[float], k: int) -> float:
+    """Calculates Discounted Cumulative Gain at k."""
+    dcg = 0.0
+    for i in range(min(len(ranked_relevances), k)):
+        dcg += ranked_relevances[i] / np.log2(i + 2) # log2(rank + 1), rank is i+1
+    return dcg 
+
+def calculate_ndcg_at_k(
+    xai_feature_scores: Dict[str, float],
+    true_relevant_features: List[str],
+    all_feature_names: List[str],
+    k: int
+) -> float:
+    """
+    Calculates Normalized Discounted Cumulative Gain at k.
+
+    Args:
+        xai_feature_scores: Dict mapping feature name to its importance score from XAI.
+        true_relevant_features: List of feature names considered ground truth relevant.
+        all_feature_names: List of all possible feature names in order.
+        k: The cut-off for NDCG.
+
+    Returns:
+        NDCG@k score, or 0.0 if IDCG is 0 or no true relevant features.
+    """
+    if not true_relevant_features: # No ground truth relevant features to rank
+        return 0.0
+
+    # Create true relevance map (1 for relevant, 0 otherwise)
+    true_relevance_map = {feat: (1.0 if feat in true_relevant_features else 0.0)
+                          for feat in all_feature_names}
+
+    # Get XAI-ranked features and their true relevances
+    # Sort features by XAI score in descending order
+    sorted_features_by_xai = sorted(xai_feature_scores.items(), key=lambda item: item[1], reverse=True)
+    
+    # Ensure all features are present in sorted_features_by_xai, adding missing ones with score 0
+    present_features = {item[0] for item in sorted_features_by_xai}
+    for feat in all_feature_names:
+        if feat not in present_features:
+            sorted_features_by_xai.append((feat, 0.0)) # Add with lowest score if missing
+
+    xai_ranked_true_relevances = [true_relevance_map.get(feat_name, 0.0)
+                                  for feat_name, score in sorted_features_by_xai]
+
+    dcg_at_k = calculate_dcg_at_k(xai_ranked_true_relevances, k)
+
+    # Get ideally-ranked features and their true relevances
+    # Sort features by true relevance in descending order
+    ideal_ranked_true_relevances = sorted(true_relevance_map.values(), reverse=True)
+    
+    idcg_at_k = calculate_dcg_at_k(ideal_ranked_true_relevances, k)
+
+    if idcg_at_k == 0:
+        return 0.0  # Or handle as per convention, e.g., if DCG is also 0, result is 1.
+                    # Common practice is 0 if IDCG is 0 and DCG is not (should not happen with binary relevance)
+                    # Or if DCG is 0 and IDCG is 0, could be 1 or 0. Let's use 0.
+    
+    return dcg_at_k / idcg_at_k
+
+def parse_duration_to_seconds(duration_str):
+        """
+        Parses a duration string like '1H', '30min', '2D', '1h30m', '2days 5hours' 
+        into a timedelta object.
+        
+        Supports the following units:
+            - H, h: hours
+            - min, m: minutes
+            - D, d, days: days
+            - S, s: seconds
+            - W, w, weeks: weeks
+
+        Args:
+            duration_str (str): The duration string to parse.
+
+        Returns:
+            datetime.timedelta: A timedelta object representing the duration.
+
+        Raises:
+            ValueError: If the duration string is invalid.
+        """
+
+
+        if duration_str == "0" or duration_str == None or duration_str == "":
+            return 0
+
+        pattern = r'(\d+)\s*([HhmindaysSwW]+)'
+        matches = re.findall(pattern, duration_str)
+
+        if not matches:
+            raise ValueError("Invalid duration format")
+
+        total_seconds = 0
+        for value, unit in matches:
+            value = int(value)
+            if unit in ('H', 'h'):
+                total_seconds += value * 3600
+            elif unit in ('min', 'm'):
+                total_seconds += value * 60
+            elif unit in ('D', 'd', 'days'):
+                total_seconds += value * 86400
+            elif unit in ('S', 's'):
+                total_seconds += value
+            elif unit in ('W', 'w', 'weeks'):
+                total_seconds += value * 604800
+            else:
+                return 0
+
+        return total_seconds
 
 # --- End of utils.py content ---

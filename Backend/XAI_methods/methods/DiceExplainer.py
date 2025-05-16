@@ -39,7 +39,7 @@ class DiceExplainer(ExplainerMethodAPI):
                 - backend (str, optional): Backend for DiCE model ('sklearn', 'TF1', 'TF2', 'PYT'). Defaults to 'sklearn'.
                 # Other potential dice_ml init args can be passed.
         """
-        print("Initializing DiceExplainer...")
+        # print("Initializing DiceExplainer...")
         self.model_wrapper = model # The wrapper instance (e.g., ModelWrapperForXAI)
         self.mode = params.get('mode', None) # Should be 'classification' or 'regression'
         self.feature_names = params.get('feature_names', None) # Base feature names
@@ -97,7 +97,7 @@ class DiceExplainer(ExplainerMethodAPI):
                      warnings.warn(f"Flattened feature name '{flat_name}' matched a base continuous name directly. Ensure naming convention is consistent.", UserWarning)
 
         # --- Prepare Data for DiCE (needs 2D DataFrame) ---
-        print("Preparing data for DiCE...")
+        # print("Preparing data for DiCE...")
         n_bg_samples = background_data.shape[0]
         background_data_flat = background_data.reshape(n_bg_samples, self._num_flat_features)
         background_df_dict = {name: background_data_flat[:, i] for i, name in enumerate(self.flat_feature_names)}
@@ -111,8 +111,8 @@ class DiceExplainer(ExplainerMethodAPI):
              try: background_df[self.outcome_name] = background_df[self.outcome_name].astype(float)
              except ValueError as e: warnings.warn(f"Could not convert outcome column '{self.outcome_name}' to float for DiCE regression. Check data. Error: {e}", RuntimeWarning)
 
-        print(f"Background DataFrame created. Shape: {background_df.shape}")
-        print(f"Outcome column: '{self.outcome_name}', Continuous flat features identified: {len(self.continuous_flat_feature_names)}")
+        # print(f"Background DataFrame created. Shape: {background_df.shape}")
+        # print(f"Outcome column: '{self.outcome_name}', Continuous flat features identified: {len(self.continuous_flat_feature_names)}")
 
         # --- Initialize dice_ml.Data ---
         try:
@@ -128,9 +128,9 @@ class DiceExplainer(ExplainerMethodAPI):
                 continuous_features=self.continuous_flat_feature_names, # Use potentially updated list
                 outcome_name=self.outcome_name
             )
-            print("dice_ml.Data initialized.")
+            # print("dice_ml.Data initialized.")
         except Exception as e:
-            print(f"Error initializing dice_ml.Data: {e}")
+            # print(f"Error initializing dice_ml.Data: {e}")
             traceback.print_exc()
             raise RuntimeError("Failed to initialize DiCE Data object.") from e
 
@@ -171,16 +171,16 @@ class DiceExplainer(ExplainerMethodAPI):
                 backend=self.backend, 
                 model_type=dice_model_type
             )
-            print(f"dice_ml.Model initialized directly with model wrapper and backend '{self.backend}'. Model type: '{dice_model_type}'")
+            # print(f"dice_ml.Model initialized directly with model wrapper and backend '{self.backend}'. Model type: '{dice_model_type}'")
         except Exception as e:
-            print(f"Warning: Initializing dice_ml.Model directly failed ({e}). Retrying with explicit function wrapper...")
+            # print(f"Warning: Initializing dice_ml.Model directly failed ({e}). Retrying with explicit function wrapper...")
             try:
                 self._dice_model_interface = dice_ml.Model(
                     func=_predict_fn_dice, backend=self.backend, model_type=dice_model_type
                 )
-                print(f"dice_ml.Model initialized with explicit function wrapper and backend '{self.backend}'. Model type: '{dice_model_type}'")
+                # print(f"dice_ml.Model initialized with explicit function wrapper and backend '{self.backend}'. Model type: '{dice_model_type}'")
             except Exception as e2:
-                print(f"Error initializing dice_ml.Model with function wrapper: {e2}")
+                # print(f"Error initializing dice_ml.Model with function wrapper: {e2}")
                 traceback.print_exc()
                 raise RuntimeError("Failed to initialize DiCE Model object.") from e2
 
@@ -191,10 +191,10 @@ class DiceExplainer(ExplainerMethodAPI):
                 model_interface=self._dice_model_interface,
                 method=self.dice_method
             )
-            print(f"dice_ml.Dice explainer initialized with method '{self.dice_method}'.")
-            print("DiceExplainer initialization complete.")
+            # print(f"dice_ml.Dice explainer initialized with method '{self.dice_method}'.")
+            # print("DiceExplainer initialization complete.")
         except Exception as e:
-            print(f"Error initializing dice_ml.Dice: {e}")
+            # print(f"Error initializing dice_ml.Dice: {e}")
             traceback.print_exc()
             raise RuntimeError("Failed to initialize DiCE explainer.") from e
 
@@ -230,7 +230,7 @@ class DiceExplainer(ExplainerMethodAPI):
             TypeError: If input is not a NumPy array.
             Any exceptions from the underlying DiCE `generate_counterfactuals` call.
         """
-        print(f"DiceExplainer: Received {instances_to_explain.shape[0]} instances to explain.")
+        # print(f"DiceExplainer: Received {instances_to_explain.shape[0]} instances to explain.")
 
         # --- Input Validation ---
         if not isinstance(instances_to_explain, np.ndarray):
@@ -245,7 +245,7 @@ class DiceExplainer(ExplainerMethodAPI):
         instances_flat_np = instances_to_explain.reshape(n_instances, self._num_flat_features)
         # Ensure columns are in the same order as self.flat_feature_names used in init
         query_df = pd.DataFrame(instances_flat_np, columns=self.flat_feature_names)
-        print(f"Query DataFrame created for DiCE. Shape: {query_df.shape}")
+        # print(f"Query DataFrame created for DiCE. Shape: {query_df.shape}")
 
         # --- Extract DiCE runtime arguments ---
         if 'total_CFs' not in kwargs:
@@ -259,10 +259,10 @@ class DiceExplainer(ExplainerMethodAPI):
         if features_to_vary_input is None or len(features_to_vary_input) == 0:
             # If no specific features provided, default to all continuous flattened features
             final_features_to_vary = self.continuous_flat_feature_names
-            print(f"No 'features_to_vary' provided, defaulting to {len(final_features_to_vary)} continuous flattened features.")
+            # print(f"No 'features_to_vary' provided, defaulting to {len(final_features_to_vary)} continuous flattened features.")
         else:
             # Assume features_to_vary_input contains BASE feature names and convert them
-            print(f"Received 'features_to_vary' input (base names): {features_to_vary_input}")
+            # print(f"Received 'features_to_vary' input (base names): {features_to_vary_input}")
             base_names_to_vary = set(features_to_vary_input)
             converted_count = 0
             for flat_name in self.flat_feature_names: # Iterate through all possible flat names
@@ -277,7 +277,7 @@ class DiceExplainer(ExplainerMethodAPI):
                     else:
                          warnings.warn(f"Base feature '{base_name}' requested in features_to_vary, but corresponding flattened feature '{flat_name}' not found in query data columns. Skipping.", RuntimeWarning)
 
-            print(f"Converted base features to {len(final_features_to_vary)} valid flattened features to vary.")
+            # print(f"Converted base features to {len(final_features_to_vary)} valid flattened features to vary.")
             # Validate if any features remain after conversion
             if not final_features_to_vary:
                  warnings.warn("After converting base feature names in 'features_to_vary', the list is empty. Defaulting to all continuous flattened features.", RuntimeWarning)
@@ -300,7 +300,7 @@ class DiceExplainer(ExplainerMethodAPI):
             else: dice_runtime_args['desired_range'] = desired_range
 
         # --- Call DiCE generate_counterfactuals ---
-        print(f"Calling DiCE generate_counterfactuals with args: {dice_runtime_args}")
+        # print(f"Calling DiCE generate_counterfactuals with args: {dice_runtime_args}")
         try:
             if not hasattr(self, '_explainer') or self._explainer is None:
                  raise RuntimeError("DiCE explainer object was not initialized correctly.")
@@ -313,9 +313,9 @@ class DiceExplainer(ExplainerMethodAPI):
                 query_instances=query_df,
                 **dice_runtime_args
             )
-            print("DiCE explanation finished.")
+            # print("DiCE explanation finished.")
             return dice_exp
         except Exception as e:
-            print(f"Error during DiCE generate_counterfactuals calculation: {e}")
+            # print(f"Error during DiCE generate_counterfactuals calculation: {e}")
             traceback.print_exc()
             raise RuntimeError("DiCE explanation failed.") from e

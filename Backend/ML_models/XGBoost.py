@@ -63,8 +63,8 @@ class XGBoostModel(model_interface.ModelInterface):
         if self.n_splits <= 1 and self.n_splits != 0 : # Allow 0 if user wants to skip CV
              warnings.warn(f"n_splits is {self.n_splits}. If >0, it must be >1. Setting to 2. If you want to skip CV, set n_splits=0.")
              if self.n_splits > 0 : self.n_splits = 2 # Correct to a valid value if > 0 but <=1
-        if self.n_splits == 0:
-             print("n_splits is 0. K-Fold Cross-Validation will be skipped.")
+        # if self.n_splits == 0:
+             # print("n_splits is 0. K-Fold Cross-Validation will be skipped.")
 
 
         # Metrics for manual calculation and averaging after each fold
@@ -90,13 +90,13 @@ class XGBoostModel(model_interface.ModelInterface):
                     'min_child_weight': [1, 3, 5, 7],
                     'reg_alpha':[0.001, 0.01, 0.1, 1],
                 }
-                print("XGBoostModel auto_tune=True: Using default hyperparameter grid.")
-            else:
-                print("XGBoostModel auto_tune=True: Using provided hyperparameter grid.")
+                # print("XGBoostModel auto_tune=True: Using default hyperparameter grid.")
+            # else:
+                # print("XGBoostModel auto_tune=True: Using provided hyperparameter grid.")
             if not isinstance(self.hyperparam_grid, dict) or not self.hyperparam_grid:
                  raise ValueError("Hyperparameter grid must be a non-empty dictionary when auto_tune is True.")
-            print(f"  RandomizedSearchCV: n_iter={self.n_iter_search}, scoring='{self.search_scoring_metric}', "
-                  f"inner_cv_splits={self.search_cv_splits}, verbose={self.search_verbose}")
+            # print(f"  RandomizedSearchCV: n_iter={self.n_iter_search}, scoring='{self.search_scoring_metric}', "
+                #   f"inner_cv_splits={self.search_cv_splits}, verbose={self.search_verbose}")
             if self.search_cv_splits <= 1:
                 raise ValueError("search_cv_splits for RandomizedSearchCV must be greater than 1.")
 
@@ -131,11 +131,11 @@ class XGBoostModel(model_interface.ModelInterface):
         self.early_stopping_rounds = kwargs.get('early_stopping_rounds', None)
         self.verbose_eval = kwargs.get('verbose_eval', False)
 
-        print(f"XGBoostModel Initialized with base params: {self.model_params}")
-        if self.n_splits > 0:
-            print(f"K-fold CV: n_splits={self.n_splits}, shuffle={self.shuffle_kfold}")
-        print(f"Early Stopping Rounds (per fold/final): {self.early_stopping_rounds}, XGBoost Verbose Eval: {self.verbose_eval}")
-        print(f"User-defined CV metrics for averaging: {self.user_validation_metrics}")
+        # print(f"XGBoostModel Initialized with base params: {self.model_params}")
+        # if self.n_splits > 0:
+            # print(f"K-fold CV: n_splits={self.n_splits}, shuffle={self.shuffle_kfold}")
+        # print(f"Early Stopping Rounds (per fold/final): {self.early_stopping_rounds}, XGBoost Verbose Eval: {self.verbose_eval}")
+        # print(f"User-defined CV metrics for averaging: {self.user_validation_metrics}")
 
     def _prepare_data_for_model(
         self, X: Union[pd.DataFrame, np.ndarray],
@@ -156,7 +156,7 @@ class XGBoostModel(model_interface.ModelInterface):
         - feature_names: List of feature names for the columns in X_processed_scaled.
         """
         if isinstance(X, pd.DataFrame):
-            print("Processing DataFrame input as 2D NumPy (no lagging)...")
+            # print("Processing DataFrame input as 2D NumPy (no lagging)...")
             self.input_type = 'dataframe'
             self.sequence_length = 1 # No sequence dimension
 
@@ -203,7 +203,7 @@ class XGBoostModel(model_interface.ModelInterface):
 
         elif isinstance(X, np.ndarray):
             # Handle both 3D and 2D NumPy input, especially for inference
-            print(f"DEBUG _prepare_data: Processing NumPy input shape {X.shape}")
+            # print(f"DEBUG _prepare_data: Processing NumPy input shape {X.shape}")
 
             original_ndim = X.ndim
             temp_X = X # Work with a temporary variable
@@ -215,7 +215,7 @@ class XGBoostModel(model_interface.ModelInterface):
                 if self.n_original_features is not None and n_feat_2d != self.n_original_features:
                     raise ValueError(f"Inference 2D NumPy input has {n_feat_2d} features, expected {self.n_original_features}.")
                 temp_X = temp_X[:, np.newaxis, :] # Reshape to (samples, 1, features)
-                print(f"DEBUG _prepare_data: Reshaped 2D NumPy input to 3D {temp_X.shape} for inference.")
+                # print(f"DEBUG _prepare_data: Reshaped 2D NumPy input to 3D {temp_X.shape} for inference.")
 
             # Now proceed assuming temp_X is 3D (either originally or after reshape)
             if temp_X.ndim != 3:
@@ -229,7 +229,7 @@ class XGBoostModel(model_interface.ModelInterface):
                 if original_ndim != 3: # Ensure original input was 3D for training
                     raise ValueError(f"NumPy training input must be 3D, got {original_ndim}D.")
 
-                print(f"DEBUG _prepare_data (Train): NumPy input shape {temp_X.shape}") # Add shape print
+                # print(f"DEBUG _prepare_data (Train): NumPy input shape {temp_X.shape}") # Add shape print
                 self.input_type = 'numpy'
                 self.sequence_length = seq_len
                 self.n_original_features = n_feat
@@ -240,12 +240,12 @@ class XGBoostModel(model_interface.ModelInterface):
 
                 # Flatten 3D -> 2D for XGBoost training
                 X_flattened = temp_X.reshape(n_samples, seq_len * n_feat)
-                print(f"DEBUG _prepare_data (Train): Flattened 3D to 2D for scaling/training: {X_flattened.shape}")
+                # print(f"DEBUG _prepare_data (Train): Flattened 3D to 2D for scaling/training: {X_flattened.shape}")
 
                 # Scaling (Fit and Transform flattened data)
                 self.scaler = MinMaxScaler()
                 X_processed_scaled = self.scaler.fit_transform(X_flattened)
-                print(f"DEBUG _prepare_data (Train): Scaled 2D data shape: {X_processed_scaled.shape}")
+                # print(f"DEBUG _prepare_data (Train): Scaled 2D data shape: {X_processed_scaled.shape}")
 
                 # Generate flattened feature names
                 n_flattened_features = seq_len * n_feat
@@ -259,7 +259,7 @@ class XGBoostModel(model_interface.ModelInterface):
                 return X_processed_scaled, y_aligned, self.processed_feature_names
 
             else: # Detection/Inference for NumPy input
-                print(f"DEBUG _prepare_data (Inference): NumPy input shape {temp_X.shape}")
+                # print(f"DEBUG _prepare_data (Inference): NumPy input shape {temp_X.shape}")
                 if self.scaler is None or self.sequence_length is None or self.n_original_features is None or self.processed_feature_names is None:
                     raise RuntimeError("Model (trained on NumPy or receiving NumPy for inference) not ready.")
 
@@ -275,11 +275,11 @@ class XGBoostModel(model_interface.ModelInterface):
 
                 # Flatten 3D -> 2D for XGBoost prediction
                 X_flattened = temp_X.reshape(n_samples, seq_len * n_feat)
-                print(f"DEBUG _prepare_data (Inference): Flattened 3D to 2D for scaling/prediction: {X_flattened.shape}")
+                # print(f"DEBUG _prepare_data (Inference): Flattened 3D to 2D for scaling/prediction: {X_flattened.shape}")
 
                 # Scaling (Transform only)
                 X_processed_scaled = self.scaler.transform(X_flattened)
-                print(f"DEBUG _prepare_data (Inference): Scaled 2D data shape: {X_processed_scaled.shape}")
+                # print(f"DEBUG _prepare_data (Inference): Scaled 2D data shape: {X_processed_scaled.shape}")
 
                 # Return 2D scaled data for XGBoost prediction
                 return X_processed_scaled, None, self.processed_feature_names # No labels
@@ -294,7 +294,7 @@ class XGBoostModel(model_interface.ModelInterface):
         then (if n_splits > 0) performs k-fold cross-validation for performance estimation,
         and finally trains a final XGBoost model on the entire dataset.
         """
-        print(f"Running training for XGBoostModel (Input type: {'DataFrame' if isinstance(X, pd.DataFrame) else 'NumPy'})...")
+        # print(f"Running training for XGBoostModel (Input type: {'DataFrame' if isinstance(X, pd.DataFrame) else 'NumPy'})...")
 
         # --- Step 1: Prepare FULL data (fits scaler globally) ---
         if isinstance(X, pd.DataFrame):
@@ -322,8 +322,8 @@ class XGBoostModel(model_interface.ModelInterface):
 
         # --- Step 1.5: Hyperparameter Tuning (Optional) ---
         if self.auto_tune:
-            print("\n" + "-" * 30)
-            print("Starting Hyperparameter Tuning with RandomizedSearchCV...")
+            # print("\n" + "-" * 30)
+            # print("Starting Hyperparameter Tuning with RandomizedSearchCV...")
             
             n_neg_search = np.sum(y_aligned_full == 0)
             n_pos_search = np.sum(y_aligned_full == 1)
@@ -334,7 +334,7 @@ class XGBoostModel(model_interface.ModelInterface):
                 warnings.warn("No positive samples in data for hyperparameter search scale_pos_weight calculation. Using 1.0.", RuntimeWarning)
             elif n_neg_search == 0:
                  warnings.warn("No negative samples in data for hyperparameter search scale_pos_weight calculation. Using 1.0.", RuntimeWarning)
-            print(f"  Using scale_pos_weight for search estimator: {scale_pos_weight_search:.4f} (calculated on full preprocessed data)")
+            # print(f"  Using scale_pos_weight for search estimator: {scale_pos_weight_search:.4f} (calculated on full preprocessed data)")
 
             search_estimator_base_params = self.model_params.copy()
             search_estimator_base_params['scale_pos_weight'] = scale_pos_weight_search
@@ -364,8 +364,8 @@ class XGBoostModel(model_interface.ModelInterface):
                     num_param_combinations *= len(self.hyperparam_grid[k])
             
             actual_n_iter = min(self.n_iter_search, num_param_combinations)
-            if actual_n_iter < self.n_iter_search:
-                print(f"  Note: n_iter_search ({self.n_iter_search}) is > total param combinations ({num_param_combinations}). Using n_iter={actual_n_iter}.")
+            # if actual_n_iter < self.n_iter_search:
+                # print(f"  Note: n_iter_search ({self.n_iter_search}) is > total param combinations ({num_param_combinations}). Using n_iter={actual_n_iter}.")
 
 
             random_search = RandomizedSearchCV(
@@ -379,12 +379,12 @@ class XGBoostModel(model_interface.ModelInterface):
                 verbose=self.search_verbose
             )
 
-            print(f"  Fitting RandomizedSearchCV on {X_processed_full.shape[0]} samples...")
+            # print(f"  Fitting RandomizedSearchCV on {X_processed_full.shape[0]} samples...")
             search_fit_params = {} # No early stopping during RandomizedSearchCV's internal folds for simplicity.
                                    # n_estimators from grid will be used as-is.
-            if self.early_stopping_rounds is not None and self.early_stopping_rounds > 0:
-                 print("  Note: Configured early_stopping_rounds is NOT applied *during* RandomizedSearchCV's internal folds.")
-                 print("        It will be applied during the subsequent main K-Fold CV and final model fit, using the tuned n_estimators as a max.")
+            # if self.early_stopping_rounds is not None and self.early_stopping_rounds > 0:
+                 # print("  Note: Configured early_stopping_rounds is NOT applied *during* RandomizedSearchCV's internal folds.")
+                 # print("        It will be applied during the subsequent main K-Fold CV and final model fit, using the tuned n_estimators as a max.")
 
             try:
                 if X_processed_full.shape[0] < self.search_cv_splits:
@@ -392,15 +392,15 @@ class XGBoostModel(model_interface.ModelInterface):
                                    "Skipping hyperparameter tuning.", RuntimeWarning)
                 else:
                     random_search.fit(X_processed_full, y_aligned_full, **search_fit_params)
-                    print(f"  Best parameters found by RandomizedSearchCV: {random_search.best_params_}")
-                    print(f"  Best score ('{self.search_scoring_metric}') from RandomizedSearchCV: {random_search.best_score_:.4f}")
+                    # print(f"  Best parameters found by RandomizedSearchCV: {random_search.best_params_}")
+                    # print(f"  Best score ('{self.search_scoring_metric}') from RandomizedSearchCV: {random_search.best_score_:.4f}")
                     self.model_params.update(random_search.best_params_)
-                    print(f"  self.model_params updated to: {self.model_params}")
+                    # print(f"  self.model_params updated to: {self.model_params}")
 
             except Exception as e:
                 warnings.warn(f"Hyperparameter tuning with RandomizedSearchCV failed: {e}. "
                               "Proceeding with original/default model parameters.", RuntimeWarning)
-            print("-" * 30 + "\n")
+            # print("-" * 30 + "\n")
         # --- End of Hyperparameter Tuning ---
 
 
@@ -413,10 +413,10 @@ class XGBoostModel(model_interface.ModelInterface):
             fold_best_eval_scores = []
             fold_count = 0
 
-            print(f"Starting {self.n_splits}-fold cross-validation for XGBoost with effective params: {self.model_params}...")
+            # print(f"Starting {self.n_splits}-fold cross-validation for XGBoost with effective params: {self.model_params}...")
             for fold_idx, (train_index, val_index) in enumerate(skf.split(X_processed_full, y_aligned_full)):
                 fold_count += 1
-                print(f"  Fold {fold_idx + 1}/{self.n_splits}...")
+                # print(f"  Fold {fold_idx + 1}/{self.n_splits}...")
                 X_train_fold, X_val_fold = X_processed_full[train_index], X_processed_full[val_index]
                 y_train_fold, y_val_fold = y_aligned_full[train_index], y_aligned_full[val_index]
 
@@ -433,7 +433,7 @@ class XGBoostModel(model_interface.ModelInterface):
                 if n_pos_train_fold == 0: warnings.warn(f"    No positive samples in train part of fold {fold_idx+1}. scale_pos_weight=1.0.", RuntimeWarning)
                 elif n_neg_train_fold == 0: warnings.warn(f"    No negative samples in train part of fold {fold_idx+1}. scale_pos_weight=1.0.", RuntimeWarning)
                 else: scale_pos_weight_fold = float(n_neg_train_fold) / float(n_pos_train_fold)
-                print(f"    Fold {fold_idx+1} scale_pos_weight: {scale_pos_weight_fold:.4f}")
+                # print(f"    Fold {fold_idx+1} scale_pos_weight: {scale_pos_weight_fold:.4f}")
 
                 current_fold_model_params = self.model_params.copy()
                 current_fold_model_params['scale_pos_weight'] = scale_pos_weight_fold
@@ -461,7 +461,7 @@ class XGBoostModel(model_interface.ModelInterface):
                         fold_best_iterations.append(temp_model_fold.best_iteration)
                         if hasattr(temp_model_fold, 'best_score') and temp_model_fold.best_score is not None:
                             fold_best_eval_scores.append(temp_model_fold.best_score)
-                        print(f"    Fold {fold_idx+1} - Best Iteration (early stopping): {temp_model_fold.best_iteration if temp_model_fold.best_iteration is not None else 'N/A'}")
+                        # print(f"    Fold {fold_idx+1} - Best Iteration (early stopping): {temp_model_fold.best_iteration if temp_model_fold.best_iteration is not None else 'N/A'}")
 
                 except Exception as e:
                     warnings.warn(f"    XGBoost fitting failed for fold {fold_idx + 1}: {e}. Skipping fold evaluation.", RuntimeWarning)
@@ -489,14 +489,14 @@ class XGBoostModel(model_interface.ModelInterface):
                                     warnings.warn(f"    Unsupported user metric '{metric_name}' for fold {fold_idx + 1}.", UserWarning)
                                     continue
                                 fold_scores[metric_name].append(score)
-                                print(f"    Fold {fold_idx + 1} User Metric '{metric_name}': {score:.4f}")
+                                # print(f"    Fold {fold_idx + 1} User Metric '{metric_name}': {score:.4f}")
                             except Exception as metric_e:
-                                print(f"    Failed to calculate user metric '{metric_name}' for fold {fold_idx + 1}: {metric_e}")
+                                # print(f"    Failed to calculate user metric '{metric_name}' for fold {fold_idx + 1}: {metric_e}")
                                 fold_scores[metric_name].append(np.nan)
                     except Exception as eval_e:
                         print(f"    Failed during manual validation evaluation for fold {fold_idx + 1}: {eval_e}")
                 else:
-                    print(f"    Fold {fold_idx+1}: Skipping evaluation metrics as validation set is empty.")
+                    # print(f"    Fold {fold_idx+1}: Skipping evaluation metrics as validation set is empty.")
                     for metric_name in self.user_validation_metrics:
                         fold_scores[metric_name].append(np.nan)
 
@@ -505,35 +505,35 @@ class XGBoostModel(model_interface.ModelInterface):
                 warnings.warn("XGBoost K-fold CV: No folds successfully processed. Validation scores will be empty/NaN.", RuntimeWarning)
                 self.validation_scores_ = {metric: np.nan for metric in self.user_validation_metrics}
             elif self.n_splits > 0:
-                print("\nCross-validation summary (XGBoost):")
+                # print("\nCross-validation summary (XGBoost):")
                 for metric_name in self.user_validation_metrics:
                     valid_metric_scores = [s for s in fold_scores[metric_name] if not np.isnan(s)]
                     if valid_metric_scores:
                         avg_score = np.mean(valid_metric_scores)
                         std_score = np.std(valid_metric_scores)
                         self.validation_scores_[metric_name] = avg_score
-                        print(f"  Average User Metric '{metric_name}': {avg_score:.4f} (Std: {std_score:.4f}) from {len(valid_metric_scores)} folds")
+                        # print(f"  Average User Metric '{metric_name}': {avg_score:.4f} (Std: {std_score:.4f}) from {len(valid_metric_scores)} folds")
                     else:
                         self.validation_scores_[metric_name] = np.nan
-                        print(f"  Average User Metric '{metric_name}': NaN (no valid scores from folds)")
+                        # print(f"  Average User Metric '{metric_name}': NaN (no valid scores from folds)")
                 
                 if fold_best_iterations:
                     self.avg_best_iteration_cv_ = np.mean(fold_best_iterations)
-                    print(f"  Average Best Iteration (from CV with early stopping): {self.avg_best_iteration_cv_:.2f}")
+                    # print(f"  Average Best Iteration (from CV with early stopping): {self.avg_best_iteration_cv_:.2f}")
                 if fold_best_eval_scores:
                     self.avg_best_score_cv_ = np.mean(fold_best_eval_scores)
-                    print(f"  Average Best XGBoost Eval Metric Score (from CV): {self.avg_best_score_cv_:.4f}")
-            print("-" * 30)
+                    # print(f"  Average Best XGBoost Eval Metric Score (from CV): {self.avg_best_score_cv_:.4f}")
+            # print("-" * 30)
         else: # n_splits == 0
-            print("K-Fold Cross-Validation skipped as n_splits=0.")
+            # print("K-Fold Cross-Validation skipped as n_splits=0.")
             self.validation_scores_ = {metric: np.nan for metric in self.user_validation_metrics}
             self.avg_best_iteration_cv_ = None
             self.avg_best_score_cv_ = None
 
 
         # --- Step 3: Training the FINAL XGBoost Model on the ENTIRE Prepared Dataset ---
-        print(f"Training final XGBoost model on {X_processed_full.shape[0]} samples, {X_processed_full.shape[1]} features...")
-        print(f"  Using final model_params: {self.model_params}")
+        # print(f"Training final XGBoost model on {X_processed_full.shape[0]} samples, {X_processed_full.shape[1]} features...")
+        # print(f"  Using final model_params: {self.model_params}")
 
         final_model_params = self.model_params.copy()
         n_neg_full = np.sum(y_aligned_full == 0); n_pos_full = np.sum(y_aligned_full == 1)
@@ -544,7 +544,7 @@ class XGBoostModel(model_interface.ModelInterface):
         final_model_params['scale_pos_weight'] = scale_pos_weight_full
         final_model_params.setdefault('max_delta_step', 1)
         
-        print(f"Final model scale_pos_weight: {scale_pos_weight_full:.4f}")
+        # print(f"Final model scale_pos_weight: {scale_pos_weight_full:.4f}")
         
         # Adjust n_estimators for final model based on CV's avg_best_iteration_cv_ IF early stopping was effective in CV
         # AND n_estimators was NOT part of hyperparam_grid (or if tuning wasn't run).
@@ -561,20 +561,20 @@ class XGBoostModel(model_interface.ModelInterface):
                  # If n_estimators was tuned, use the tuned value as the upper bound
                  # and avg_best_iteration_cv_ as a potentially lower value found by early stopping.
                  final_n_estimators = min(original_n_estimators, candidate_n_estimators)
-                 if final_n_estimators < candidate_n_estimators:
-                     print(f"  Note: Tuned n_estimators ({original_n_estimators}) is lower than avg_best_iteration_cv_ from CV ({candidate_n_estimators}). "
-                           f"Using {final_n_estimators} for final model (min of tuned and CV-derived).")
-                 else:
-                     print(f"  Adjusting final model n_estimators from tuned {original_n_estimators} to {final_n_estimators} based on average best_iteration from CV.")
+                #  if final_n_estimators < candidate_n_estimators:
+                     # print(f"  Note: Tuned n_estimators ({original_n_estimators}) is lower than avg_best_iteration_cv_ from CV ({candidate_n_estimators}). "
+                        #    f"Using {final_n_estimators} for final model (min of tuned and CV-derived).")
+                #  else:
+                     # print(f"  Adjusting final model n_estimators from tuned {original_n_estimators} to {final_n_estimators} based on average best_iteration from CV.")
 
             else: # n_estimators was not tuned, so avg_best_iteration_cv_ directly informs it.
                 final_n_estimators = candidate_n_estimators
-                print(f"  Adjusting final model n_estimators from initial {original_n_estimators} to {final_n_estimators} based on average best_iteration from CV.")
+                # print(f"  Adjusting final model n_estimators from initial {original_n_estimators} to {final_n_estimators} based on average best_iteration from CV.")
 
             final_model_params['n_estimators'] = final_n_estimators
         else:
             # Use n_estimators from self.model_params (either initial, or tuned by RandomizedSearchCV if early stopping in CV was not used/effective)
-            print(f"  Using n_estimators ({original_n_estimators}) for final model (from initial or tuned params, no CV early stopping adjustment).")
+            # print(f"  Using n_estimators ({original_n_estimators}) for final model (from initial or tuned params, no CV early stopping adjustment).")
             final_model_params['n_estimators'] = original_n_estimators # Ensure it's explicitly set
 
 
@@ -590,7 +590,7 @@ class XGBoostModel(model_interface.ModelInterface):
             # It's better to raise the error rather than just warn, as the model isn't usable.
             raise RuntimeError(f"Final XGBoost fitting failed on the full dataset: {e}") from e
 
-        print("Final XGBoost model training complete.")
+        # print("Final XGBoost model training complete.")
 
 
     def detect(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
@@ -644,7 +644,7 @@ class XGBoostModel(model_interface.ModelInterface):
         if self.model is None or self.scaler is None or self.input_type is None or self.processed_feature_names is None or self.n_original_features is None:
             raise RuntimeError("Model is not trained or ready for predict_proba.")
 
-        print(f"Predicting UNCALIBRATED probabilities for input type: {type(X_input)}")
+        # print(f"Predicting UNCALIBRATED probabilities for input type: {type(X_input)}")
         # Prepare data (returns 2D NumPy array suitable for the model)
         X_processed_scaled, _, _ = self._prepare_data_for_model(
             X_input, is_training=False, label_col=self.label_col
@@ -655,7 +655,7 @@ class XGBoostModel(model_interface.ModelInterface):
             warnings.warn("No data to predict probabilities after preprocessing.", RuntimeWarning)
             return np.empty((0, 2)) # Return shape (0, 2)
 
-        print(f"Input shape to base model's predict_proba: {X_processed_scaled.shape}")
+        # print(f"Input shape to base model's predict_proba: {X_processed_scaled.shape}")
         try:
             # Use the predict_proba method of the base XGBoost model
             probabilities = self.model.predict_proba(X_processed_scaled)
@@ -665,28 +665,28 @@ class XGBoostModel(model_interface.ModelInterface):
         if probabilities.shape[1] != 2:
             warnings.warn(f"Expected 2 columns in probability output, but got {probabilities.shape[1]}. Returning as is.", RuntimeWarning)
 
-        print(f"Predicted probabilities shape: {probabilities.shape}")
+        # print(f"Predicted probabilities shape: {probabilities.shape}")
         return probabilities
     
     def get_validation_scores(self) -> Dict[str, float]:
         """Returns the average validation scores from k-fold cross-validation."""
         if not self.validation_scores_:
-             print("K-fold CV scores (user metrics) not available.")
+             # print("K-fold CV scores (user metrics) not available.")
              return {}
-        if all(np.isnan(score) for score in self.validation_scores_.values()):
-            print("K-fold CV scores (user metrics) are all NaN.")
+        # if all(np.isnan(score) for score in self.validation_scores_.values()):
+            # print("K-fold CV scores (user metrics) are all NaN.")
         return self.validation_scores_
 
     def get_feature_importances(self) -> Optional[Dict[str, float]]:
         """Returns feature importances from the final trained XGBoost model."""
         if self.model is None:
-            print("Final model not trained yet.")
+            # print("Final model not trained yet.")
             return None
         if not hasattr(self.model, 'feature_importances_'):
-            print("Final model does not have feature_importances_ attribute.")
+            # print("Final model does not have feature_importances_ attribute.")
             return None
         if self.processed_feature_names is None:
-            print("Processed feature names not available for final model.")
+            # print("Processed feature names not available for final model.")
             # Fallback if names are missing for some reason
             return {f"feature_{i}": imp for i, imp in enumerate(self.model.feature_importances_)}
 

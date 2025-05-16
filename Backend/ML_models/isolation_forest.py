@@ -55,14 +55,14 @@ class IsolationForestModel(model_interface.ModelInterface):
         # Instantiate the model using the collected parameters
         self.model: Optional[IsolationForest] = IsolationForest(**self.model_params)
 
-        print(f"IsolationForestModel Initialized with effective params: {self.model_params}")
+        # print(f"IsolationForestModel Initialized with effective params: {self.model_params}")
      
     def run(self, df: pd.DataFrame):
         """ Trains the Isolation Forest model. """
         if not isinstance(df, pd.DataFrame): raise TypeError("Input 'df' must be a pandas DataFrame.")
         if df.empty: raise ValueError("Input DataFrame 'df' is empty.")
 
-        print(f"Running IsolationForest training on data shape: {df.shape}")
+        # print(f"Running IsolationForest training on data shape: {df.shape}")
         self.n_features = df.shape[1]
         self.feature_names = df.columns.tolist() # Store feature names
         if self.n_features == 0: raise ValueError("Input DataFrame has no feature columns.")
@@ -72,12 +72,12 @@ class IsolationForestModel(model_interface.ModelInterface):
         # --- Scaling ---
         self.scaler = StandardScaler()
         X_train = self.scaler.fit_transform(X_train)
-        print("Scaler fitted.")
+        # print("Scaler fitted.")
         # --- End Scaling ---
 
-        print(f"Fitting IsolationForest model...")
+        # print(f"Fitting IsolationForest model...")
         self.model.fit(X_train)
-        print("Model fitting complete.")
+        # print("Model fitting complete.")
 
     def _prepare_data_for_predict(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """
@@ -102,7 +102,7 @@ class IsolationForestModel(model_interface.ModelInterface):
                 input_is_3d = True
                 n_samples, seq_len, n_feat = detection_data.shape
                 if n_feat != self.n_features: raise ValueError(f"3D NumPy input features {n_feat} != expected {self.n_features}.")
-                print("IsolationForestModel: Received 3D NumPy, selecting last time step.")
+                # print("IsolationForestModel: Received 3D NumPy, selecting last time step.")
                 data_2d = detection_data[:, -1, :] # Extract last step -> (samples, features)
             elif detection_data.ndim == 2:
                 if detection_data.shape[1] != self.n_features: raise ValueError(f"2D NumPy input features {detection_data.shape[1]} != expected {self.n_features}.")
@@ -132,14 +132,14 @@ class IsolationForestModel(model_interface.ModelInterface):
         Returns:
             np.ndarray: 1D array of anomaly scores, length matches input samples.
         """
-        print("Calculating anomaly scores (Isolation Forest decision_function)...")
+        # print("Calculating anomaly scores (Isolation Forest decision_function)...")
         processed_data_2d = self._prepare_data_for_predict(detection_data)
 
         if processed_data_2d.size == 0: return np.array([])
 
         scores = self.model.decision_function(processed_data_2d) # Lower = more anomalous
         # The score is calculated for each input sample (row in processed_data_2d)
-        print(f"Calculated {len(scores)} scores.")
+        # print(f"Calculated {len(scores)} scores.")
         return scores # Returns 1D array
 
 
@@ -151,7 +151,7 @@ class IsolationForestModel(model_interface.ModelInterface):
         Returns:
             np.ndarray: 1D boolean array (True=Anomaly), length matches input samples.
         """
-        print("Detecting anomalies (Isolation Forest predict)...")
+        # print("Detecting anomalies (Isolation Forest predict)...")
         processed_data_2d = self._prepare_data_for_predict(detection_data)
 
         if processed_data_2d.size == 0: return np.array([], dtype=bool)
@@ -159,7 +159,7 @@ class IsolationForestModel(model_interface.ModelInterface):
         # Predict returns +1 for inliers, -1 for outliers
         predictions = self.model.predict(processed_data_2d)
         anomalies = (predictions == -1) # Convert -1 (outlier) to True
-        print(f"Detected {np.sum(anomalies)} anomalies out of {len(anomalies)} samples.")
+        # print(f"Detected {np.sum(anomalies)} anomalies out of {len(anomalies)} samples.")
         return anomalies # Returns 1D boolean array
 
     def get_anomaly_score(self, detection_data: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:

@@ -28,8 +28,8 @@ class TimeSeriesAnomalyInjector:
         self, 
         data: pd.DataFrame, # Expecting a DataFrame
         # anomaly_settings can be a single setting object when called from BatchImporter per setting
-        anomaly_setting_obj: AnomalySetting 
-    ) -> pd.DataFrame:
+        anomaly_setting_obj: AnomalySetting,
+        ) -> pd.DataFrame:
         
         dl.debug_print(f"TimeSeriesAnomalyInjector.inject_anomaly called. Data shape: {data.shape}")
         if 'timestamp' in data.columns:
@@ -69,7 +69,7 @@ class TimeSeriesAnomalyInjector:
                 sys.stdout.flush()
                 return modified_data # Return current state of modified_data
             
-            start_time_utc = anomaly_setting_obj.timestamp 
+            start_time_utc = anomaly_setting_obj.timestamp
             
             duration_timedelta: Optional[datetime.timedelta] = None
             try:
@@ -165,6 +165,7 @@ class TimeSeriesAnomalyInjector:
                     
                     # Mark 'injected_anomaly' flag
                     modified_data.loc[anomaly_indices_for_column, "injected_anomaly"] = True
+                    modified_data.loc[anomaly_indices_for_column, "label"] = 1 # Also update the labels
                     
                     dl.debug_print(f"        Data AFTER injection for '{col_to_inject}' at sample indices:\n{modified_data.loc[anomaly_indices_for_column, col_to_inject].head()}")
                     dl.debug_print(f"        'injected_anomaly' flags set for '{col_to_inject}' at sample indices:\n{modified_data.loc[anomaly_indices_for_column, 'injected_anomaly'].head()}")
