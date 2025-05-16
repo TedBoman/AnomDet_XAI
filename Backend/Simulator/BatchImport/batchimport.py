@@ -190,67 +190,7 @@ class BatchImporter:
         dl.debug_print(self.chunksize)
         dl.debug_print(self.start_time)
         dl.debug_print("Starting to insert!")
-
-        # Preprocess anomaly settings to convert timestamps to absolute UTC times
-        if anomaly_settings:
-            dl.debug_print(f"Preprocessing {len(anomaly_settings)} anomaly settings for absolute UTC timestamps...")
-            for i, setting in enumerate(anomaly_settings):
-                original_setting_ts = setting.timestamp # For logging
-
-                # Step 1: Convert to absolute pd.Timestamp if it's a relative offset
-                if not isinstance(setting.timestamp, pd.Timestamp):
-                    try:
-                        # Assuming setting.timestamp is a numeric offset (int or string convertible to float)
-                        # representing seconds from self.start_time
-                        time_offset_seconds = float(str(setting.timestamp)) # Ensure it's floatable
-                        setting.timestamp = self.start_time + pd.to_timedelta(time_offset_seconds, unit='s')
-                        # dl.debug_print(f"  Anomaly setting {i}: Relative '{original_setting_ts}' + start_time '{self.start_time}' -> Absolute '{setting.timestamp}'")
-                    except ValueError as ve:
-                        dl.debug_print(f"  WARNING: Anomaly setting {i}: Could not convert timestamp offset '{original_setting_ts}' to timedelta. Error: {ve}. Skipping UTC conversion for this timestamp.")
-                        continue # Skip to next setting if offset conversion fails
-                    except TypeError as te: # E.g. if self.start_time is None
-                        dl.debug_print(f"  WARNING: Anomaly setting {i}: TypeError during offset calculation for timestamp '{original_setting_ts}' (start_time: {self.start_time}). Error: {te}. Skipping.")
-                        continue
-
-
-                # Step 2: Ensure the (now absolute) setting.timestamp is UTC-aware
-                if isinstance(setting.timestamp, pd.Timestamp):
-                    if setting.timestamp.tzinfo is None:
-                        # If self.start_time was naive, the resulting absolute timestamp is naive.
-                        # Assume it should be interpreted as UTC.
-                        try:
-                            setting.timestamp = setting.timestamp.tz_localize('UTC')
-                            # dl.debug_print(f"  Anomaly setting {i}: Localized naive timestamp to UTC: '{setting.timestamp}'")
-                        except (pytz.exceptions.AmbiguousTimeError, pytz.exceptions.NonExistentTimeError) as tze:
-                            # This can happen if the naive timestamp falls on a DST transition
-                            dl.debug_print(f"  WARNING: Anomaly setting {i}: Failed to localize naive timestamp {setting.timestamp} to UTC due to DST ambiguity/non-existence: {tze}. Attempting 'infer' or safe option.")
-                            try: # Try to handle DST transitions carefully
-                                setting.timestamp = setting.timestamp.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
-                                if pd.isna(setting.timestamp):
-                                    dl.debug_print(f"  ERROR: Anomaly setting {i}: Timestamp {original_setting_ts} resulted in NaT after tz_localize. Cannot use.")
-                                    # Potentially mark this setting as invalid or remove it
-                                    continue
-                            except Exception as e_loc_fallback:
-                                dl.debug_print(f"  ERROR: Anomaly setting {i}: Critical error localizing timestamp {original_setting_ts}: {e_loc_fallback}")
-                                continue
-
-                    elif str(setting.timestamp.tzinfo).upper() != 'UTC':
-                        # If it's already tz-aware but not UTC, convert it to UTC.
-                        try:
-                            setting.timestamp = setting.timestamp.tz_convert('UTC')
-                            # dl.debug_print(f"  Anomaly setting {i}: Converted timestamp from {original_setting_ts.tzinfo} to UTC: '{setting.timestamp}'")
-                        except Exception as e_conv:
-                            dl.debug_print(f"  WARNING: Anomaly setting {i}: Failed to convert timestamp {original_setting_ts} to UTC: {e_conv}")
-                            continue
-                    # else: It's already a pd.Timestamp and UTC-aware, no change needed.
-                    #    dl.debug_print(f"  Anomaly setting {i}: Timestamp '{setting.timestamp}' is already UTC-aware.")
-
-                else:
-                    dl.debug_print(f"  WARNING: Anomaly setting {i}: Its 'timestamp' attribute is not a pd.Timestamp after processing (type: {type(setting.timestamp)}, value: {setting.timestamp}). Cannot ensure UTC.")
-                    continue # Skip if not a valid timestamp object
-        # Create a list to store results from async processes
-        results = []
-
+        
         full_df = self.read_file()
         if full_df is None or full_df.empty:
             dl.print_exception(f"Fileformat {self.file_extention} not supported!")
@@ -305,8 +245,7 @@ class BatchImporter:
         dl.debug_print("Sample of DataFrame after all timestamp processing (should be datetime64[ns, UTC]):")
         dl.debug_print(full_df.head())
         
-        
-        print(f"renaming columns '{label_col_name}'")
+        # print(f"renaming columns '{label_col_name}'")
         rename_map = {}
         if label_col_name != 'label':
             rename_map[label_col_name] = 'label'
@@ -347,6 +286,77 @@ class BatchImporter:
         else:
             dl.debug_print("'label' column not found or specified. Skipping label conversion.")
 
+        # Sort by timestamp to ensure iloc[0] is the earliest if not already sorted.
+        full_df.sort_values(by='timestamp', inplace=True)
+        dl.debug_print("DataFrame sorted by 'timestamp' column.")
+
+        # ***** SET self.start_time FROM THE FIRST VALID TIMESTAMP *****
+        self.start_time = full_df['timestamp'].iloc[0]
+        dl.debug_print(f"Data-derived self.start_time set to: {self.start_time}")
+
+        # Preprocess anomaly settings to convert timestamps to absolute UTC times
+        if anomaly_settings:
+            dl.debug_print(f"Preprocessing {len(anomaly_settings)} anomaly settings for absolute UTC timestamps...")
+            for i, setting in enumerate(anomaly_settings):
+                original_setting_ts = setting.timestamp # For logging
+                
+                dl.debug_print(f"Setting.timestamp: {setting.timestamp}")
+                dl.debug_print(f"start_time: {self.start_time}")
+
+                # Step 1: Convert to absolute pd.Timestamp if it's a relative offset
+                if not isinstance(setting.timestamp, pd.Timestamp):
+                    try:
+                        # Assuming setting.timestamp is a numeric offset (int or string convertible to float)
+                        # representing seconds from self.start_time
+                        time_offset_seconds = float(str(setting.timestamp)) # Ensure it's floatable
+                        setting.timestamp = self.start_time + pd.to_timedelta(time_offset_seconds, unit='s')
+                        # dl.debug_print(f"  Anomaly setting {i}: Relative '{original_setting_ts}' + start_time '{self.start_time}' -> Absolute '{setting.timestamp}'")
+                    except ValueError as ve:
+                        dl.debug_print(f"  WARNING: Anomaly setting {i}: Could not convert timestamp offset '{original_setting_ts}' to timedelta. Error: {ve}. Skipping UTC conversion for this timestamp.")
+                        continue # Skip to next setting if offset conversion fails
+                    except TypeError as te: # E.g. if self.start_time is None
+                        dl.debug_print(f"  WARNING: Anomaly setting {i}: TypeError during offset calculation for timestamp '{original_setting_ts}' (start_time: {self.start_time}). Error: {te}. Skipping.")
+                        continue
+
+
+                # Step 2: Ensure the (now absolute) setting.timestamp is UTC-aware
+                if isinstance(setting.timestamp, pd.Timestamp):
+                    if setting.timestamp.tzinfo is None:
+                        # If self.start_time was naive, the resulting absolute timestamp is naive.
+                        # Assume it should be interpreted as UTC.
+                        try:
+                            setting.timestamp = setting.timestamp.tz_localize('UTC')
+                            # dl.debug_print(f"  Anomaly setting {i}: Localized naive timestamp to UTC: '{setting.timestamp}'")
+                        except (pytz.exceptions.AmbiguousTimeError, pytz.exceptions.NonExistentTimeError) as tze:
+                            # This can happen if the naive timestamp falls on a DST transition
+                            dl.debug_print(f"  WARNING: Anomaly setting {i}: Failed to localize naive timestamp {setting.timestamp} to UTC due to DST ambiguity/non-existence: {tze}. Attempting 'infer' or safe option.")
+                            try: # Try to handle DST transitions carefully
+                                setting.timestamp = setting.timestamp.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
+                                if pd.isna(setting.timestamp):
+                                    dl.debug_print(f"  ERROR: Anomaly setting {i}: Timestamp {original_setting_ts} resulted in NaT after tz_localize. Cannot use.")
+                                    # Potentially mark this setting as invalid or remove it
+                                    continue
+                            except Exception as e_loc_fallback:
+                                dl.debug_print(f"  ERROR: Anomaly setting {i}: Critical error localizing timestamp {original_setting_ts}: {e_loc_fallback}")
+                                continue
+
+                    elif str(setting.timestamp.tzinfo).upper() != 'UTC':
+                        # If it's already tz-aware but not UTC, convert it to UTC.
+                        try:
+                            setting.timestamp = setting.timestamp.tz_convert('UTC')
+                            # dl.debug_print(f"  Anomaly setting {i}: Converted timestamp from {original_setting_ts.tzinfo} to UTC: '{setting.timestamp}'")
+                        except Exception as e_conv:
+                            dl.debug_print(f"  WARNING: Anomaly setting {i}: Failed to convert timestamp {original_setting_ts} to UTC: {e_conv}")
+                            continue
+                    # else: It's already a pd.Timestamp and UTC-aware, no change needed.
+                    #    dl.debug_print(f"  Anomaly setting {i}: Timestamp '{setting.timestamp}' is already UTC-aware.")
+
+                else:
+                    dl.debug_print(f"  WARNING: Anomaly setting {i}: Its 'timestamp' attribute is not a pd.Timestamp after processing (type: {type(setting.timestamp)}, value: {setting.timestamp}). Cannot ensure UTC.")
+                    continue # Skip if not a valid timestamp object
+        # Create a list to store results from async processes
+        results = []
+        
         columns = list(full_df.columns.values)
         
         table_name = self.create_table(conn_params, Path(self.file_path).stem if table_name is None else table_name, columns)
@@ -388,8 +398,6 @@ class BatchImporter:
                     chunk_to_process.loc[:, 'is_anomaly'] = (is_anomaly_bool | injected_anomaly_bool) # Result of OR is boolean
                 
                 dl.debug_print(f"  Chunk {idx+1} PREPARED for worker. injected_anomaly sum: {chunk_to_process['injected_anomaly'].sum()}, is_anomaly sum: {chunk_to_process['is_anomaly'].sum()}")
-                if chunk_to_process['injected_anomaly'].sum() > 0:
-                    dl.debug_print(f"    Sample of injected flags/data in chunk {idx+1} before sending to worker:\n{chunk_to_process[chunk_to_process['injected_anomaly']==1][['timestamp', 'V1', 'injected_anomaly', 'is_anomaly']].head()}") # Assuming V1 is a relevant column
                 sys.stdout.flush()
                 
             # Use apply_async and collect results

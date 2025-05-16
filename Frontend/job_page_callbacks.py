@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from io import StringIO 
 from pages.job_page import get_display_job_name
 from get_handler import get_handler 
+from visualisations.feature_importance_plot import plot_aggregated_feature_importance_comparison
 
 # --- Ensure XAI_DIR is consistent with app.py ---
 XAI_DIR = "/app/data" # The path INSIDE the container
@@ -28,6 +29,105 @@ def get_asset_url(job_name, method_name, filename):
     quoted_file = urllib.parse.quote(filename)
     return f"/xai-assets/{quoted_job}/{quoted_method}/{quoted_file}"
 # -------------------------------------------
+
+# --- Helper function to create XAI Evaluation Table ---
+def create_xai_evaluation_table(xai_eval_data: dict, theme_colors: dict):
+    """
+    Creates a Dash DataTable for XAI evaluation metrics (like NDCG).
+    Input: xai_eval_data = {"ndcg_scores": {"ShapExplainer": {"NDCG@3": 0.8, "NDCG@5": 0.75}, ...}}
+    """
+    if not xai_eval_data or "ndcg_scores" not in xai_eval_data:
+        return None
+
+    ndcg_data = xai_eval_data.get("ndcg_scores", {})
+    if not ndcg_data: # If ndcg_scores is empty
+        return html.P("No NDCG scores available.", style={'color': theme_colors.get('text_medium', '#aaa'), 'marginTop': '10px'})
+
+    # Prepare data for the table
+    # Rows: Metrics (e.g., NDCG@3, NDCG@5)
+    # Columns: XAI Methods (e.g., SHAP, LIME, DiCE)
+
+    all_metrics = set()
+    all_methods = sorted(list(ndcg_data.keys())) # Ensures consistent column order
+
+    for method_scores in ndcg_data.values():
+        all_metrics.update(method_scores.keys())
+    
+    def get_ndcg_k_value(metric_name_str):
+        """Extracts the k value from NDCG@k string, returns large number if not found for sorting."""
+        if metric_name_str.startswith("NDCG@"):
+            try:
+                return int(metric_name_str.split('@')[1])
+            except (IndexError, ValueError):
+                return float('inf') # Put non-standard NDCG names at the end
+        return float('inf') # Put other metric types (if any) at the end
+
+    # Sort metrics: first by whether they are NDCG@k, then by the k value
+    # Non-NDCG@k metrics will be sorted alphabetically after all NDCG@k metrics.
+    sorted_metrics = sorted(
+        list(all_metrics),
+        key=lambda m: (not m.startswith("NDCG@"), get_ndcg_k_value(m), m)
+        # The tuple in key does:
+        # 1. (not m.startswith("NDCG@")): False (0) for NDCG@k, True (1) for others. So NDCG@k comes first.
+        # 2. get_ndcg_k_value(m): Sorts NDCG@k by their k value numerically.
+        # 3. m: Alphabetical sort as a tie-breaker or for non-NDCG@k metrics among themselves.
+    )
+
+    table_data = []
+    for metric_name in sorted_metrics:
+        row = {'Metric': metric_name}
+        for method_name in all_methods:
+            # Get the score, default to 'N/A' or 0.0 if not present
+            score = ndcg_data.get(method_name, {}).get(metric_name, "N/A")
+            if isinstance(score, float):
+                row[method_name] = f"{score:.4f}"
+            else:
+                row[method_name] = score # Keep as 'N/A' or other string
+        table_data.append(row)
+
+    if not table_data:
+        return html.P("Could not parse NDCG scores for table display.", style={'color': theme_colors.get('text_medium', '#aaa')})
+
+    table_columns = [{"name": "Metric", "id": "Metric"}] + \
+                    [{"name": method, "id": method} for method in all_methods]
+
+    data_table = dash_table.DataTable(
+        columns=table_columns,
+        data=table_data,
+        style_table={'overflowX': 'auto', 'marginTop': '10px', 'marginBottom': '20px'},
+        style_header={
+            'backgroundColor': 'rgb(30, 30, 30)',
+            'color': 'white',
+            'fontWeight': 'bold',
+            'textAlign': 'center'
+        },
+        style_cell={
+            'backgroundColor': 'rgb(50, 50, 50)',
+            'color': 'white',
+            'border': f"1px solid {theme_colors.get('border_light', '#555')}",
+            'textAlign': 'center', # Center align all cells
+            'padding': '8px',
+            'minWidth': '100px', 'width': '120px', 'maxWidth': '150px',
+        },
+        style_cell_conditional=[ # Left align the 'Metric' column
+            {
+                'if': {'column_id': 'Metric'},
+                'textAlign': 'left',
+                'fontWeight': 'bold'
+            }
+        ]
+    )
+
+    return html.Div([
+        html.H4("XAI Evaluation Metrics (e.g., NDCG)", style={
+            'borderBottom': f"1px solid {theme_colors.get('border_light', '#555')}",
+            'paddingBottom': '5px',
+            'marginTop': '25px', # More space before this table
+            'marginBottom': '10px',
+            'color': theme_colors.get('text_light', '#eee')
+        }),
+        data_table
+    ], style={'gridColumn': '1 / -1'}) # Make this section span all columns
 
 # --- Helper function to format nested dicts/lists prettily ---
 def create_pretty_dict_list_display(data, indent=0):
@@ -551,10 +651,6 @@ def register_job_page_callbacks(app):
                 if exec_times_filtered:
                     display_elements.append(create_info_section("Execution Times", exec_times_filtered, theme_colors))
 
-                metrics_explanation_section = create_performance_metrics_explanation(metrics, theme_colors)
-                if metrics_explanation_section:
-                    display_elements.append(metrics_explanation_section)
-
                 # 5. Model Parameters (collapsible)
                 model_params = metadata.get("model_params")
                 if model_params:
@@ -584,6 +680,19 @@ def register_job_page_callbacks(app):
                             create_pretty_dict_list_display(injection_params)
                         ], style={'padding': '15px', 'border': f"1px solid {theme_colors.get('border_light', '#444')}", 'borderRadius':'5px', 'backgroundColor': 'rgba(40,40,40,0.3)', 'marginBottom': '15px'})
                     ]))
+                    
+                # 8. Performance metrics explanations
+                metrics_explanation_section = create_performance_metrics_explanation(metrics, theme_colors)
+                if metrics_explanation_section:
+                    display_elements.append(metrics_explanation_section)
+                    
+                # 9. XAI Evaluation Metrics Table (NDCG)
+                xai_eval_metrics_data = metadata.get("xai_evaluation_metrics", {})
+                if xai_eval_metrics_data:
+                    xai_eval_table = create_xai_evaluation_table(xai_eval_metrics_data, theme_colors)
+                    if xai_eval_table:
+                        display_elements.append(xai_eval_table)
+                # --- END ---
 
                 # --- Create the Grid Container ---
                 grid_container = html.Div(
@@ -1081,7 +1190,7 @@ def register_job_page_callbacks(app):
                     print(f"(XAI Display CB) Error scanning/processing files in directory {method_path}: {e}")
                     method_file_components.append(html.P(f"Error processing results for {method_name}: {e}", style={'color':'red'}))
 
-                print(f"method_file_components (after last append): {method_file_components}")
+                #print(f"method_file_components (after last append): {method_file_components}")
                 # Create a block for this method if it has any components (even error messages)
                 if method_file_components:
                     xai_content_blocks.append(html.Div([
@@ -1091,15 +1200,62 @@ def register_job_page_callbacks(app):
                         *method_file_components # Unpack the list of components
                     ], className="xai-method-block", style={'marginBottom': '30px', 'padding': '15px', 'border': '1px solid #555', 'borderRadius':'5px', 'backgroundColor': 'rgba(40,40,40,0.5)'})) # Style the block
 
-            # --- Final Check and Return ---
-            if not found_any_results:
-                # This message means subdirectories were found, but no displayable files inside them
-                 print("(XAI Display CB) Method subdirectories found, but no displayable files within them.")
-                 return f"No displayable XAI results files (.png, .html, .csv) found for job '{job_name}' in method subdirectories.", {'display': 'block'}
+            # --- Aggregated Feature Importance Comparison Plot ---
+            aggregated_fi_path = os.path.join(job_xai_base_path, "aggregated_feature_importances.json")
+            print(f"(XAI Display CB) Checking for aggregated FI summary: {aggregated_fi_path}")
 
-            print("(XAI Display CB) Finished processing XAI results. Returning content blocks.")
-            # Return the list of method blocks, ensure section is visible
-            return xai_content_blocks, {'display': 'block'}
+            if os.path.exists(aggregated_fi_path):
+                try:
+                    with open(aggregated_fi_path, 'r') as f:
+                        aggregated_scores_data = json.load(f)
+                    
+                    if aggregated_scores_data:
+                        print("(XAI Display CB) Found aggregated_scores_data. Attempting to plot comparison.")
+                        comparison_plot_filename = f"{job_name}_feature_importance_comparison.html"
+                        
+                        # Call the plotting function (it saves the file)
+                        plot_aggregated_feature_importance_comparison(
+                            aggregated_scores_data,
+                            output_dir=job_xai_base_path, 
+                            job_name=job_name
+                        )
+                        
+                        comparison_plot_asset_url = f"/xai-assets/{urllib.parse.quote(job_name)}/{urllib.parse.quote(comparison_plot_filename)}"
+                        expected_comparison_plot_path = os.path.join(job_xai_base_path, comparison_plot_filename)
+
+                        if os.path.exists(expected_comparison_plot_path):
+                            print(f"(XAI Display CB) Comparison plot HTML exists at: {expected_comparison_plot_path}")
+                            comparison_plot_component = html.Div([
+                                html.H4("Aggregated Feature Importance Comparison", style={'borderBottom': '1px solid #555', 'paddingBottom': '5px', 'marginTop': '30px', 'marginBottom': '15px', 'color':'#eee'}),
+                                html.Iframe(
+                                    src=comparison_plot_asset_url,
+                                    style={'width': '100%', 'height': '700px', 'border': '1px solid #444', 'backgroundColor': 'rgba(40,40,40,0.5)'}
+                                )
+                            ], style={'marginTop': '20px', 'marginBottom': '20px', 'padding': '15px', 'border': '1px solid #555', 'borderRadius':'5px', 'backgroundColor': 'rgba(40,40,40,0.5)'})
+                            xai_content_blocks.append(comparison_plot_component)
+                            # found_any_results = True # No longer solely rely on found_any_results
+                        else:
+                            print(f"(XAI Display CB) Comparison plot HTML NOT found at {expected_comparison_plot_path} after calling plot function.")
+                            # Optionally add a message to xai_content_blocks if plot failed to generate
+                            # xai_content_blocks.append(html.P("Failed to generate comparison plot.", style={'color':'orange'}))
+                    else:
+                        print("(XAI Display CB) aggregated_scores_data loaded but was empty.")
+                except Exception as e:
+                    print(f"(XAI Display CB) Error loading or plotting aggregated feature importances: {e}")
+                    traceback.print_exc()
+                    xai_content_blocks.append(html.P(f"Error displaying aggregated feature importance comparison: {e}", style={'color':'red'}))
+            else:
+                print(f"(XAI Display CB) Aggregated feature importance file not found: {aggregated_fi_path}")
+
+            # --- Final Return based on xai_content_blocks ---
+            if xai_content_blocks: # If any content (method files, error messages, or aggregated plot) was added
+                print("(XAI Display CB) xai_content_blocks is populated. Returning content.")
+                return xai_content_blocks, {'display': 'block'}
+            else:
+                # This means base dir existed, but no method subdirs with files, AND no aggregated_fi.json (or it failed to process into content)
+                print("(XAI Display CB) xai_content_blocks is empty. No displayable results found.")
+                message = f"No displayable XAI results or summary plot found for job '{job_name}'."
+                return message, {'display': 'block'}
 
         except Exception as e:
             print(f"(XAI Display CB) General error processing XAI for job {job_name}:")

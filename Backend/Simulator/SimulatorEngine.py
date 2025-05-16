@@ -42,7 +42,7 @@ class SimulatorEngine:
 
     def main(self, db_conn_params, job, timestamp_col_name=None, label_col_name=None):
         # Set debug mode once for all files
-        dl.set_debug(False)  # or False to disable debug prints
+        dl.set_debug(True)  # or False to disable debug prints
 
         # Check if the path exists
         if os.path.isfile(job.filepath):
@@ -55,11 +55,6 @@ class SimulatorEngine:
         if job:
             # Convert anomaly settings timestamps to datetime objects
             if isinstance(job, (tc.Job)) and job.anomaly_settings:
-                for setting in job.anomaly_settings:
-                    # Access the timestamp attribute of the AnomalySetting object
-                    setting.timestamp = pd.to_datetime(setting.timestamp, unit='s')
-
                 return self.process_file(job.filepath, db_conn_params, job.simulation_type, job.anomaly_settings, pd.to_timedelta(0), job.speedup, job.table_name if job.table_name else None, timestamp_col_name, label_col_name)
             else:
-
                 return self.process_file(job.filepath, db_conn_params, job.simulation_type, job.anomaly_settings, pd.to_timedelta(0), job.speedup, job.table_name if job.table_name else None, timestamp_col_name, label_col_name)

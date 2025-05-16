@@ -181,6 +181,7 @@ def __handle_api_call(conn, data: dict) -> None:
             name = data["name"]
             debug = data["debug"]
             label_column = data.get("label_column", None)
+            time_column = data.get("time_column", None)
 
             inj_params = data.get("inj_params", None)
             xai_params = data.get("xai_params", None)
@@ -204,6 +205,7 @@ def __handle_api_call(conn, data: dict) -> None:
                     inj_params,
                     debug,
                     label_column,
+                    time_column,
                     xai_params,
                     model_params,
                 )

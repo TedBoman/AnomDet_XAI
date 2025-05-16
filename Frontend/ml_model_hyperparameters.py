@@ -71,9 +71,53 @@ HYPERPARAMETER_DESCRIPTIONS = {
         "random_state": "Controls the randomness of the estimator (for splitter='random' and/or max_features<n_features).",
         "max_leaf_nodes": "Grow a tree with max_leaf_nodes in best-first fashion. If None, unlimited number of leaf nodes.",
         "min_impurity_decrease": "A node will be split if this split induces a decrease of the impurity greater than or equal to this value.",
-        "ccp_alpha": "Complexity parameter used for Minimal Cost-Complexity Pruning. The subtree with the largest cost complexity that is smaller than ccp_alpha will be chosen."
+        "ccp_alpha": "Complexity parameter used for Minimal Cost-Complexity Pruning. The subtree with the largest cost complexity that is smaller than ccp_alpha will be chosen.",
+        
+        "scaler_type": "(Wrapper Parameter) Type of scaler to use for preprocessing features ('standard' for StandardScaler, 'minmax' for MinMaxScaler).",
+        "imputer_strategy": "(Wrapper Parameter) Strategy for SimpleImputer to handle missing values ('mean', 'median', 'most_frequent', 'constant').",
+        "n_splits": "(Wrapper Parameter) Number of folds for StratifiedKFold cross-validation (default: 5).",
+        "shuffle_kfold": "(Wrapper Parameter) Whether to shuffle data before StratifiedKFold splitting (default: True).",
+        "validation_metrics": "(Wrapper Parameter) List of metrics to compute during cross-validation (e.g., ['accuracy', 'f1', 'roc_auc']).",
+        "auto_tune": "(Wrapper Parameter) Whether to perform hyperparameter tuning using RandomizedSearchCV (default: False).",
+        "search_n_iter": "(Wrapper Parameter) Number of parameter settings sampled for RandomizedSearchCV (default: 10).",
+        "search_scoring": "(Wrapper Parameter) Scoring metric for RandomizedSearchCV (default: 'f1').",
+        "calibrate_probabilities": "(Wrapper Parameter) If True and loss is 'hinge' or 'squared_hinge', the final model is wrapped in CalibratedClassifierCV for better probability estimates (default: True)."
+
         # Add others as needed
-    }
+    },
+    "SGDClassifier": {
+    "loss": "The loss function to be used. 'hinge' for Linear SVM, 'log_loss' for Logistic Regression, 'modified_huber' for a smooth SVM-like loss, 'squared_hinge' for quadratically penalized SVM, 'perceptron' for the Perceptron algorithm. Determines the type of linear model trained.",
+    "penalty": "The penalty (regularization term) to be used. 'l2' (default) adds squared magnitudes of coefficients, 'l1' adds absolute magnitudes (can lead to sparse coefficients), 'elasticnet' combines L1 and L2.",
+    "alpha": "Constant that multiplies the regularization term (1/C in SVMs). Higher values specify stronger regularization. Corresponds to `1 / C` in SVMs.",
+    "l1_ratio": "The Elastic Net mixing parameter, with 0 <= l1_ratio <= 1. Only used if penalty='elasticnet'. l1_ratio=0 corresponds to L2 penalty, l1_ratio=1 to L1. For 0 < l1_ratio < 1, the penalty is a combination of L1 and L2.",
+    "fit_intercept": "Whether the intercept (bias term) should be estimated or not. If set to False, the data is assumed to be already centered.",
+    "max_iter": "The maximum number of passes over the training data (epochs).",
+    "tol": "The stopping criterion. If it is not None, training will stop when (loss > previous_loss - tol).",
+    "shuffle": "Whether or not the training data should be shuffled after each epoch. This is different from the wrapper's `shuffle_kfold`.",
+    "verbose": "The verbosity level (0 for silent, higher for more messages).",
+    "epsilon": "Epsilon in the epsilon-insensitive loss functions ('huber', 'epsilon_insensitive', 'squared_epsilon_insensitive'). Not relevant for 'hinge' or 'log_loss'.",
+    "n_jobs": "Number of CPUs to use for the One-vs-All (OVA) computation. -1 means using all processors. This parameter is for multi-class classification; for binary, it has no effect on SGD itself.",
+    "random_state": "Used for shuffling the data, when shuffle is set to True. Pass an int for reproducible output across multiple function calls.",
+    "learning_rate": "The learning rate schedule: 'constant' (eta = eta0), 'optimal' (eta = 1.0 / (alpha * (t + t0))), 'invscaling' (eta = eta0 / pow(t, power_t)), 'adaptive' (eta = eta0, as long as training keeps decreasing. Each time n_iter_no_change consecutive epochs fail to decrease training loss by tol, or fail to increase validation score by tol if early_stopping is True, the current learning rate is divided by 5).",
+    "eta0": "The initial learning rate for the 'constant', 'invscaling', or 'adaptive' schedules. Default is 0.0 if learning_rate is 'optimal'.",
+    "power_t": "The exponent for inverse scaling learning rate (default: 0.5). Only used when learning_rate is 'invscaling'.",
+    "early_stopping": "Whether to use early stopping to terminate training when validation score is not improving. If set to True, it will automatically set aside a fraction of training data as validation and terminate training when validation score is not improving by at least tol for n_iter_no_change consecutive epochs.",
+    "validation_fraction": "The proportion of training data to set aside as validation set for early stopping. Must be between 0 and 1. Only used if early_stopping is True.",
+    "n_iter_no_change": "Number of iterations with no improvement to wait before stopping fitting. Only used if early_stopping is True.",
+    "class_weight": "Preset 'balanced' or a dictionary giving weights to each class. If 'balanced', class weights will be inversely proportional to class frequencies. If None, all classes have weight one.",
+    "warm_start": "When set to True, reuse the solution of the previous call to fit as initialization, otherwise, just erase the previous solution.",
+    "average": "When set to True, computes the averaged SGD weights and stores the result in the `coef_` attribute. Useful for L2 regularization. Can also be an integer specifying the number of iterations to start averaging.",
+
+    "scaler_type": "(Wrapper Parameter) Type of scaler to use for preprocessing features ('standard' for StandardScaler, 'minmax' for MinMaxScaler).",
+    "imputer_strategy": "(Wrapper Parameter) Strategy for SimpleImputer to handle missing values ('mean', 'median', 'most_frequent', 'constant').",
+    "n_splits": "(Wrapper Parameter) Number of folds for StratifiedKFold cross-validation (default: 5).",
+    "shuffle_kfold": "(Wrapper Parameter) Whether to shuffle data before StratifiedKFold splitting (default: True).",
+    "validation_metrics": "(Wrapper Parameter) List of metrics to compute during cross-validation (e.g., ['accuracy', 'f1', 'roc_auc']).",
+    "auto_tune": "(Wrapper Parameter) Whether to perform hyperparameter tuning using RandomizedSearchCV (default: False).",
+    "search_n_iter": "(Wrapper Parameter) Number of parameter settings sampled for RandomizedSearchCV (default: 10).",
+    "search_scoring": "(Wrapper Parameter) Scoring metric for RandomizedSearchCV (default: 'f1').",
+    "calibrate_probabilities": "(Wrapper Parameter) If True and loss is 'hinge' or 'squared_hinge', the final model is wrapped in CalibratedClassifierCV for better probability estimates (default: True)."
+  }
     # Add entries for other models if needed
 }
 

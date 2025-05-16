@@ -16,6 +16,7 @@ class BackendAPI:
     def run_batch(self, model: str, dataset: str, name: str, debug=False,
                 inj_params: Optional[List[Dict[str, Any]]]=None, # Backend expects list? Match frontend
                 label_column: Optional[str]=None,
+                time_column: Optional[str]=None,
                 xai_params: Optional[Dict[str, Any]]=None,
                 model_params: Optional[Dict[str, Any]]=None,
                 ) -> None:
@@ -32,6 +33,8 @@ class BackendAPI:
             data["inj_params"] = inj_params
         if label_column is not None:
             data["label_column"] = label_column
+        if time_column is not None:
+            data["time_column"] = time_column
         if xai_params is not None:
             data["xai_params"] = xai_params
         if model_params is not None:

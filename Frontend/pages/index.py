@@ -151,6 +151,23 @@ def layout(handler):
                             # Output for delete status
                             html.Div(id='output-delete-state', style={"marginTop": "15px", "color": "#ffffff", "minHeight": "30px", "fontWeight": "bold"})
                         ], style={"textAlign": "center", "marginBottom": "5px"}),
+                        
+                        # Div to hold the conditional time column dropdown
+                        html.Div(
+                            id="time-column-selection-div",
+                            children=[
+                                html.Label("Select Time Column:", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block"}),
+                                dcc.Dropdown(
+                                    id="time-column-dropdown", # NEW ID for clarity
+                                    options=[], # Populated by callback
+                                    value=None, # Reset by callback
+                                    placeholder="Select time column",
+                                    multi=False, # Select only ONE time column
+                                    style={"width": "300px", "margin": "5px auto",}
+                                )
+                            ],
+                            # Initially hidden, shown by callback
+                            style={"marginTop": "10px", "textAlign": "center"}),
 
                         # --- Labeled Dataset Section ---
                         html.Div([

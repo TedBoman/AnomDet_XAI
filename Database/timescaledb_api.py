@@ -258,8 +258,8 @@ class TimescaleDBAPI(DBInterface):
                     # If one fails, the whole transaction will be rolled back in the outer except block.
 
             conn.commit()
-            print(f"Attempted to update {len(anomaly_pk_values)} anomaly records in table '{table_name}'.")
-            print(f"Total rows reported as affected by database (sum of individual updates): {updated_row_count_sum}.")
+            # print(f"Attempted to update {len(anomaly_pk_values)} anomaly records in table '{table_name}'.")
+            # print(f"Total rows reported as affected by database (sum of individual updates): {updated_row_count_sum}.")
 
         except psycopg2.Error as db_err: # Catch specific psycopg2 errors
             print(f"Database error during anomaly update for table '{table_name}': {db_err}")
