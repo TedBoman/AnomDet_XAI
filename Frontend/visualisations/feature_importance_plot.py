@@ -65,10 +65,10 @@ def plot_aggregated_feature_importance_comparison(
     fig.update_layout(
         title=plot_title,
         xaxis_title="Features",
-        yaxis_title="Aggregated Importance Score (e.g., Avg. |SHAP|, Avg. |LIME Weight|, Avg. DiCE Change Freq.)",
+        yaxis_title="Aggregated Importance Score",
         barmode='group', # Group bars for each feature
         legend_title_text="XAI Method",
-        template='plotly_dark',
+        template='seaborn',
         xaxis_tickangle=-45, # Angle feature names if many
         height=max(600, len(df_to_display) * 30) # Dynamic height
     )

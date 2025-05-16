@@ -639,14 +639,6 @@ def register_job_page_callbacks(app):
                 if metrics:
                     display_elements.append(create_info_section("Performance Metrics", metrics, theme_colors))
                     
-                # --- XAI Evaluation Metrics Table ---
-                xai_eval_metrics_data = metadata.get("xai_evaluation_metrics", {})
-                if xai_eval_metrics_data:
-                    xai_eval_table = create_xai_evaluation_table(xai_eval_metrics_data, theme_colors)
-                    if xai_eval_table:
-                        display_elements.append(xai_eval_table)
-                # --- END ---
-                    
                 # 4. Execution Times
                 exec_times = {
                     "Total (s)": metadata.get("execution_time_total_seconds"),
@@ -658,10 +650,6 @@ def register_job_page_callbacks(app):
                 exec_times_filtered = {k: v for k, v in exec_times.items() if v is not None}
                 if exec_times_filtered:
                     display_elements.append(create_info_section("Execution Times", exec_times_filtered, theme_colors))
-
-                metrics_explanation_section = create_performance_metrics_explanation(metrics, theme_colors)
-                if metrics_explanation_section:
-                    display_elements.append(metrics_explanation_section)
 
                 # 5. Model Parameters (collapsible)
                 model_params = metadata.get("model_params")
@@ -692,6 +680,19 @@ def register_job_page_callbacks(app):
                             create_pretty_dict_list_display(injection_params)
                         ], style={'padding': '15px', 'border': f"1px solid {theme_colors.get('border_light', '#444')}", 'borderRadius':'5px', 'backgroundColor': 'rgba(40,40,40,0.3)', 'marginBottom': '15px'})
                     ]))
+                    
+                # 8. Performance metrics explanations
+                metrics_explanation_section = create_performance_metrics_explanation(metrics, theme_colors)
+                if metrics_explanation_section:
+                    display_elements.append(metrics_explanation_section)
+                    
+                # 9. XAI Evaluation Metrics Table (NDCG)
+                xai_eval_metrics_data = metadata.get("xai_evaluation_metrics", {})
+                if xai_eval_metrics_data:
+                    xai_eval_table = create_xai_evaluation_table(xai_eval_metrics_data, theme_colors)
+                    if xai_eval_table:
+                        display_elements.append(xai_eval_table)
+                # --- END ---
 
                 # --- Create the Grid Container ---
                 grid_container = html.Div(
@@ -1228,7 +1229,7 @@ def register_job_page_callbacks(app):
                                 html.H4("Aggregated Feature Importance Comparison", style={'borderBottom': '1px solid #555', 'paddingBottom': '5px', 'marginTop': '30px', 'marginBottom': '15px', 'color':'#eee'}),
                                 html.Iframe(
                                     src=comparison_plot_asset_url,
-                                    style={'width': '100%', 'height': '700px', 'border': '1px solid #444', 'backgroundColor': 'white'}
+                                    style={'width': '100%', 'height': '700px', 'border': '1px solid #444', 'backgroundColor': 'rgba(40,40,40,0.5)'}
                                 )
                             ], style={'marginTop': '20px', 'marginBottom': '20px', 'padding': '15px', 'border': '1px solid #555', 'borderRadius':'5px', 'backgroundColor': 'rgba(40,40,40,0.5)'})
                             xai_content_blocks.append(comparison_plot_component)
