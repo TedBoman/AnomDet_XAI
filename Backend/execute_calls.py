@@ -405,7 +405,6 @@ def run_batch(
     sim_duration, training_duration, detection_duration, xai_duration = 0, 0, 0, 0
     sim_end_time, train_end_time, detect_end_time, xai_end_time = None, None, None, None
     evaluation_results = {}
-    detection_results = {}
     run_status = "Failed" # Default status
     run_summary = {} # Initialize summary dict
     df = pd.DataFrame() # Initialize df
@@ -413,7 +412,6 @@ def run_batch(
     testing_data = pd.DataFrame()
     feature_columns = []
     anomaly_rows = pd.DataFrame()
-    df_all_data_eval = pd.DataFrame()
     df_eval = pd.DataFrame()
     actual_label_col = label_column or 'label' # Use provided or default 'label'
     sequence_length = None # Initialize
@@ -543,31 +541,27 @@ def run_batch(
         all_features_df = df[[col for col in feature_columns if col in df.columns]] # For detection
 
         # --- Impute NaNs ---
-        # Now you can safely modify these copies
-        # print(f"DEBUG run_batch: Imputing NaNs in training_features_df (shape: {training_features_df.shape}) using mean.")
+        print(f"DEBUG run_batch: Imputing NaNs in training_features_df (shape: {training_features_df.shape}) using mean.")
+        print(f"DEBUG run_batch: NaNs before imputation: {training_features_df.isna().sum().sum()}")
+        # Simple mean imputation, you might choose a different strategy
         for col in training_features_df.columns:
             if training_features_df[col].isnull().any():
                 if pd.api.types.is_numeric_dtype(training_features_df[col]):
-                    # Use .loc to ensure modification of the DataFrame directly
-                    training_features_df.loc[:, col] = training_features_df[col].fillna(training_features_df[col].mean())
-                else:
-                    training_features_df.loc[:, col] = training_features_df[col].fillna(training_features_df[col].mode()[0] if not training_features_df[col].mode().empty else 'missing')
-
-        # print(f"DEBUG run_batch: Imputing NaNs in all_features_df (shape: {all_features_df.shape}) using mean.")
+                    training_features_df[col] = training_features_df[col].fillna(training_features_df[col].mean())
+                else: # For non-numeric, fill with mode or a placeholder
+                    training_features_df[col] = training_features_df[col].fillna(training_features_df[col].mode()[0] if not training_features_df[col].mode().empty else 'missing')
+        print(f"DEBUG run_batch: NaNs after imputation: {training_features_df.isna().sum().sum()}")
+        # Also impute for all_features_df if it's used by LIME/SHAP directly for explanation instances
+        # Though LIME uses background_data for stats, and explains instances passed at runtime.
+        # SHAP Kernel also uses background_data. SHAP Tree might use the data directly.
+        # It's good practice to have clean data for explanations too.
+        print(f"DEBUG run_batch: Imputing NaNs in all_features_df (shape: {all_features_df.shape}) using mean.")
         for col in all_features_df.columns:
             if all_features_df[col].isnull().any():
                 if pd.api.types.is_numeric_dtype(all_features_df[col]):
-                    all_features_df.loc[:, col] = all_features_df[col].fillna(all_features_df[col].mean()) # Use mean from testing_features_df
+                    all_features_df[col] = all_features_df[col].fillna(all_features_df[col].mean())
                 else:
-                    all_features_df.loc[:, col] = all_features_df[col].fillna(all_features_df[col].mode()[0] if not all_features_df[col].mode().empty else 'missing')
-        
-        # print(f"DEBUG run_batch: Imputing NaNs in testing_features_df (shape: {testing_features_df.shape}) using mean.")
-        for col in testing_features_df.columns:
-            if testing_features_df[col].isnull().any():
-                if pd.api.types.is_numeric_dtype(testing_features_df[col]):
-                    testing_features_df.loc[:, col] = testing_features_df[col].fillna(testing_features_df[col].mean()) # Use mean from testing_features_df
-                else:
-                    testing_features_df.loc[:, col] = testing_features_df[col].fillna(testing_features_df[col].mode()[0] if not testing_features_df[col].mode().empty else 'missing')
+                    all_features_df[col] = all_features_df[col].fillna(all_features_df[col].mode()[0] if not all_features_df[col].mode().empty else 'missing')
 
         # --- Anomaly Row Extraction (Ground Truth) ---
         if actual_label_col in df.columns:
@@ -634,8 +628,7 @@ def run_batch(
         detect_start_time = time.perf_counter()
         # Ensure detection data is not empty
         if all_features_df.empty:
-            raise ValueError("Features DataFrame for detection is empty.")
-        evaluation = model_instance.detect(testing_data)
+             raise ValueError("Features DataFrame for detection is empty.")
         res = model_instance.detect(all_features_df)
         detect_end_time = time.perf_counter()
         detection_duration = detect_end_time - detect_start_time
@@ -643,45 +636,27 @@ def run_batch(
 
         # --- Assign Results & Evaluate ---
         # Prepare df_eval with original index and label for evaluation
-        df_eval = testing_data.copy() # Copy only needed cols initially
+        df_eval = df.copy() # Copy only needed cols initially
         df_eval['is_anomaly'] = False # Initialize column
-        df_all_data_eval = df.copy()
-        df_all_data_eval['is_anomaly'] = False
 
         expected_padding = sequence_length - 1
-        if len(res) == len(df_all_data_eval):
+        if len(res) == len(df_eval):
             # print("Assigning detection results directly.")
-            df_all_data_eval['is_anomaly'] = res.values if isinstance(res, pd.Series) else res
-        elif len(res) == len(df_all_data_eval) - expected_padding and expected_padding >= 0 :
+            df_eval['is_anomaly'] = res.values if isinstance(res, pd.Series) else res
+        elif len(res) == len(df_eval) - expected_padding and expected_padding >= 0 :
             # print(f"Padding detection results with {expected_padding} 'False' values at the beginning.")
             padding = [False] * expected_padding
             res_list = list(res.values) if isinstance(res, pd.Series) else list(res)
-            df_all_data_eval['is_anomaly'] = padding + res_list
+            df_eval['is_anomaly'] = padding + res_list
         else:
             # Handle unexpected length difference more robustly
-            warnings.warn(f"Unexpected length difference: results ({len(res)}), df ({len(df_all_data_eval)}), expected padding ({expected_padding}). Check model's detect output and sequence_length.", RuntimeWarning)
+            warnings.warn(f"Unexpected length difference: results ({len(res)}), df ({len(df_eval)}), expected padding ({expected_padding}). Check model's detect output and sequence_length.", RuntimeWarning)
             # Attempt assignment if possible, otherwise evaluation might fail
-            min_len = min(len(res), len(df_all_data_eval))
-            df_all_data_eval['is_anomaly'][-min_len:] = list(res)[-min_len:] # Try aligning from end
-
-        expected_padding = sequence_length - 1
-        if len(evaluation) == len(df_eval):
-            # print("Assigning detection results directly.")
-            df_eval['is_anomaly'] = evaluation.values if isinstance(evaluation, pd.Series) else evaluation
-        elif len(evaluation) == len(df_eval) - expected_padding and expected_padding >= 0 :
-            # print(f"Padding detection results with {expected_padding} 'False' values at the beginning.")
-            padding = [False] * expected_padding
-            evaluation_list = list(evaluation.values) if isinstance(evaluation, pd.Series) else list(evaluation)
-            df_eval['is_anomaly'] = padding + evaluation_list
-        else:
-            # Handle unexpected length difference more robustly
-            warnings.warn(f"Unexpected length difference: results ({len(evaluation)}), df ({len(df_eval)}), expected padding ({expected_padding}). Check model's detect output and sequence_length.", RuntimeWarning)
-            # Attempt assignment if possible, otherwise evaluation might fail
-            min_len = min(len(evaluation), len(df_eval))
-            df_eval['is_anomaly'][-min_len:] = list(evaluation)[-min_len:] # Try aligning from end
+            min_len = min(len(res), len(df_eval))
+            df_eval['is_anomaly'][-min_len:] = list(res)[-min_len:] # Try aligning from end
 
         # Update anomalies in DB (using original timestamps)
-        predicted_anomalies_mask = df_all_data_eval['is_anomaly'] == True
+        predicted_anomalies_mask = df_eval['is_anomaly'] == True
         # Select rows from the original 'df' (which includes the PRIMARY_KEY_COLUMN)
         anomaly_df_for_update = df.loc[predicted_anomalies_mask & df[PRIMARY_KEY_COLUMN].notna()]
         
@@ -699,8 +674,7 @@ def run_batch(
         else:
             print("No anomalies detected in current run, or no anomalies with valid PKs.")
 
-        detection_results = evaluate_classification(df_all_data_eval) # Evaluate using actual and predicted labels
-        evaluation_results = evaluate_classification(df_eval) # Evaluate the testing set
+        evaluation_results = evaluate_classification(df_eval) # Evaluate using actual and predicted labels
         # print("Evaluation Results:", evaluation_results)
 
         # --- XAI Execution (Conditional) ---
@@ -708,7 +682,7 @@ def run_batch(
         model_wrapper = None # Initialize
         avg_ndcg_scores = {} # Initialize NDCG results dict
         
-        interpretation_list = ['lstm', 'XGBoost', 'decision_tree'] # higher_is_anomaly
+        interpretation_list = ['lstm', 'xgboost', 'decision_tree'] # higher_is_anomaly
         
         if xai_settings and isinstance(xai_settings, dict):
             interpretation = 'higher_is_anomaly' # Default
@@ -815,20 +789,6 @@ def run_batch(
             evaluation_results["f1_score"] = round(f1_score, 4)
             evaluation_results["specificity_tnr"] = round(specificity, 4)
             
-        if detection_results:
-            tp = detection_results.get("correct_anomalies", 0)
-            fp = detection_results.get("false_positives", 0)
-            fn = detection_results.get("false_negatives", 0)
-            tn = detection_results.get("correct_non_anomalies", 0)
-            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-            f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-            specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
-            detection_results["precision"] = round(precision, 4)
-            detection_results["recall_tpr"] = round(recall, 4)
-            detection_results["f1_score"] = round(f1_score, 4)
-            detection_results["specificity_tnr"] = round(specificity, 4)
-            
         cv_metrics = {}
         if model_instance is not None: # Check if model_instance was created
             if hasattr(model_instance, 'get_validation_scores'):
@@ -872,7 +832,6 @@ def run_batch(
             "data_num_anomalies_predicted": int(df_eval["is_anomaly"].sum()) if 'is_anomaly' in df_eval.columns else 0,
             "sequence_length": sequence_length,
             "evaluation_metrics": evaluation_results,
-            "all_data_evaluation_metrics": detection_results,
             "cross_validation_metrics": cv_metrics,
             "execution_time_total_seconds": round(overall_duration, 4),
             "execution_time_simulation_seconds": round(sim_duration, 4),

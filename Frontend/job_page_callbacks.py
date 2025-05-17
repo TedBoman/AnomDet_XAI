@@ -266,7 +266,7 @@ def create_performance_metrics_explanation(metrics_data: dict, theme_colors: dic
         },
         {
             "key": "specificity_tnr", "name": "Specificity (True Negative Rate - TNR)",
-            "description": "The proportion of normal instances that were correctly identified as normal. High specificity indicates the model is good at identifying normal data.",
+            "description": "Of all actual normal instances, what proportion did the model correctly identify? High specificity indicates the model is good at identifying normal data.",
             "formula": rf"$\text{{Specificity (TNR)}} = \frac{{{tn_val}}}{{{tn_val} + {fp_val}}} = \frac{{\text{{TN}}}}{{\text{{TN + FP}}}}$"
         }
     ]
@@ -637,7 +637,7 @@ def register_job_page_callbacks(app):
                 # 3. Performance Metrics
                 metrics = metadata.get("evaluation_metrics", {})
                 if metrics:
-                    display_elements.append(create_info_section("Performance Metrics (Testing data only)", metrics, theme_colors))
+                    display_elements.append(create_info_section("Performance Metrics", metrics, theme_colors))
                     
                 # 4. Execution Times
                 exec_times = {
@@ -693,13 +693,6 @@ def register_job_page_callbacks(app):
                     if xai_eval_table:
                         display_elements.append(xai_eval_table)
                 # --- END ---
-                
-                # 10. All data evaluation results
-                # 3. Performance Metrics
-                metrics = metadata.get("all_data_evaluation_metrics", {})
-                if metrics:
-                    display_elements.append(create_info_section("All Data Performance Metrics (Can be misleading)", metrics, theme_colors))
-                    
 
                 # --- Create the Grid Container ---
                 grid_container = html.Div(
