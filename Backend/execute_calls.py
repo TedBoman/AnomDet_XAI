@@ -593,6 +593,7 @@ def run_batch(
             # Pass only features to the unsupervised model's run method
             model_instance.run(training_features_df)
             testing_data = testing_features_df # Use features for testing as well
+
         else:
             # --- Supervised Model (or unknown, default to supervised) ---
             # print(f"Model '{model}' identified as supervised/unknown. Training with features and label.")
@@ -636,7 +637,7 @@ def run_batch(
         # Ensure detection data is not empty
         if all_features_df.empty:
             raise ValueError("Features DataFrame for detection is empty.")
-        evaluation = model_instance.detect(testing_data)
+        evaluation = model_instance.detect(testing_features_df)
         res = model_instance.detect(all_features_df)
         detect_end_time = time.perf_counter()
         detection_duration = detect_end_time - detect_start_time

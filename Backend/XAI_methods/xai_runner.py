@@ -427,7 +427,6 @@ class XAIRunner:
                 # print("TimeSeriesExplainer initialized successfully.")
             except Exception as e:
                 # print(f"Failed to initialize TimeSeriesExplainer: {e}")
-                import traceback
                 traceback.print_exc()
                 return # Stop if explainer fails
 
@@ -546,7 +545,7 @@ class XAIRunner:
                     final_sequence_indices_in_full_set = sequence_indices_potential[valid_mask].astype(int)
 
                     if len(final_sequence_indices_in_full_set) < len(selected_original_df_indices):
-                         warnings.warn(f"Could not map all selected original DF indices to valid sequence indices for {method_name}.", RuntimeWarning)
+                        warnings.warn(f"Could not map all selected original DF indices to valid sequence indices for {method_name}.", RuntimeWarning)
                     
                     if len(final_sequence_indices_in_full_set) == 0:
                         # print(f"WARNING: No valid sequence indices derived for {method_name}. Skipping method.")
