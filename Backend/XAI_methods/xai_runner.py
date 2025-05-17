@@ -2,7 +2,6 @@
 import datetime
 import json
 import sys
-import traceback
 import warnings
 import pandas as pd
 import numpy as np

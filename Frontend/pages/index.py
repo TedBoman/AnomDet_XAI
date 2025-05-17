@@ -256,7 +256,7 @@ def layout(handler):
                                                 {'label': 'Random Anomalies', 'value': 'random_anomalies'},
                                                 {'label': 'First N Anomalies', 'value': 'first_n_anomalies'},
                                                 {'label': 'Last N Anomalies', 'value': 'last_n_anomalies'},
-                                                {'label': 'Half N Half', 'value': 'boundary'},
+                                                {'label': 'Half N Half', 'value': 'half_n_half'},
                                                 # Note: The 'errors' option might be added dynamically by a callback if labels are available
                                                 {'label': 'Misclassified/High-Error N (Needs Labels)', 'value': 'errors', 'disabled': True} # Start disabled, enable via callback
                                             ],
