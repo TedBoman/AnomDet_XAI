@@ -592,7 +592,8 @@ def run_batch(
             # print(f"Calling model.run with features-only data. Shape: {training_features_df.shape}")
             # Pass only features to the unsupervised model's run method
             model_instance.run(training_features_df)
-            testing_data = testing_features_df
+            testing_data = testing_features_df # Use features for testing as well
+
         else:
             # --- Supervised Model (or unknown, default to supervised) ---
             # print(f"Model '{model}' identified as supervised/unknown. Training with features and label.")
