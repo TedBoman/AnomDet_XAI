@@ -418,6 +418,7 @@ def run_batch(
     actual_label_col = label_column or 'label' # Use provided or default 'label'
     sequence_length = None # Initialize
     timestamp_col_name = time_column if time_column != None else 'timestamp'
+    xai_runner_instance = None
 
     try:
         # --- Simulation / Data Import ---
