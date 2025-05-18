@@ -569,6 +569,14 @@ def run_batch(
                 else:
                     testing_features_df.loc[:, col] = testing_features_df[col].fillna(testing_features_df[col].mode()[0] if not testing_features_df[col].mode().empty else 'missing')
 
+        # print(f"DEBUG run_batch: Imputing NaNs in testing_features_df (shape: {testing_features_df.shape}) using mean.")
+        for col in testing_data.columns:
+            if testing_data[col].isnull().any():
+                if pd.api.types.is_numeric_dtype(testing_data[col]):
+                    testing_data.loc[:, col] = testing_data[col].fillna(testing_data[col].mean()) # Use mean from testing_features_df
+                else:
+                    testing_data.loc[:, col] = testing_data[col].fillna(testing_data[col].mode()[0] if not testing_data[col].mode().empty else 'missing')
+
         # --- Anomaly Row Extraction (Ground Truth) ---
         if actual_label_col in df.columns:
             anomaly_rows = get_anomaly_rows(df, label_column=actual_label_col, anomaly_value=1)
@@ -592,8 +600,6 @@ def run_batch(
             # print(f"Calling model.run with features-only data. Shape: {training_features_df.shape}")
             # Pass only features to the unsupervised model's run method
             model_instance.run(training_features_df)
-            testing_data = testing_features_df # Use features for testing as well
-
         else:
             # --- Supervised Model (or unknown, default to supervised) ---
             # print(f"Model '{model}' identified as supervised/unknown. Training with features and label.")
@@ -609,15 +615,15 @@ def run_batch(
             # Ensure these columns actually exist in training_data to avoid KeyErrors
             valid_cols_for_training = [col for col in columns_for_supervised_training if col in training_data.columns]
             if len(valid_cols_for_training) != len(columns_for_supervised_training):
-                 missing_cols = set(columns_for_supervised_training) - set(valid_cols_for_training)
-                 # Raise error because model likely depends on these specific columns
-                 raise ValueError(f"Columns {missing_cols} required for supervised training not found in training_data slice.")
+                missing_cols = set(columns_for_supervised_training) - set(valid_cols_for_training)
+                # Raise error because model likely depends on these specific columns
+                raise ValueError(f"Columns {missing_cols} required for supervised training not found in training_data slice.")
 
             # Create the specific DataFrame to pass to the model
             training_data_for_model = training_data[valid_cols_for_training]
 
             if training_data_for_model.empty:
-                 raise ValueError("DataFrame prepared for supervised model training (features + label) is empty.")
+                raise ValueError("DataFrame prepared for supervised model training (features + label) is empty.")
 
             # print(f"Calling model.run with training data containing ONLY specific features and label '{actual_label_col}'. Shape: {training_data_for_model.shape}")
             # Pass the filtered DataFrame (only features + label) to the model's run method
@@ -694,8 +700,8 @@ def run_batch(
                 # Call the new DB API function that updates by primary key
                 # This method needs to be implemented in your TimescaleDBAPI class.
                 api.update_anomalies(table_name=name,
-                                           pk_column_name=PRIMARY_KEY_COLUMN,
-                                           anomaly_pk_values=anomaly_pk_values)
+                                    pk_column_name=PRIMARY_KEY_COLUMN,
+                                    anomaly_pk_values=anomaly_pk_values)
             else:
                 print("No valid primary key values found for the detected anomalies.")
         else:
@@ -854,6 +860,11 @@ def run_batch(
         xai_eval_metrics = {}
         if avg_ndcg_scores:
              xai_eval_metrics["ndcg_scores"] = avg_ndcg_scores
+             
+        # Add individual XAI method timings
+        individual_xai_timings = {}
+        if xai_runner_instance: # Check if XAIRunner was instantiated
+            individual_xai_timings = xai_runner_instance.get_xai_method_timings()
 
         run_summary = {
             "job_name": name,
@@ -882,6 +893,10 @@ def run_batch(
             "execution_time_detection_seconds": round(detection_duration, 4),
             "execution_time_xai_seconds": round(xai_duration, 4),
         }
+        
+        # Add individual XAI method timings to the summary
+        for method, timing in individual_xai_timings.items():
+            run_summary[f"execution_time_xai_{method}_seconds"] = timing
 
         # --- Save Summary ---
         save_run_summary(run_summary, name, OUTPUT_DIR)

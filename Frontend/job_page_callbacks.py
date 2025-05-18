@@ -640,16 +640,35 @@ def register_job_page_callbacks(app):
                     display_elements.append(create_info_section("Performance Metrics (Testing data only)", metrics, theme_colors))
                     
                 # 4. Execution Times
-                exec_times = {
-                    "Total (s)": metadata.get("execution_time_total_seconds"),
-                    "Simulation (s)": metadata.get("execution_time_simulation_seconds"),
-                    "Training (s)": metadata.get("execution_time_training_seconds"),
-                    "Detection (s)": metadata.get("execution_time_detection_seconds"),
-                    "XAI (s)": metadata.get("execution_time_xai_seconds")
+                exec_times_prefix = "execution_time_"
+                xai_method_time_prefix = "execution_time_xai_"
+                xai_method_time_suffix = "_seconds"
+
+                general_exec_times = {
+                    "Total (s)": metadata.get(f"{exec_times_prefix}total_seconds"),
+                    "Simulation (s)": metadata.get(f"{exec_times_prefix}simulation_seconds"),
+                    "Training (s)": metadata.get(f"{exec_times_prefix}training_seconds"),
+                    "Detection (s)": metadata.get(f"{exec_times_prefix}detection_seconds"),
+                    "XAI Overall (s)": metadata.get(f"{exec_times_prefix}xai_seconds") # Renamed for clarity
                 }
-                exec_times_filtered = {k: v for k, v in exec_times.items() if v is not None}
-                if exec_times_filtered:
-                    display_elements.append(create_info_section("Execution Times", exec_times_filtered, theme_colors))
+                general_exec_times_filtered = {k: v for k, v in general_exec_times.items() if v is not None}
+                if general_exec_times_filtered:
+                    display_elements.append(create_info_section("Overall Execution Times", general_exec_times_filtered, theme_colors))
+
+                # New section for Individual XAI Method Execution Times
+                individual_xai_exec_times = {}
+                for key, value in metadata.items():
+                    if key.startswith(xai_method_time_prefix) and key.endswith(xai_method_time_suffix):
+                        # Extract method name for a cleaner display key
+                        method_name_part = key[len(xai_method_time_prefix):-len(xai_method_time_suffix)]
+                        # Capitalize method name if it's simple (e.g., shap -> Shap)
+                        # or handle multi-word like LimeExplainer -> Lime Explainer
+                        display_method_name = ' '.join(word.capitalize() for word in method_name_part.replace('_', ' ').split(' '))
+                        individual_xai_exec_times[f"{display_method_name} (s)"] = value
+                
+                individual_xai_exec_times_filtered = {k: v for k, v in individual_xai_exec_times.items() if v is not None}
+                if individual_xai_exec_times_filtered:
+                    display_elements.append(create_info_section("Individual XAI Method Times", individual_xai_exec_times_filtered, theme_colors))
 
                 # 5. Model Parameters (collapsible)
                 model_params = metadata.get("model_params")

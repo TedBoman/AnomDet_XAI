@@ -8,6 +8,7 @@ import numpy as np
 import os
 import time
 from typing import List, Optional, Dict, Any
+import traceback
 
 # Custom / Third-party imports needed for XAI logic
 from ML_models.model_wrapper import ModelWrapperForXAI
@@ -83,6 +84,9 @@ class XAIRunner:
         self.ndcg_results: Dict[str, Dict[int, List[float]]] = {}
         self.ndcg_ground_truth_found_count = 0
         self.ndcg_anomalies_explained_count = 0
+        
+        # --- For Individual XAI Method Timings ---
+        self.xai_method_timings: Dict[str, float] = {}
         
         # # print(f"DEBUG XAIRunner __init__: Job '{self.job_name}'")
         # # print(f"DEBUG XAIRunner __init__: inj_params received: {bool(self.inj_params)}")
@@ -333,6 +337,8 @@ class XAIRunner:
         """
         # print(f"\n--- Starting XAI Execution via XAIRunner for job '{self.job_name}' ---")
         # print(f"Processing {len(self.xai_params)} XAI method(s)...")
+        
+        self.xai_method_timings.clear() # Clear previous timings if any
 
         # --- Check Prerequisites ---
         if (TimeSeriesExplainer is None or ut.dataframe_to_sequences is None or
@@ -481,8 +487,11 @@ class XAIRunner:
             for xai_config in self.xai_params:
                 method_name = xai_config.get("method")
                 settings = xai_config.get("settings", {})
+                method_start_time = time.perf_counter() # Start timer for this method
 
-                if not method_name or method_name == "none": continue
+                if not method_name or method_name == "none": 
+                    if method_name: self.xai_method_timings[method_name] = 0.0 # Record 0 time if skipped
+                    continue
                 # print(f"\n===== Running Method: {method_name.upper()} =====")
 
                 try:
@@ -511,6 +520,7 @@ class XAIRunner:
 
                     if len(selected_original_indices) == 0:
                         # print(f"WARNING: No original indices selected based on strategy/override for {method_name}. Skipping method.")
+                        self.xai_method_timings[method_name] = time.perf_counter() - method_start_time # Record time even if skipped early
                         continue
 
                     # BEGIN: Index selection logic from original, adapted slightly
@@ -535,6 +545,7 @@ class XAIRunner:
                     
                     if len(selected_original_df_indices) == 0:
                         # print(f"WARNING: No original DataFrame indices selected for {method_name}. Skipping method.")
+                        self.xai_method_timings[method_name] = time.perf_counter() - method_start_time
                         continue
 
                     # Map selected original DF indices to sequence array indices
@@ -549,6 +560,7 @@ class XAIRunner:
                     
                     if len(final_sequence_indices_in_full_set) == 0:
                         # print(f"WARNING: No valid sequence indices derived for {method_name}. Skipping method.")
+                        self.xai_method_timings[method_name] = time.perf_counter() - method_start_time
                         continue
                     
                     # Apply per-method instance limit (n_explain_max from settings) AFTER initial selection
@@ -564,7 +576,9 @@ class XAIRunner:
                     
                     num_sequences_to_process_for_method = len(final_sequence_indices_in_full_set)
                     if num_sequences_to_process_for_method == 0:
-                        print(f"No instances left to explain for {method_name} after limiting/mapping. Skipping."); continue
+                        print(f"No instances left to explain for {method_name} after limiting/mapping. Skipping."); 
+                        self.xai_method_timings[method_name] = time.perf_counter() - method_start_time
+                        continue
                     
                     # print(f"Final number of sequences to explain for {method_name}: {num_sequences_to_process_for_method}")
 
@@ -578,7 +592,10 @@ class XAIRunner:
                     # END: Index selection logic from original
 
                     explainer_object = ts_explainer._get_or_initialize_explainer(method_name)
-                    if explainer_object is None: print(f"Could not get explainer for {method_name}. Skipping."); continue
+                    if explainer_object is None: 
+                        print(f"Could not get explainer for {method_name}. Skipping.")
+                        self.xai_method_timings[method_name] = time.perf_counter() - method_start_time
+                        continue
 
                     # print(f"Using configuration for {method_name}: {settings}")
                     handler_args = {
@@ -622,7 +639,6 @@ class XAIRunner:
                                 current_label_single_for_dice = [current_original_labels_for_method[loop_idx]]
 
                             try:
-                                start_explain_time = time.perf_counter()
                                 # Assuming ts_explainer.explain for DiCE can take one instance
                                 # or returns a list where we can pick the one for this loop_idx.
                                 # For simplicity, let's assume we call it for one instance here.
@@ -635,9 +651,6 @@ class XAIRunner:
                                 if isinstance(dice_explanation_object_for_instance, list) and dice_explanation_object_for_instance:
                                     dice_explanation_object_for_instance = dice_explanation_object_for_instance[0]
                                 
-                                end_explain_time = time.perf_counter()
-                                # print(f"DiCE explanation for instance {loop_idx} took {end_explain_time - start_explain_time:.2f}s")
-
                                 # Plotting for this DiCE instance
                                 handler_args_dice_instance = handler_args.copy()
                                 handler_args_dice_instance.update({
@@ -696,9 +709,7 @@ class XAIRunner:
                         
                         shap_runtime_kwargs = {'nsamples': n_samples_shap, 'l1_reg': l1_reg_shap}
                         # print(f"SHAP Runtime Params ({current_shap_method_run}): {shap_runtime_kwargs}")
-                        start_explain_time = time.perf_counter()
                         xai_results_batch = ts_explainer.explain(instances_to_explain=current_instances_np, method_name=method_name, **shap_runtime_kwargs)
-                        end_explain_time = time.perf_counter(); # print(f"SHAP explanation ({current_shap_method_run}) took {end_explain_time - start_explain_time:.2f}s")
                         handler_args.update({"results": xai_results_batch, "instances_explained": current_instances_np})
                         # Plotting
                         plot_func = plot_handlers.get(method_name)
@@ -768,9 +779,7 @@ class XAIRunner:
                                 current_label_single = [current_original_labels_for_method[loop_idx]]
 
                             try:
-                                start_lime_time = time.perf_counter()
                                 lime_explanation_obj = ts_explainer.explain(instances_to_explain=current_instance_single_np, method_name='LimeExplainer', **lime_runtime_kwargs)
-                                end_lime_time = time.perf_counter(); # print(f"LIME explanation for instance {loop_idx} took {end_lime_time - start_lime_time:.2f}s")
                                 
                                 # Plotting for LIME
                                 handler_args_lime_instance = handler_args.copy()
@@ -804,6 +813,7 @@ class XAIRunner:
                         # print(f"--- Finished LIME Explanations ---")
                     else:
                         # print(f"Skipping unknown or unhandled XAI method: {method_name}")
+                        self.xai_method_timings[method_name] = time.perf_counter() - method_start_time
                         continue # Skip NDCG for unhandled
 
                     # --- NDCG Calculation for BATCHED methods (SHAP, potentially DiCE if adapted) ---
@@ -846,6 +856,9 @@ class XAIRunner:
                 except Exception as explain_err:
                     # print(f"ERROR during explanation/plotting/NDCG setup for method '{method_name}': {explain_err}")
                     traceback.print_exc()
+                finally:
+                    self.xai_method_timings[method_name] = round(time.perf_counter() - method_start_time, 4)
+                    
                 # --- After the loop, aggregate and save the summary feature importances ---
                 if self.all_aggregated_scores_for_ndcg:
                     summary_feature_importances = {}
@@ -890,3 +903,8 @@ class XAIRunner:
         # elif self.ndcg_ground_truth_found_count == 0 and self.ndcg_anomalies_explained_count > 0: # Added
              # print("DEBUG run_explanations: NDCG Warning: Ground truth features could not be matched for any explained anomalous instances. Check timestamp/duration/label alignment in inj_params and data.") # Added
         # # print(f"DEBUG run_explanations: FINAL ndcg_results dictionary: {self.ndcg_results}") # Added
+        
+        
+    def get_xai_method_timings(self) -> Dict[str, float]:
+        """Returns the execution times for each XAI method."""
+        return self.xai_method_timings
