@@ -67,10 +67,10 @@ def layout(handler):
         ),
         # --- END Explanation Box ---
 
-        # --- AnomDetX Settings panel ---
+        # --- EXACTX Settings panel ---
         html.Div( 
             [ 
-                html.H1("AnomDetX", style={
+                html.H1("EXACTX", style={
                     "textAlign": "center",
                     "marginBottom": "30px",
                     "color": "#ffffff",
@@ -387,7 +387,7 @@ def layout(handler):
                                 id="mode-selection",
                                 options=[
                                     {"label": "Batch", "value": "batch"},
-                                    #{"label": "Stream", "value": "stream"} # Streaming not supported by AnomDetX
+                                    #{"label": "Stream", "value": "stream"} # Streaming not supported by EXACT
                                 ],
                                 value="batch",  # Default selection
                                 labelStyle={"display": "inline-block", "marginRight": "20px"},
@@ -406,7 +406,7 @@ def layout(handler):
                         #         step=0.1,
                         #         style={"width": "200px", "marginTop": "10px"}
                         #     )
-                        # ], style={"marginTop": "20px", "textAlign": "center"}), # Streaming not supported by AnomDetX
+                        # ], style={"marginTop": "20px", "textAlign": "center"}), # Streaming not supported by EXACTX
                         
                         # --- SEPARATOR ---
                         html.Hr(style={'borderColor': '#446e92', }),

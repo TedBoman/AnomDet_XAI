@@ -1,4 +1,4 @@
-# This CLI tool is a remaining feature of AnomDet before XAI was implemented.
+# This CLI tool is a remaining feature of EXACT before XAI was implemented.
 # The tool may or may not work will the new XAI integration due to the
 # magnitudes of the changed made to the backend.
 

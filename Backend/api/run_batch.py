@@ -1,5 +1,5 @@
 # This run_batch file will not work with the current backend. It remains from the
-# original AnomDet tool without XAI integration.
+# original EXACT tool without XAI integration.
 
 # import json
 # from api import BackendAPI
@@ -8,7 +8,7 @@
 #     # Gather available models for detection
 #     response = api.get_models()
 #     models = json.loads(response)["models"]
-#     print(f"Theses are the models provided by AnomDet: {models}")
+#     print(f"Theses are the models provided by EXACT: {models}")
 #     model = input("Enter the model to use: ")
 #     while model not in models:
 #         model = input("Model not found, please enter a valid model: ")
@@ -16,7 +16,7 @@
 #     # Gather available datasets for detection
 #     response = api.get_datasets()
 #     datasets = json.loads(response)["datasets"]
-#     print(f"Theses are the datasets provided by AnomDet: {datasets}")
+#     print(f"Theses are the datasets provided by EXACT: {datasets}")
 #     dataset = input("Enter the dataset to use: ")
 #     while dataset not in datasets:
 #         dataset = input("Dataset not found, please enter a valid dataset: ")
@@ -43,7 +43,7 @@
 #         # Gather injection methods for anomalies
 #         response = api.get_injection_methods()
 #         injection_methods = json.loads(response)["injection_methods"]
-#         print(f"These are the injection methods provided by AnomDet: {injection_methods}")
+#         print(f"These are the injection methods provided by EXACT: {injection_methods}")
 
 #         while True:  # Loop to allow input of multiple anomalies
 #             injection_method = input("Enter injection method (or 'done' to finish): ")
