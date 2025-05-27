@@ -6,8 +6,8 @@ import dash
 from dash import dcc, html, Input, Output, State, callback, ctx
 from dash.dependencies import ALL
 from callbacks import create_active_jobs
-import base64 # Needed for decoding uploaded file content
-import io     # Needed for reading decoded content if using pandas
+import base64 
+import io     
 
 UPLOAD_DIRECTORY = "/app/Datasets"
 if not os.path.exists(UPLOAD_DIRECTORY):
@@ -55,12 +55,11 @@ def layout(handler):
                 "backgroundColor": "#0a3d5a", # Slightly different background
                 "borderRadius": "1rem",
                 "boxShadow": "0 2px 5px rgb(0, 0, 0)",
-                "minWidth": "300px", # Adjust width as needed
+                "minWidth": "300px", 
                 "maxWidth": "400px",
                 "height": "fit-content", # Adjust height based on content
                 "maxHeight": "80vh", # Limit max height and make scrollable if needed
                 "overflowY": "auto", # Add scroll if content exceeds maxHeight
-                # Add flex properties if needed, e.g., flex: 1 (takes up 1/3 width)
                 "color": "#e0e0e0",
                 "textAlign": "left",
             }
@@ -84,7 +83,7 @@ def layout(handler):
                         # --- SEPARATOR ---
                         html.Hr(style={'borderColor': '#446e92', }),
 
-                        # *** NEW: Dataset Upload Component ***
+                        # *** Dataset Upload Component ***
                         html.Div([
                             html.Label("Upload Dataset:", style={"fontSize": "22px", "color": "#ffffff", "display": "block", "marginBottom": "5px"}),
                             dcc.Upload(
@@ -108,9 +107,9 @@ def layout(handler):
                                 # Allow multiple files to be uploaded? Set False if only one.
                                 multiple=False,
                                 # Define accepted file types (example: CSV)
-                                accept='.csv,.json,' # Adjust as needed
+                                accept='.csv,.json,'
                             ),
-                             # *** NEW: Div to show upload status/filename ***
+                             # *** Div to show upload status/filename ***
                             html.Div(id='output-upload-state', style={'color': '#4CAF50', 'marginTop': '10px', 'textAlign': 'center', 'minHeight': '20px'}),
                         ], style={"textAlign": "center", "marginBottom": "5px"}),
                         # --- END Dataset Upload Component ---
@@ -158,7 +157,7 @@ def layout(handler):
                             children=[
                                 html.Label("Select Time Column:", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block"}),
                                 dcc.Dropdown(
-                                    id="time-column-dropdown", # NEW ID for clarity
+                                    id="time-column-dropdown", 
                                     options=[], # Populated by callback
                                     value=None, # Reset by callback
                                     placeholder="Select time column",
@@ -183,7 +182,7 @@ def layout(handler):
                                 children=[
                                     html.Label("Select Label Column:", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block"}),
                                     dcc.Dropdown(
-                                        id="label-column-dropdown", # NEW ID for clarity
+                                        id="label-column-dropdown", 
                                         options=[], # Populated by callback
                                         value=None, # Reset by callback
                                         placeholder="Select label column",
@@ -221,7 +220,7 @@ def layout(handler):
                         html.Div([
                             dcc.Checklist(
                                 id="xai-check",
-                                options=[{"label": "Run Explainability (XAI)?", "value": "use_xai"}], # Changed value for clarity
+                                options=[{"label": "Run Explainability (XAI)?", "value": "use_xai"}], 
                                 value=[], # Initially unchecked
                                 style={"fontSize": "20px", "color": "#ffffff", "marginBottom": "10px"}
                             ),
@@ -235,7 +234,7 @@ def layout(handler):
                                         dcc.Dropdown(
                                             id="xai-method-dropdown",
                                             options=[{"label": method, "value": method} for method in xai_methods],
-                                            value="none", # Default to None
+                                            value="none", 
                                             placeholder="Select XAI method",
                                             multi=True,
                                             clearable=False,
@@ -243,9 +242,7 @@ def layout(handler):
                                         ),
                                     ], style={"marginTop": "10px"}),
                                     
-                                    # =========================================== #
-                                    # ***    XAI Sampling Strategy Dropdown   *** #
-                                    # =========================================== #
+                                    #  --- XAI Sampling Strategy Dropdown --- 
                                     html.Div([
                                         html.Label("Select Instances to Explain:", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block", "marginTop": "15px"}),
                                         dcc.Dropdown(
@@ -257,7 +254,6 @@ def layout(handler):
                                                 {'label': 'First N Anomalies', 'value': 'first_n_anomalies'},
                                                 {'label': 'Last N Anomalies', 'value': 'last_n_anomalies'},
                                                 {'label': 'Half N Half', 'value': 'half_n_half'},
-                                                # Note: The 'errors' option might be added dynamically by a callback if labels are available
                                                 {'label': 'Misclassified/High-Error N (Needs Labels)', 'value': 'errors', 'disabled': True} # Start disabled, enable via callback
                                             ],
                                             value='first_n', # Default strategy
@@ -266,22 +262,17 @@ def layout(handler):
                                             style={"width": "300px", "margin": "5px auto"}
                                         ),
                                     ], style={"marginTop": "10px"}),
-                                    # =========================================== #
 
-                                    # ========================================= #
-                                    # ***      Seed Input                   *** #
-                                    # ========================================= #
+                                    # --- Seed Input --- 
                                     html.Div([
                                         html.Label("Enter seed for reproducibility:", style={"fontSize": "18px", "color": "#e0e0e0", "display": "block", "marginTop": "10px"}),
                                         dcc.Input(
                                             id="xai-sample-seed",
                                             type="number",
                                             placeholder="Enter a number",
-                                            # Use required=True maybe, or handle None in callback
                                             style={"width": "150px", "margin": "5px auto", "display": "block", "textAlign": "center"} 
                                         ),
                                     ], style={"marginTop": "10px"}),
-                                    # ========================================= #
                                     
                                     # Div for Dynamic XAI Settings
                                     html.Div(
@@ -415,20 +406,20 @@ def layout(handler):
                             html.Label(
                                 "Note: Job processing time may vary depending on the model and XAI methods selected. Dont press the button twice!", 
                                 style={
-                                    "fontSize": "14px",         # Reduced font size for a note
-                                    "color": "#cccccc",         # Softer than pure white, good on dark backgrounds
-                                    "fontStyle": "italic",      # Common styling for notes
-                                    "display": "inline-block"   # Allows text-align to work from parent
+                                    "fontSize": "14px",         
+                                    "color": "#cccccc",        
+                                    "fontStyle": "italic",      
+                                    "display": "inline-block"   
                                 }
                             ),
-                            style={"textAlign": "center", "marginBottom": "15px"} # Center the text and add space below
+                            style={"textAlign": "center", "marginBottom": "15px"} 
                         ),
                         
                         # --- Start Button ---
                         html.Div([
                             dcc.Loading(
                                 id="loading-start-job",
-                                type="default", # or "circle", "cube", etc.
+                                type="default", 
                                 children=[
                                     html.Button("Start Job", id="start-job-btn", n_clicks=0, style={ # Ensure n_clicks is initialized
                                         "marginTop": "20px",
@@ -478,10 +469,10 @@ def layout(handler):
 
         ], style={ # Style for the parent flex container
             "display": "flex",
-            "flexDirection": "row", # Arrange items side-by-side
-            "justifyContent": "center", # Center the items horizontally
-            "alignItems": "flex-start", # Align items to the top
-            "maxWidth": "80rem", # Adjust overall max width if needed
+            "flexDirection": "row", 
+            "justifyContent": "center", 
+            "alignItems": "flex-start", 
+            "maxWidth": "80rem", 
             "margin": "30px",
         }),
 
@@ -524,15 +515,14 @@ def layout(handler):
             children=[html.P("Select an XAI method to see its description.", style={'color':'#b0b0b0'})],
             style={
                 "padding": "20px",
-                "backgroundColor": "#0a3d5a", # Slightly different background
+                "backgroundColor": "#0a3d5a", 
                 "borderRadius": "1rem",
                 "boxShadow": "0 2px 5px rgb(0, 0, 0)",
-                "minWidth": "300px", # Adjust width as needed
+                "minWidth": "300px",
                 "maxWidth": "400px",
-                "height": "fit-content", # Adjust height based on content
+                "height": "fit-content", 
                 "maxHeight": "80vh", # Limit max height and make scrollable if needed
                 "overflowY": "auto", # Add scroll if content exceeds maxHeight
-                # Add flex properties if needed, e.g., flex: 1 (takes up 1/3 width)
                 "color": "#e0e0e0",
                 "textAlign": "left",
             }
